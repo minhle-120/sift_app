@@ -3,16 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sift_app/core/storage/sift_database.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/collection_controller.dart';
 import '../controllers/knowledge_controller.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+
 import 'package:intl/intl.dart';
 
-class DocumentsScreen extends ConsumerWidget {
+class DocumentsScreen extends ConsumerStatefulWidget {
   const DocumentsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DocumentsScreen> createState() => _DocumentsScreenState();
+}
+
+class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
+  bool _isDragging = false;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final activeCollection = ref.watch(collectionProvider).activeCollection;
-    
     final AsyncValue<List<Document>> documentsAsync = ref.watch(filteredDocumentsProvider);
 
     return Scaffold(
@@ -21,22 +29,62 @@ class DocumentsScreen extends ConsumerWidget {
         backgroundColor: theme.colorScheme.surface,
         surfaceTintColor: Colors.transparent,
       ),
-      body: documentsAsync.when<Widget>(
-        data: (documents) {
-          if (documents.isEmpty) {
-            return _buildEmptyState(theme, activeCollection == null);
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: documents.length,
-            itemBuilder: (context, index) {
-              final doc = documents[index];
-              return _buildDocumentCard(context, ref, doc, theme);
-            },
-          );
+      body: DropTarget(
+        onDragEntered: (details) => setState(() => _isDragging = true),
+        onDragExited: (details) => setState(() => _isDragging = false),
+        onDragDone: (details) {
+          final paths = details.files.map((f) => f.path).toList();
+          ref.read(knowledgeControllerProvider.notifier).uploadFiles(paths);
         },
-        error: (err, stack) => Center(child: Text('Error: $err')),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        child: Stack(
+          children: [
+            documentsAsync.when<Widget>(
+              data: (documents) {
+                if (documents.isEmpty) {
+                  return _buildEmptyState(theme, activeCollection == null);
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: documents.length,
+                  itemBuilder: (context, index) {
+                    final doc = documents[index];
+                    return _buildDocumentCard(context, ref, doc, theme);
+                  },
+                );
+              },
+              error: (err, stack) => Center(child: Text('Error: $err')),
+              loading: () => const Center(child: CircularProgressIndicator()),
+            ),
+            if (_isDragging)
+              Container(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: theme.colorScheme.primary, width: 2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.upload_file, color: theme.colorScheme.onPrimaryContainer),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Drop documents to upload',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
       floatingActionButton: activeCollection != null ? FloatingActionButton.extended(
         onPressed: () {

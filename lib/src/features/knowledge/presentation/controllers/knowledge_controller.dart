@@ -46,25 +46,31 @@ class KnowledgeController extends StateNotifier<AsyncValue<void>> {
 
     if (result == null || result.files.isEmpty) return;
 
+    final paths = result.files.map((f) => f.path).whereType<String>().toList();
+    if (paths.isEmpty) return;
+
+    uploadFiles(paths);
+  }
+
+  Future<void> uploadFiles(List<String> paths) async {
     final db = _ref.read(databaseProvider);
     final activeCollection = _ref.read(collectionProvider).activeCollection;
-    
-    // We assume documents belong to the active collection, or are global (null collectionId)
     final collectionId = activeCollection?.id;
 
-    for (final file in result.files) {
-      if (file.path == null) continue;
+    for (final path in paths) {
+      final file = File(path);
+      if (!await file.exists()) continue;
+
+      final fileName = path.split(Platform.pathSeparator).last;
+      final extension = fileName.split('.').last;
 
       final doc = await db.createDocument(
         collectionId: collectionId,
-        title: file.name,
-        filePath: file.path!,
-        type: file.extension ?? 'txt',
+        title: fileName,
+        filePath: path,
+        type: extension,
       );
 
-      // Process in background (don't await here to keep UI responsive? 
-      // Or await to show progress? Let's await for simplicity first, or fire and forget with riverpod handling state?)
-      // Better to fire and forget but update state. The stream will update UI.
       _processDocument(doc);
     }
   }
