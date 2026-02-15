@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 import '../../domain/entities/message.dart';
+import '../controllers/workbench_controller.dart';
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends ConsumerWidget {
   final Message message;
 
   const MessageBubble({super.key, required this.message});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isUser = message.role == MessageRole.user;
     final theme = Theme.of(context);
 
@@ -50,6 +52,23 @@ class MessageBubble extends StatelessWidget {
                   builders: {
                     'citation': CitationBuilder(
                       context: context,
+                      citations: message.citations,
+                      onCitationClick: (index, metadata) {
+                        final docId = metadata?['documentId'] as int?;
+                        final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Document';
+                        
+                        if (docId != null) {
+                          ref.read(workbenchProvider.notifier).addTab(
+                            WorkbenchTab(
+                              id: 'doc_$docId',
+                              title: sourceTitle,
+                              icon: Icons.description_outlined,
+                              type: WorkbenchTabType.document,
+                              metadata: metadata,
+                            ),
+                          );
+                        }
+                      },
                     ),
                   },
                   styleSheet: MarkdownStyleSheet(
@@ -108,12 +127,12 @@ class MessageBubble extends StatelessWidget {
 }
 
 class CitationSyntax extends md.InlineSyntax {
-  CitationSyntax() : super(r'\[{1,2}([\d\s,]+)\]{1,2}');
+  CitationSyntax() : super(r'\[{1,2}(?:Chunk\s+)?(\d+)\]{1,2}');
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
-    final rawIndex = match.group(1);
-    final element = md.Element('citation', [md.Text(rawIndex!)]);
+    final indexStr = match.group(1);
+    final element = md.Element('citation', [md.Text(indexStr!)]);
     parser.addNode(element);
     return true;
   }
@@ -121,28 +140,55 @@ class CitationSyntax extends md.InlineSyntax {
 
 class CitationBuilder extends MarkdownElementBuilder {
   final BuildContext context;
+  final Map<String, dynamic>? citations;
+  final Function(String, Map<String, dynamic>?)? onCitationClick;
 
-  CitationBuilder({required this.context});
+  CitationBuilder({
+    required this.context, 
+    this.citations,
+    this.onCitationClick,
+  });
 
   @override
   Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
-    final rawContent = element.textContent;
+    final rawIndex = element.textContent;
     final theme = Theme.of(context);
+    
+    final metadata = citations?[rawIndex] as Map<String, dynamic>?;
+    final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Source details not available';
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 1.5),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer.withValues(alpha: 0.7),
+    return Tooltip(
+      message: sourceTitle,
+      child: InkWell(
+        onTap: () {
+          debugPrint('Clicked citation: $rawIndex');
+          if (onCitationClick != null) {
+            onCitationClick!(rawIndex, metadata);
+          }
+        },
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.5), width: 0.5),
-      ),
-      child: Text(
-        rawContent,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.onPrimaryContainer,
-          fontWeight: FontWeight.bold,
-          fontSize: 10,
+        child: Container(
+          width: 18,
+          height: 18,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.8),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
+              width: 0.5,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            rawIndex,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+              height: 1.0,
+            ),
+          ),
         ),
       ),
     );

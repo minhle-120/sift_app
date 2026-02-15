@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/message.dart' as domain;
 import 'package:sift_app/core/storage/sift_database.dart';
@@ -106,6 +107,7 @@ class ChatController extends StateNotifier<ChatState> {
           role: _parseRole(m.role),
           timestamp: m.createdAt,
           reasoning: m.reasoning,
+          citations: m.citations != null ? (jsonDecode(m.citations!) as Map<String, dynamic>) : null,
         )).toList();
         
         state = state.copyWith(
@@ -209,6 +211,20 @@ class ChatController extends StateNotifier<ChatState> {
           package: researchResult.package!,
           registry: researchOrchestrator.registry,
         );
+
+        // Save citation metadata
+        final citationData = <String, dynamic>{};
+        for (final index in researchResult.package!.indices) {
+          final res = researchOrchestrator.registry.getResult(index);
+          if (res != null) {
+            citationData[index.toString()] = {
+              'documentId': res.documentId,
+              'sourceTitle': res.sourceTitle,
+              'chunkIndex': res.chunkIndex,
+            };
+          }
+        }
+        await _db.updateMessageMetadata(placeholderMessage.id, citations: jsonEncode(citationData));
       } else {
         await _db.updateMessageContent(placeholderMessage.id, 'I couldn\'t find enough specific information to answer that accurately.');
         throw Exception('I couldn\'t find enough specific information to answer that accurately.');

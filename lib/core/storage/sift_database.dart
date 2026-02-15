@@ -124,6 +124,16 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Update a message's metadata and citations.
+  Future<void> updateMessageMetadata(int id, {String? citations, String? metadata}) {
+    return (update(messages)..where((t) => t.id.equals(id))).write(
+      MessagesCompanion(
+        citations: citations != null ? Value(citations) : const Value.absent(),
+        metadata: metadata != null ? Value(metadata) : const Value.absent(),
+      ),
+    );
+  }
+
   // --- Document Operations ---
 
   Stream<List<Document>> watchCollectionDocuments(int collectionId) {
@@ -162,6 +172,17 @@ class AppDatabase extends _$AppDatabase {
 
   Future<int> deleteDocument(int id) {
     return (delete(documents)..where((t) => t.id.equals(id))).go();
+  }
+
+  Future<Document?> getDocumentById(int id) {
+    return (select(documents)..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
+  Future<List<DocumentChunk>> getDocumentChunks(int documentId) {
+    return (select(documentChunks)
+          ..where((t) => t.documentId.equals(documentId))
+          ..orderBy([(t) => OrderingTerm.asc(t.index)]))
+        .get();
   }
 
   Future<void> insertDocumentChunks(List<DocumentChunksCompanion> chunks) async {

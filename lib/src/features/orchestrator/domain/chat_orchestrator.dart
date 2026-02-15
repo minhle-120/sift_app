@@ -22,9 +22,9 @@ class ChatOrchestrator {
     // 1. Resolve Chunks
     final List<String> resolvedChunks = [];
     for (final index in package.indices) {
-      final content = registry.getContent(index);
-      if (content != null) {
-        resolvedChunks.add('[[Chunk $index]]\n$content');
+      final res = registry.getResult(index);
+      if (res != null) {
+        resolvedChunks.add('[[Chunk $index]]\n${res.content}');
       }
     }
 
@@ -49,8 +49,7 @@ class ChatOrchestrator {
 - Use the provided context to answer questions.
 - Cite your sources using the chunk tags (e.g., [[Chunk 1]]) when referencing specific information.
 - If the context doesn't contain the answer, be honest and explain what's missing.
-- Keep your tone professional, helpful, and concise.
-- Output ONLY the final answer. No internal reasoning or meta-talk.
+- Keep your tone professional and helpful.
 ''';
   }
 

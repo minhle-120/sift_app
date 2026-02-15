@@ -129,12 +129,16 @@ class RAGResult {
   final String content;
   final int index;
   final String sourceTitle;
+  final int documentId;
+  final int chunkIndex;
   final double? score;
 
   RAGResult({
     required this.content,
     required this.index,
     required this.sourceTitle,
+    required this.documentId,
+    required this.chunkIndex,
     this.score,
   });
 
@@ -147,26 +151,34 @@ class RAGResult {
 /// Helper to maintain stable indexing for chunks in a single research session.
 class ChunkRegistry {
   final Map<String, int> _contentToId = {};
-  final Map<int, String> _idToContent = {};
+  final Map<int, RAGResult> _idToResult = {};
   int _nextId = 1;
 
-  int getIndex(String content) {
-    // Basic normalization for hash stability
+  int register(String content, String sourceTitle, int documentId, int chunkIndex, [double? score]) {
     final normalized = content.trim();
     if (_contentToId.containsKey(normalized)) {
       return _contentToId[normalized]!;
     }
     final id = _nextId++;
     _contentToId[normalized] = id;
-    _idToContent[id] = normalized;
+    _idToResult[id] = RAGResult(
+      content: content,
+      index: id,
+      sourceTitle: sourceTitle,
+      documentId: documentId,
+      chunkIndex: chunkIndex,
+      score: score,
+    );
     return id;
   }
 
-  String? getContent(int index) => _idToContent[index];
+  RAGResult? getResult(int index) => _idToResult[index];
+
+  List<RAGResult> getAllResults() => _idToResult.values.toList();
 
   void reset() {
     _contentToId.clear();
-    _idToContent.clear();
+    _idToResult.clear();
     _nextId = 1;
   }
 }

@@ -11,7 +11,7 @@ class Message {
   final MessageRole role;
   final String? reasoning;
   final DateTime timestamp;
-  final List<dynamic>? citations;
+  final Map<String, dynamic>? citations;
   final Map<String, dynamic>? metadata;
 
   Message({

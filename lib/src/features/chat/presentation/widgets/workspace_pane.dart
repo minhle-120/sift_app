@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/workbench_controller.dart';
+import '../../../knowledge/presentation/widgets/document_viewer.dart';
 
 class WorkbenchPanel extends ConsumerWidget {
   const WorkbenchPanel({super.key});
@@ -104,8 +105,21 @@ class WorkbenchPanel extends ConsumerWidget {
         ),
       );
     }
+
+    if (tab.type == WorkbenchTabType.document) {
+      final meta = tab.metadata as Map<String, dynamic>?;
+      final docId = meta?['documentId'] as int?;
+      final chunkIndex = meta?['chunkIndex'] as int?;
+      
+      if (docId != null) {
+        return DocumentViewer(
+          key: ValueKey('doc_$docId'),
+          documentId: docId,
+          initialChunkIndex: chunkIndex,
+        );
+      }
+    }
     
-    // Placeholder for actual document/diagram views until implemented
     return _buildPlaceholderContent(tab.type, theme);
   }
 

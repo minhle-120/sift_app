@@ -74,6 +74,9 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
 
   void addTab(WorkbenchTab tab) {
     if (state.tabs.any((t) => t.id == tab.id)) {
+      if (tab.metadata != null) {
+        updateTabMetadata(tab.id, tab.metadata);
+      }
       selectTab(tab.id);
       return;
     }
@@ -82,6 +85,22 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
       activeTabId: tab.id,
       isCollapsed: false,
     );
+  }
+
+  void updateTabMetadata(String id, dynamic metadata) {
+    final newTabs = state.tabs.map((t) {
+      if (t.id == id) {
+        return WorkbenchTab(
+          id: t.id,
+          title: t.title,
+          icon: t.icon,
+          type: t.type,
+          metadata: metadata,
+        );
+      }
+      return t;
+    }).toList();
+    state = state.copyWith(tabs: newTabs);
   }
 
   void removeTab(String id) {

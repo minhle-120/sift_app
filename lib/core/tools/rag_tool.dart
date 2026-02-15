@@ -80,13 +80,15 @@ class RAGTool {
       final chunk = s.result.readTable(database.documentChunks);
       final doc = s.result.readTable(database.documents);
       
-      final index = registry.getIndex(chunk.content);
-      results.add(RAGResult(
-        content: chunk.content,
-        index: index,
-        sourceTitle: doc.title,
-        score: s.score,
-      ));
+      final index = registry.register(
+        chunk.content,
+        doc.title,
+        doc.id,
+        chunk.index,
+        s.score,
+      );
+      
+      results.add(registry.getResult(index)!);
     }
 
     // Sort by index for consistent presentation to AI
