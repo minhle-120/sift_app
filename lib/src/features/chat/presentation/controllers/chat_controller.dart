@@ -131,13 +131,6 @@ class ChatController extends StateNotifier<ChatState> {
   Future<void> sendMessage(String text, int? activeCollectionId) async {
     if (text.trim().isEmpty) return;
 
-    // 0. Pre-flight connection check
-    await checkAiConnection();
-    if (!state.isConnectionValid) {
-      state = state.copyWith(error: state.connectionError);
-      return;
-    }
-
     // 1. Ensure conversation exists
     int? conversationId = state.conversationId;
     if (conversationId == null) {
@@ -162,44 +155,12 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(isLoading: true);
     
     try {
-      // 2. Prepare Isolated Histories
-      
-      // Path A: Chat History (Clean context for the Synthesizer)
-      // Contains only User queries and finalized Assistant answers.
-      final List<ai.ChatMessage> chatHistory = [];
-      for (final m in state.messages) {
-        if (m.metadata != null && m.metadata!['exclude_from_history'] == true) {
-          continue;
-        }
-        
-        chatHistory.add(ai.ChatMessage(
-          role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
-          content: m.text,
-        ));
-      }
+      // 2. Prepare Isolated Histories via Orchestrators
+      final researchOrchestrator = _ref.read(researchOrchestratorProvider);
+      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
 
-      // Path B: Research History (High-fidelity context for the Researcher)
-      // Re-injects internal tool traces to maintain ReAct continuity.
-      final List<ai.ChatMessage> researchHistory = [];
-      for (int i = 0; i < state.messages.length; i++) {
-        final m = state.messages[i];
-        
-        if (m.metadata != null && m.metadata!['exclude_from_history'] == true) {
-          continue;
-        }
-
-        if (m.metadata != null && m.metadata!.containsKey('research_steps')) {
-          final stepsJson = m.metadata!['research_steps'] as List<dynamic>;
-          for (final step in stepsJson) {
-            researchHistory.add(ai.ChatMessage.fromJson(step as Map<String, dynamic>));
-          }
-        } else {
-          researchHistory.add(ai.ChatMessage(
-            role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
-            content: m.text,
-          ));
-        }
-      }
+      final chatHistory = chatOrchestrator.buildHistory(state.messages);
+      final researchHistory = researchOrchestrator.buildHistory(state.messages);
 
       // 3. User Message
       final userMessage = await _db.insertMessage(
@@ -220,9 +181,6 @@ class ChatController extends StateNotifier<ChatState> {
       state = state.copyWith(researchStatus: 'Initializing research...');
 
       // 5. Research AI Step
-      final researchOrchestrator = _ref.read(researchOrchestratorProvider);
-      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
-
       final researchResult = await researchOrchestrator.research(
         collectionId: activeCollectionId!,
         conversation: researchHistory,

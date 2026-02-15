@@ -41,6 +41,26 @@ class ChatOrchestrator {
     return await aiService.chat(messages);
   }
 
+  /// Builds a clean user-visible history from domain messages.
+  /// This excludes internal tool calls and internal research steps.
+  List<ChatMessage> buildHistory(List<dynamic> domainMessages) {
+    final List<ChatMessage> history = [];
+    
+    for (final m in domainMessages) {
+      // Use dynamic to avoid import issues if domain.Message is not fully typed here
+      final metadata = m.metadata as Map<String, dynamic>?;
+      if (metadata != null && metadata['exclude_from_history'] == true) {
+        continue;
+      }
+      
+      history.add(ChatMessage(
+        role: m.role.name == 'user' ? ChatRole.user : ChatRole.assistant,
+        content: m.text,
+      ));
+    }
+    return history;
+  }
+
   String _buildSystemPrompt() {
     return '''You are Sift, a helpful AI assistant. Your goal is to answer the user's question accurately using the provided background knowledge chunks.
 You have access to the full conversation history. Use it to maintain context, resolve references, and ensure your response flows naturally from previous interactions.

@@ -176,6 +176,34 @@ You have access to the conversation history. Use this context to resolve pronoun
 ''';
   }
 
+  /// Builds a high-fidelity research history from domain messages.
+  /// This re-injects internal tool traces to maintain ReAct continuity across turns.
+  List<ChatMessage> buildHistory(List<dynamic> domainMessages) {
+    final List<ChatMessage> history = [];
+    
+    for (int i = 0; i < domainMessages.length; i++) {
+      final m = domainMessages[i];
+      final metadata = m.metadata as Map<String, dynamic>?;
+
+      if (metadata != null && metadata['exclude_from_history'] == true) {
+        continue;
+      }
+
+      if (metadata != null && metadata.containsKey('research_steps')) {
+        final stepsJson = metadata['research_steps'] as List<dynamic>;
+        for (final step in stepsJson) {
+          history.add(ChatMessage.fromJson(step as Map<String, dynamic>));
+        }
+      } else {
+        history.add(ChatMessage(
+          role: m.role.name == 'user' ? ChatRole.user : ChatRole.assistant,
+          content: m.text,
+        ));
+      }
+    }
+    return history;
+  }
+
   Map<String, dynamic> _parseArgs(String arguments) {
     try {
       // Basic JSON parsing
