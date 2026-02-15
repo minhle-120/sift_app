@@ -91,11 +91,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _buildHeader(context, ref, collectionState.activeCollection),
         
         Expanded(
-          child: collectionState.activeCollection == null
-              ? _buildLibraryView(context, ref, collectionState)
-              : (chatState.messages.isEmpty 
-                  ? _buildEmptyChatState(theme) 
-                  : _buildMessagesList(chatState)),
+          child: Column(
+            children: [
+              if (!chatState.isConnectionValid)
+                _buildConnectionWarning(theme, chatState.connectionError),
+              Expanded(
+                child: SelectionArea(
+                  child: collectionState.activeCollection == null
+                      ? _buildLibraryView(context, ref, collectionState)
+                      : (chatState.messages.isEmpty && !chatState.isLoading
+                          ? _buildEmptyChatState(theme) 
+                          : _buildMessagesList(chatState)),
+                ),
+              ),
+            ],
+          ),
         ),
 
         if (collectionState.activeCollection != null)
@@ -357,6 +367,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  // Remove _buildResearchStatusIndicator
+
   Widget _buildInputArea(ChatState chatState, ThemeData theme) {
     return SafeArea(
       top: false,
@@ -499,6 +511,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               }
             },
             child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionWarning(ThemeData theme, String? error) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: theme.colorScheme.errorContainer,
+      child: Row(
+        children: [
+          Icon(Icons.wifi_off_rounded, size: 20, color: theme.colorScheme.onErrorContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              error ?? "Cannot connect to AI Server",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => ref.read(chatControllerProvider.notifier).checkAiConnection(),
+            child: Text(
+              "Retry",
+              style: TextStyle(color: theme.colorScheme.primary),
+            ),
           ),
         ],
       ),

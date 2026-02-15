@@ -3,20 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/message.dart' as domain;
 import 'package:sift_app/core/storage/sift_database.dart';
 import 'package:sift_app/core/storage/database_provider.dart';
+import 'package:sift_app/src/features/orchestrator/domain/research_orchestrator.dart';
+import 'package:sift_app/src/features/orchestrator/domain/chat_orchestrator.dart';
+import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
+import 'package:sift_app/core/models/ai_models.dart' as ai;
+import 'package:sift_app/core/services/openai_service.dart';
 
 class ChatState {
   final bool isLoading;
   final List<domain.Message> messages;
   final String? error;
   final int? conversationId;
-  final String? researchKeywords;
+  final String? researchStatus;
+  final bool isConnectionValid;
+  final String? connectionError;
 
   const ChatState({
     this.isLoading = false,
     this.messages = const [],
     this.error,
     this.conversationId,
-    this.researchKeywords,
+    this.researchStatus,
+    this.isConnectionValid = true,
+    this.connectionError,
   });
 
   ChatState copyWith({
@@ -24,7 +33,9 @@ class ChatState {
     List<domain.Message>? messages,
     String? error,
     int? conversationId,
-    String? researchKeywords,
+    String? researchStatus,
+    bool? isConnectionValid,
+    String? connectionError,
     bool clearConversationId = false,
   }) {
     return ChatState(
@@ -32,7 +43,9 @@ class ChatState {
       messages: messages ?? this.messages,
       error: error,
       conversationId: clearConversationId ? null : (conversationId ?? this.conversationId),
-      researchKeywords: researchKeywords ?? this.researchKeywords,
+      researchStatus: researchStatus ?? this.researchStatus,
+      isConnectionValid: isConnectionValid ?? this.isConnectionValid,
+      connectionError: connectionError ?? this.connectionError,
     );
   }
 }
@@ -40,9 +53,31 @@ class ChatState {
 class ChatController extends StateNotifier<ChatState> {
   // ignore: unused_field
   final AppDatabase _db;
+  final Ref _ref;
   StreamSubscription<List<Message>>? _messagesSubscription;
 
-  ChatController(this._db) : super(const ChatState());
+  ChatController(this._db, this._ref) : super(const ChatState()) {
+    // Initial check
+    checkAiConnection();
+    
+    // Watch for settings changes (URL or Model) to re-verify connectivity
+    _ref.listen<SettingsState>(settingsProvider, (previous, next) {
+      if (previous?.llamaServerUrl != next.llamaServerUrl || 
+          previous?.chatModel != next.chatModel) {
+        checkAiConnection();
+      }
+    });
+  }
+
+  Future<void> checkAiConnection() async {
+    final aiService = _ref.read(aiServiceProvider);
+    final isValid = await aiService.checkConnection();
+    
+    state = state.copyWith(
+      isConnectionValid: isValid,
+      connectionError: isValid ? null : "AI Server is unreachable. Please check your settings.",
+    );
+  }
 
   @override
   void dispose() {
@@ -93,6 +128,13 @@ class ChatController extends StateNotifier<ChatState> {
   Future<void> sendMessage(String text, int? activeCollectionId) async {
     if (text.trim().isEmpty) return;
 
+    // 0. Pre-flight connection check
+    await checkAiConnection();
+    if (!state.isConnectionValid) {
+      state = state.copyWith(error: state.connectionError);
+      return;
+    }
+
     // 1. Ensure conversation exists
     int? conversationId = state.conversationId;
     if (conversationId == null) {
@@ -125,12 +167,60 @@ class ChatController extends StateNotifier<ChatState> {
         sortOrder: state.messages.length,
       );
 
-      // 3. For now, just stop loading. AI integration comes later.
-      // The watchMessages stream will update the UI with the new user message.
-      state = state.copyWith(isLoading: false);
+      state = state.copyWith(researchStatus: 'Initializing research...');
+
+      // 3. Insert Placeholder Assistant Message
+      final placeholderMessage = await _db.insertMessage(
+        conversationId: conversationId,
+        role: 'assistant',
+        content: 'Researching...',
+        sortOrder: state.messages.length,
+      );
+
+      // 4. Research AI Step
+      final researchOrchestrator = _ref.read(researchOrchestratorProvider);
+      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
+
+      // Convert domain.Message to ai.ChatMessage for the orchestrators
+      final conversationHistory = state.messages.map((m) => ai.ChatMessage(
+        role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
+        content: m.text,
+      )).toList();
+
+      final researchResult = await researchOrchestrator.research(
+        collectionId: activeCollectionId!,
+        conversation: conversationHistory,
+        userQuery: text,
+        onStatusUpdate: (status) {
+          state = state.copyWith(researchStatus: status);
+          _db.updateMessageContent(placeholderMessage.id, status);
+        },
+      );
+
+      ai.ChatMessage finalMessage;
+
+      if (researchResult.package != null) {
+        state = state.copyWith(researchStatus: 'Synthesizing final answer...');
+        _db.updateMessageContent(placeholderMessage.id, 'Synthesizing final answer...');
+        
+        finalMessage = await chatOrchestrator.synthesize(
+          originalQuery: text,
+          conversation: conversationHistory,
+          package: researchResult.package!,
+          registry: researchOrchestrator.registry,
+        );
+      } else {
+        await _db.updateMessageContent(placeholderMessage.id, 'I couldn\'t find enough specific information to answer that accurately.');
+        throw Exception('I couldn\'t find enough specific information to answer that accurately.');
+      }
+
+      // 5. Update Placeholder with Final Message
+      await _db.updateMessageContent(placeholderMessage.id, finalMessage.content);
+
+      state = state.copyWith(isLoading: false, researchStatus: null);
       
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: "Failed to send message: $e");
+      state = state.copyWith(isLoading: false, error: "Failed to process research: $e", researchStatus: null);
     }
   }
 
@@ -151,5 +241,5 @@ class ChatController extends StateNotifier<ChatState> {
 
 final chatControllerProvider = StateNotifierProvider<ChatController, ChatState>((ref) {
   final db = ref.watch(databaseProvider);
-  return ChatController(db);
+  return ChatController(db, ref);
 });

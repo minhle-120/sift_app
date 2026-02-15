@@ -39,7 +39,7 @@ class MessageBubble extends StatelessWidget {
                 if (message.reasoning != null) _buildReasoning(theme, message.reasoning!),
                 MarkdownBody(
                   data: message.text,
-                  selectable: true,
+                  selectable: false,
                   extensionSet: md.ExtensionSet(
                     [...md.ExtensionSet.gitHubFlavored.blockSyntaxes],
                     [

@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'dart:math' as math;
 import 'package:uuid/uuid.dart';
 import 'tables.dart';
 
@@ -114,6 +116,14 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
+
+  /// Update a message's content.
+  Future<void> updateMessageContent(int id, String content) {
+    return (update(messages)..where((t) => t.id.equals(id))).write(
+      MessagesCompanion(content: Value(content)),
+    );
+  }
+
   // --- Document Operations ---
 
   Stream<List<Document>> watchCollectionDocuments(int collectionId) {
@@ -158,6 +168,51 @@ class AppDatabase extends _$AppDatabase {
     await batch((batch) {
       batch.insertAll(documentChunks, chunks);
     });
+  }
+
+  /// Performs a simple cosine-similarity search over chunks in a collection.
+  Future<List<TypedResult>> vectorSearch({
+    required int collectionId,
+    required List<double> queryEmbedding,
+    int limit = 10,
+  }) async {
+    // Join chunks with documents to filter by collectionId
+    final query = select(documentChunks).join([
+      innerJoin(documents, documents.id.equalsExp(documentChunks.documentId)),
+    ])
+      ..where(documents.collectionId.equals(collectionId));
+
+    final allResults = await query.get();
+    
+    // Sort by cosine similarity in memory (Dart)
+    // For production-grade at scale, we'd use a vector DB or sqlite-vss
+    final List<MapEntry<TypedResult, double>> scored = [];
+    
+    for (final row in allResults) {
+      final chunk = row.readTable(documentChunks);
+      final embeddingData = jsonDecode(chunk.embedding) as List<dynamic>;
+      final embedding = embeddingData.cast<double>();
+      
+      final score = _calculateCosineSimilarity(queryEmbedding, embedding);
+      scored.add(MapEntry(row, score));
+    }
+
+    scored.sort((a, b) => b.value.compareTo(a.value));
+    
+    return scored.take(limit).map((e) => e.key).toList();
+  }
+
+  double _calculateCosineSimilarity(List<double> a, List<double> b) {
+    if (a.length != b.length) return 0.0;
+    double dotProduct = 0.0;
+    double normA = 0.0;
+    double normB = 0.0;
+    for (int i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    return dotProduct / (math.sqrt(normA) * math.sqrt(normB));
   }
 
   // --- Shared Sync Logic ---
