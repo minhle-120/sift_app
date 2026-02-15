@@ -255,7 +255,8 @@ class ChatController extends StateNotifier<ChatState> {
         await _db.updateMessageMetadata(userMessage.id, metadata: jsonEncode({'exclude_from_history': true}));
         
         // Update assistant placeholder
-        await _db.updateMessageContent(placeholderMessage.id, 'No information found about that in the current library.');
+        final reason = researchResult.noInfoReason ?? 'No information found about that in the current library.';
+        await _db.updateMessageContent(placeholderMessage.id, reason);
         await _db.updateMessageMetadata(placeholderMessage.id, metadata: jsonEncode(metadata));
 
         state = state.copyWith(isLoading: false, researchStatus: null);

@@ -127,8 +127,11 @@ class ResearchOrchestrator {
           return ResearchResult(package: package, steps: messages.sublist(newStepsStartIndex));
         } else if (toolCall.function.name == NoInfoFoundTool.name) {
           // AI specifically said no info found
+          final args = _parseArgs(toolCall.function.arguments);
+          final reason = args['reason'] as String?;
           return ResearchResult(
             noInfoFound: true, 
+            noInfoReason: reason,
             steps: messages.sublist(newStepsStartIndex),
           );
         } else {
@@ -161,12 +164,13 @@ You have access to the conversation history. Use this context to resolve pronoun
 1. **Understand Context**: Analyze the provided conversation history to rephrase the user's latest query into standalone search terms if necessary.
 2. **Search**: Use `query_knowledge_base` to find relevant document chunks.
 3. **Evaluate**: Review the returned chunks. If more information is needed, search again with different keywords or queries.
-4. **No Information Found**: If you have searched extensively and found no relevant information to answer the user query accurately, call `no_info_found`.
+4. **No Information Found**: If you have searched and found no relevant information to answer the user query accurately, call `no_info_found`. **CRITICAL**: You MUST attempt at least one `query_knowledge_base` call before concluding that no information exists.
 5. **Delegate**: Once you have found enough relevant information, call `delegate_to_synthesizer` with the indices of the most relevant chunks. This hands off the final answer generation to a specialized Chat model.
 
 ### Rules:
 - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
 - Use the conversation history to ensure your searches are targeted and context-aware.
+- **Search First**: Do NOT call `no_info_found` unless you have already received search results that were irrelevant or insufficient.
 - If you call `no_info_found`, the research session will terminate immediately.
 - Your mission is complete when you have delegated the work via `delegate_to_synthesizer` or called `no_info_found`.
 ''';
