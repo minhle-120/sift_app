@@ -162,54 +162,43 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(isLoading: true);
     
     try {
-      // 2. Prepare History (Expanded with past research steps)
-      final List<ai.ChatMessage> conversationHistory = [];
+      // 2. Prepare Isolated Histories
+      
+      // Path A: Chat History (Clean context for the Synthesizer)
+      // Contains only User queries and finalized Assistant answers.
+      final List<ai.ChatMessage> chatHistory = [];
+      for (final m in state.messages) {
+        if (m.metadata != null && m.metadata!['exclude_from_history'] == true) {
+          continue;
+        }
+        
+        chatHistory.add(ai.ChatMessage(
+          role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
+          content: m.text,
+        ));
+      }
+
+      // Path B: Research History (High-fidelity context for the Researcher)
+      // Re-injects internal tool traces to maintain ReAct continuity.
+      final List<ai.ChatMessage> researchHistory = [];
       for (int i = 0; i < state.messages.length; i++) {
         final m = state.messages[i];
         
-        // --- NEW: History Pruning ---
         if (m.metadata != null && m.metadata!['exclude_from_history'] == true) {
           continue;
         }
 
-        // Peek at next message to see if we should skip this user query (if it's already in the next assistant's research steps)
-        bool hasDetailedNext = false;
-        if (m.role == domain.MessageRole.user && i + 1 < state.messages.length) {
-          final next = state.messages[i+1];
-          if (next.metadata != null && next.metadata!.containsKey('research_steps')) {
-            hasDetailedNext = true;
-          }
-        }
-
-        if (hasDetailedNext) continue;
-
-        // Re-inject saved research steps if they exist
         if (m.metadata != null && m.metadata!.containsKey('research_steps')) {
           final stepsJson = m.metadata!['research_steps'] as List<dynamic>;
           for (final step in stepsJson) {
-            conversationHistory.add(ai.ChatMessage.fromJson(step as Map<String, dynamic>));
+            researchHistory.add(ai.ChatMessage.fromJson(step as Map<String, dynamic>));
           }
         } else {
-          conversationHistory.add(ai.ChatMessage(
+          researchHistory.add(ai.ChatMessage(
             role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
             content: m.text,
           ));
         }
-      }
-
-      // ... (Separate builders for chatHistory and researchHistory remain the same logic, 
-      // but they should also respect 'exclude_from_history')
-      
-      final List<ai.ChatMessage> chatHistory = [];
-      final List<ai.ChatMessage> researchHistory = [];
-
-      for (int i = 0; i < conversationHistory.length; i++) {
-         final m = conversationHistory[i];
-         researchHistory.add(m);
-         // Synthesizer only gets visible role messages
-         if (m.role == ai.ChatRole.user || m.role == ai.ChatRole.assistant) {
-           chatHistory.add(m);
-         }
       }
 
       // 3. User Message
