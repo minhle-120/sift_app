@@ -185,17 +185,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ),
            if (hasActiveCollection) ...[
-             IconButton(
-              icon: const Icon(Icons.description_outlined),
-              tooltip: 'Collection Documents',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const DocumentsScreen()),
-                );
-              },
-            ),
-          ],
-          if (hasActiveCollection) ...[
             IconButton(
               icon: Icon(
                 ref.watch(workbenchProvider).isCollapsed 
@@ -204,6 +193,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               tooltip: 'Toggle Workbench',
               onPressed: () => ref.read(workbenchProvider.notifier).toggleCollapsed(),
+            ),
+            IconButton(
+              icon: const Icon(Icons.description_outlined),
+              tooltip: 'Collection Documents',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const DocumentsScreen()),
+                );
+              },
             ),
             IconButton(
               icon: const Icon(Icons.add_comment_outlined),

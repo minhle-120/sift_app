@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum WorkbenchTabType { graph, analysis, sandbox, document, diagram }
 
@@ -58,18 +59,38 @@ class WorkbenchState {
 }
 
 class WorkbenchController extends StateNotifier<WorkbenchState> {
-  WorkbenchController() : super(const WorkbenchState());
+  WorkbenchController() : super(const WorkbenchState()) {
+    _loadState();
+  }
 
-  void updateWidth(double width, {double? maxAvailableWidth}) {
+  Future<void> _loadState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isCollapsed = prefs.getBool('workbench_isCollapsed') ?? true;
+    final panelWidth = prefs.getDouble('workbench_panelWidth') ?? 400.0;
+    
+    state = state.copyWith(
+      isCollapsed: isCollapsed,
+      panelWidth: panelWidth,
+    );
+  }
+
+  Future<void> updateWidth(double width, {double? maxAvailableWidth}) async {
     if (width < 250) width = 250;
     if (maxAvailableWidth != null && width > maxAvailableWidth * 0.8) {
       width = maxAvailableWidth * 0.8;
     }
     state = state.copyWith(panelWidth: width);
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('workbench_panelWidth', width);
   }
 
-  void toggleCollapsed() {
-    state = state.copyWith(isCollapsed: !state.isCollapsed);
+  Future<void> toggleCollapsed() async {
+    final newState = !state.isCollapsed;
+    state = state.copyWith(isCollapsed: newState);
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('workbench_isCollapsed', newState);
   }
 
   void addTab(WorkbenchTab tab) {
