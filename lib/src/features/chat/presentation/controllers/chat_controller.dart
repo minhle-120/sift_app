@@ -286,7 +286,7 @@ class ChatController extends StateNotifier<ChatState> {
 
       state = state.copyWith(isLoading: false, researchStatus: null);
       
-    } catch (e, stack) {
+    } catch (e) {
       state = state.copyWith(isLoading: false, error: "Failed to process research: $e", researchStatus: null);
     } finally {
       _isAiProcessing = false;
