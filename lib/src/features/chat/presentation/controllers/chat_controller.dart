@@ -162,47 +162,73 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(isLoading: true);
     
     try {
-      // 2. Prepare Histories
-      
-      // A. Chat History (User-visible messages ONLY for the Synthesizer)
-      final List<ai.ChatMessage> chatHistory = state.messages.map((m) => ai.ChatMessage(
-        role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
-        content: m.text,
-      )).toList();
+      // 2. Prepare History (Expanded with past research steps)
+      final List<ai.ChatMessage> conversationHistory = [];
+      for (int i = 0; i < state.messages.length; i++) {
+        final m = state.messages[i];
+        
+        // --- NEW: History Pruning ---
+        if (m.metadata != null && m.metadata!['exclude_from_history'] == true) {
+          continue;
+        }
 
-      // B. Research History (Internal ReAct steps for the Researcher)
-      final List<ai.ChatMessage> researchHistory = [];
-      for (final m in state.messages) {
+        // Peek at next message to see if we should skip this user query (if it's already in the next assistant's research steps)
+        bool hasDetailedNext = false;
+        if (m.role == domain.MessageRole.user && i + 1 < state.messages.length) {
+          final next = state.messages[i+1];
+          if (next.metadata != null && next.metadata!.containsKey('research_steps')) {
+            hasDetailedNext = true;
+          }
+        }
+
+        if (hasDetailedNext) continue;
+
+        // Re-inject saved research steps if they exist
         if (m.metadata != null && m.metadata!.containsKey('research_steps')) {
           final stepsJson = m.metadata!['research_steps'] as List<dynamic>;
           for (final step in stepsJson) {
-            researchHistory.add(ai.ChatMessage.fromJson(step as Map<String, dynamic>));
+            conversationHistory.add(ai.ChatMessage.fromJson(step as Map<String, dynamic>));
           }
         } else {
-          researchHistory.add(ai.ChatMessage(
+          conversationHistory.add(ai.ChatMessage(
             role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
             content: m.text,
           ));
         }
       }
 
-      // 3. Insert User Message
-      await _db.insertMessage(
+      // ... (Separate builders for chatHistory and researchHistory remain the same logic, 
+      // but they should also respect 'exclude_from_history')
+      
+      final List<ai.ChatMessage> chatHistory = [];
+      final List<ai.ChatMessage> researchHistory = [];
+
+      for (int i = 0; i < conversationHistory.length; i++) {
+         final m = conversationHistory[i];
+         researchHistory.add(m);
+         // Synthesizer only gets visible role messages
+         if (m.role == ai.ChatRole.user || m.role == ai.ChatRole.assistant) {
+           chatHistory.add(m);
+         }
+      }
+
+      // 3. User Message
+      final userMessage = await _db.insertMessage(
         conversationId: conversationId,
         role: 'user',
         content: text,
         sortOrder: state.messages.length,
       );
 
-      state = state.copyWith(researchStatus: 'Initializing research...');
-
-      // 4. Insert Placeholder Assistant Message
+      // 4. Placeholder Assistant Message
       final placeholderMessage = await _db.insertMessage(
         conversationId: conversationId,
         role: 'assistant',
         content: 'Researching...',
-        sortOrder: state.messages.length,
+        sortOrder: state.messages.length + 1,
       );
+
+      state = state.copyWith(researchStatus: 'Initializing research...');
 
       // 5. Research AI Step
       final researchOrchestrator = _ref.read(researchOrchestratorProvider);
@@ -217,6 +243,24 @@ class ChatController extends StateNotifier<ChatState> {
           _db.updateMessageContent(placeholderMessage.id, status);
         },
       );
+
+      if (researchResult.noInfoFound) {
+        // AI found nothing. Stop and prune this turn.
+        final metadata = {
+          'exclude_from_history': true,
+          'research_steps': researchResult.steps?.map((s) => s.toJson()).toList() ?? [],
+        };
+
+        // Mark user query as pruned too
+        await _db.updateMessageMetadata(userMessage.id, metadata: jsonEncode({'exclude_from_history': true}));
+        
+        // Update assistant placeholder
+        await _db.updateMessageContent(placeholderMessage.id, 'No information found about that in the current library.');
+        await _db.updateMessageMetadata(placeholderMessage.id, metadata: jsonEncode(metadata));
+
+        state = state.copyWith(isLoading: false, researchStatus: null);
+        return;
+      }
 
       ai.ChatMessage finalMessage;
 

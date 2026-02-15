@@ -12,8 +12,9 @@ class ResearchResult {
   final ChatMessage? output;
   final ResearchPackage? package;
   final List<ChatMessage>? steps;
+  final bool noInfoFound;
 
-  ResearchResult({this.output, this.package, this.steps});
+  ResearchResult({this.output, this.package, this.steps, this.noInfoFound = false});
 }
 
 enum ChatRole {
