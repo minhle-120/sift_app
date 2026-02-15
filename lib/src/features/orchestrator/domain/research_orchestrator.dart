@@ -53,32 +53,36 @@ class ResearchOrchestrator {
 
   /// Starts a research session for a given query and context.
   /// [collectionId] is the local library to search.
-  /// [conversation] is the list of visible messages.
+  /// [historicalContext] is the formatted string of previous turns.
   /// [userQuery] is the specific question to answer.
   /// [onStatusUpdate] is called as the AI moves through the research steps.
   Future<ResearchResult> research({
     required int collectionId,
-    required List<ChatMessage> conversation,
+    required String historicalContext,
     required String userQuery,
     void Function(String status)? onStatusUpdate,
   }) async {
     registry.reset();
     onStatusUpdate?.call('Starting research...');
 
-    // 1. Prepare Initial Messages
+    // 1. Prepare Unified Context Message
+    // This bundles all previous turns and the current query into one user message.
+    final contextPrompt = historicalContext.isEmpty 
+        ? userQuery 
+        : '$historicalContext\n\nCurrent query: $userQuery';
+
     final messages = [
       ChatMessage(
         role: ChatRole.system,
         content: _buildSystemPrompt(),
       ),
-      ...conversation,
       ChatMessage(
         role: ChatRole.user,
-        content: userQuery,
+        content: contextPrompt,
       ),
     ];
 
-    final int newStepsStartIndex = messages.length; // Start capturing steps AFTER the user query
+    final int newStepsStartIndex = messages.length; // Start capturing steps AFTER the context message
 
     // 2. ReAct Loop
     int iterations = 0;
@@ -177,32 +181,32 @@ You have access to the conversation history. Use this context to resolve pronoun
 ''';
   }
 
-  /// Builds a high-fidelity research history from domain messages.
-  /// This re-injects internal tool traces to maintain ReAct continuity across turns.
-  List<ChatMessage> buildHistory(List<domain.Message> domainMessages) {
-    final List<ChatMessage> history = [];
+  /// Builds a clean user-assistant chat history string from domain messages.
+  /// This excludes all internal research steps and tool traces.
+  String buildHistory(List<domain.Message> domainMessages) {
+    final StringBuffer buffer = StringBuffer();
     
     for (int i = 0; i < domainMessages.length; i++) {
       final m = domainMessages[i];
       final metadata = m.metadata;
 
+      // Skip messages that are explicitly marked for exclusion (e.g., pruned 'no info' turns)
       if (metadata != null && metadata['exclude_from_history'] == true) {
         continue;
       }
 
-      if (metadata != null && metadata.containsKey('research_steps')) {
-        final stepsJson = metadata['research_steps'] as List<dynamic>;
-        for (final step in stepsJson) {
-          history.add(ChatMessage.fromJson(step as Map<String, dynamic>));
-        }
-      } else {
-        history.add(ChatMessage(
-          role: m.role == domain.MessageRole.user ? ChatRole.user : ChatRole.assistant,
-          content: m.text,
-        ));
+      if (m.role == domain.MessageRole.user) {
+        if (buffer.isNotEmpty) buffer.write('\n\n');
+        buffer.write('Query: ${m.text}');
+      } else if (m.role == domain.MessageRole.assistant) {
+        if (buffer.isNotEmpty) buffer.write('\n');
+        // Strip Citations: Remove [[Chunk X]] markers to keep history clean for the researcher
+        final cleanText = m.text.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '');
+        buffer.write('Synthesizer answer: ${cleanText.trim()}');
       }
     }
-    return history;
+    
+    return buffer.toString();
   }
 
   Map<String, dynamic> _parseArgs(String arguments) {

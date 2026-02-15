@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import '../../core/models/ai_models.dart';
 import '../../src/features/chat/presentation/controllers/settings_controller.dart';
@@ -67,6 +68,62 @@ class OpenAiService implements IAiService {
       );
     } else {
       throw Exception('OpenAI Service Error: ${response.statusCode} - ${response.data}');
+    }
+  }
+
+  @override
+  Stream<String> streamChat(List<ChatMessage> messages) async* {
+    final settings = _ref.read(settingsProvider);
+    final baseUrl = settings.llamaServerUrl;
+    final model = settings.chatModel;
+
+    final response = await _dio.post(
+      '$baseUrl/v1/chat/completions',
+      data: {
+        'model': model,
+        'messages': messages.map((m) => m.toJson()).toList(),
+        'stream': true,
+      },
+      options: Options(
+        responseType: ResponseType.stream,
+        receiveTimeout: const Duration(seconds: 60),
+        sendTimeout: const Duration(seconds: 30),
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      final Stream<List<int>> stream = response.data.stream;
+      String buffer = '';
+
+      // Use bind and cast to avoid Uint8List vs List<int> type conflicts in transform()
+      final decodedStream = utf8.decoder.bind(stream.cast<List<int>>());
+
+      await for (final text in decodedStream) {
+        buffer += text;
+
+        while (buffer.contains('\n')) {
+          final index = buffer.indexOf('\n');
+          final line = buffer.substring(0, index).trim();
+          buffer = buffer.substring(index + 1);
+
+          if (line.startsWith('data: ')) {
+            final data = line.substring(6);
+            if (data == '[DONE]') break;
+
+            try {
+              final json = jsonDecode(data);
+              final content = json['choices'][0]['delta']['content'] as String?;
+              if (content != null && content.isNotEmpty) {
+                yield content;
+              }
+            } catch (e) {
+              // Ignore invalid JSON chunks (often headers or partial chunks)
+            }
+          }
+        }
+      }
+    } else {
+      throw Exception('OpenAI Streaming Service Error: ${response.statusCode}');
     }
   }
 

@@ -191,7 +191,7 @@ class ChatController extends StateNotifier<ChatState> {
       // 5. Research AI Step
       final researchResult = await researchOrchestrator.research(
         collectionId: activeCollectionId!,
-        conversation: researchHistory,
+        historicalContext: researchHistory,
         userQuery: text,
         onStatusUpdate: (status) {
           state = state.copyWith(researchStatus: status);
@@ -218,20 +218,10 @@ class ChatController extends StateNotifier<ChatState> {
         return;
       }
 
-      ai.ChatMessage finalMessage;
+      String finalContent = '';
 
       if (researchResult.package != null) {
-        state = state.copyWith(researchStatus: 'Synthesizing final answer...');
-        _db.updateMessageContent(placeholderMessage.id, 'Synthesizing final answer...');
-        
-        finalMessage = await chatOrchestrator.synthesize(
-          originalQuery: text,
-          conversation: chatHistory,
-          package: researchResult.package!,
-          registry: researchOrchestrator.registry,
-        );
-
-        // Save citation metadata
+        // 1. Build Citation Metadata Early (so citations work DURING streaming)
         final citationData = <String, dynamic>{};
         for (final index in researchResult.package!.indices) {
           final res = researchOrchestrator.registry.getResult(index);
@@ -242,6 +232,27 @@ class ChatController extends StateNotifier<ChatState> {
               'chunkIndex': res.chunkIndex,
             };
           }
+        }
+        
+        await _db.updateMessageMetadata(
+          placeholderMessage.id, 
+          citations: jsonEncode(citationData),
+        );
+
+        state = state.copyWith(researchStatus: 'Synthesizing final answer...');
+        await _db.updateMessageContent(placeholderMessage.id, 'Synthesizing...');
+        
+        final stream = chatOrchestrator.streamSynthesize(
+          originalQuery: text,
+          conversation: chatHistory,
+          package: researchResult.package!,
+          registry: researchOrchestrator.registry,
+        );
+
+        await for (final chunk in stream) {
+          finalContent += chunk;
+          // Update DB in real-time for UI reactivity
+          _db.updateMessageContent(placeholderMessage.id, finalContent);
         }
 
         // --- NEW: Persist Research Steps ---
@@ -259,7 +270,7 @@ class ChatController extends StateNotifier<ChatState> {
           
           completeSteps.add(ai.ChatMessage(
             role: ai.ChatRole.tool,
-            content: finalMessage.content,
+            content: finalContent,
             toolCallId: delegateCall.id,
             name: 'delegate_to_synthesizer',
           ));
@@ -273,16 +284,12 @@ class ChatController extends StateNotifier<ChatState> {
 
         await _db.updateMessageMetadata(
           placeholderMessage.id, 
-          citations: jsonEncode(citationData),
           metadata: jsonEncode(metadata),
         );
       } else {
         await _db.updateMessageContent(placeholderMessage.id, 'I couldn\'t find enough specific information to answer that accurately.');
         throw Exception('I couldn\'t find enough specific information to answer that accurately.');
       }
-
-      // 5. Update Placeholder with Final Message
-      await _db.updateMessageContent(placeholderMessage.id, finalMessage.content);
 
       state = state.copyWith(isLoading: false, researchStatus: null);
       

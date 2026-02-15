@@ -42,6 +42,34 @@ class ChatOrchestrator {
     return await aiService.chat(messages);
   }
 
+  Stream<String> streamSynthesize({
+    required String originalQuery,
+    required List<ChatMessage> conversation,
+    required ResearchPackage package,
+    required ChunkRegistry registry,
+  }) async* {
+    // 1. Resolve Chunks
+    final List<String> resolvedChunks = [];
+    for (final index in package.indices) {
+      final res = registry.getResult(index);
+      if (res != null) {
+        resolvedChunks.add('[[Chunk $index]]\n${res.content}');
+      }
+    }
+
+    // 2. Build Message List
+    final combinedUserMessage = _buildCombinedMessage(resolvedChunks, originalQuery);
+    
+    final messages = [
+      ChatMessage(role: ChatRole.system, content: _buildSystemPrompt()),
+      ...conversation,
+      ChatMessage(role: ChatRole.user, content: combinedUserMessage),
+    ];
+
+    // 3. Yield chunks from the stream
+    yield* aiService.streamChat(messages);
+  }
+
   /// Builds a clean user-visible history from domain messages.
   /// This excludes internal tool calls and internal research steps.
   List<ChatMessage> buildHistory(List<domain.Message> domainMessages) {
@@ -62,12 +90,11 @@ class ChatOrchestrator {
 
   String _buildSystemPrompt() {
     return '''You are Sift, a helpful AI assistant. Your goal is to answer the user's question accurately using the provided background knowledge chunks.
-You have access to the full conversation history. Use it to maintain context, resolve references, and ensure your response flows naturally from previous interactions.
 
 ### Citation Rules:
 1. **Strict Format**: EVERY piece of information from the background context MUST be cited using exactly this format: `[[Chunk X]]` where X is the chunk number.
 2. **Immediate Placement**: Place citations immediately after the sentence or claim they support, not just at the end of a paragraph.
-3. **No Alternatives**: NEVER use formats like "(Chunk 1)", "Source 1", or "according to Bender et al.". ONLY use the `[[Chunk X]]` tag.
+3. **No Alternatives**: NEVER use formats like "(Chunk 1)", "Source 1", or "according to xyz". ONLY use the `[[Chunk X]]` tag.
 4. **Multiple Sources**: If multiple chunks support a claim, list them all: `[[Chunk 1]][[Chunk 2]]`.
 
 ### Instructions:
