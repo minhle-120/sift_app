@@ -8,6 +8,14 @@ class ResearchPackage {
   String toString() => 'ResearchPackage(indices: $indices)';
 }
 
+class ResearchResult {
+  final ChatMessage? output;
+  final ResearchPackage? package;
+  final List<ChatMessage>? steps;
+
+  ResearchResult({this.output, this.package, this.steps});
+}
+
 enum ChatRole {
   system,
   user,
@@ -38,6 +46,18 @@ class ChatMessage {
       if (toolCallId != null) 'tool_call_id': toolCallId,
       if (toolCalls != null) 'tool_calls': toolCalls!.map((e) => e.toJson()).toList(),
     };
+  }
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      role: ChatRole.values.firstWhere((e) => e.name == json['role']),
+      content: json['content'] ?? '',
+      name: json['name'],
+      toolCallId: json['tool_call_id'],
+      toolCalls: json['tool_calls'] != null
+          ? (json['tool_calls'] as List).map((e) => ToolCall.fromJson(e)).toList()
+          : null,
+    );
   }
 }
 

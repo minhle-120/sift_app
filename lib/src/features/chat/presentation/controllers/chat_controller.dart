@@ -108,6 +108,7 @@ class ChatController extends StateNotifier<ChatState> {
           timestamp: m.createdAt,
           reasoning: m.reasoning,
           citations: m.citations != null ? (jsonDecode(m.citations!) as Map<String, dynamic>) : null,
+          metadata: m.metadata != null ? (jsonDecode(m.metadata!) as Map<String, dynamic>) : null,
         )).toList();
         
         state = state.copyWith(
@@ -159,9 +160,33 @@ class ChatController extends StateNotifier<ChatState> {
     }
 
     state = state.copyWith(isLoading: true);
-
+    
     try {
-      // 2. Insert User Message
+      // 2. Prepare Histories
+      
+      // A. Chat History (User-visible messages ONLY for the Synthesizer)
+      final List<ai.ChatMessage> chatHistory = state.messages.map((m) => ai.ChatMessage(
+        role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
+        content: m.text,
+      )).toList();
+
+      // B. Research History (Internal ReAct steps for the Researcher)
+      final List<ai.ChatMessage> researchHistory = [];
+      for (final m in state.messages) {
+        if (m.metadata != null && m.metadata!.containsKey('research_steps')) {
+          final stepsJson = m.metadata!['research_steps'] as List<dynamic>;
+          for (final step in stepsJson) {
+            researchHistory.add(ai.ChatMessage.fromJson(step as Map<String, dynamic>));
+          }
+        } else {
+          researchHistory.add(ai.ChatMessage(
+            role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
+            content: m.text,
+          ));
+        }
+      }
+
+      // 3. Insert User Message
       await _db.insertMessage(
         conversationId: conversationId,
         role: 'user',
@@ -171,7 +196,7 @@ class ChatController extends StateNotifier<ChatState> {
 
       state = state.copyWith(researchStatus: 'Initializing research...');
 
-      // 3. Insert Placeholder Assistant Message
+      // 4. Insert Placeholder Assistant Message
       final placeholderMessage = await _db.insertMessage(
         conversationId: conversationId,
         role: 'assistant',
@@ -179,19 +204,13 @@ class ChatController extends StateNotifier<ChatState> {
         sortOrder: state.messages.length,
       );
 
-      // 4. Research AI Step
+      // 5. Research AI Step
       final researchOrchestrator = _ref.read(researchOrchestratorProvider);
       final chatOrchestrator = _ref.read(chatOrchestratorProvider);
 
-      // Convert domain.Message to ai.ChatMessage for the orchestrators
-      final conversationHistory = state.messages.map((m) => ai.ChatMessage(
-        role: m.role == domain.MessageRole.user ? ai.ChatRole.user : ai.ChatRole.assistant,
-        content: m.text,
-      )).toList();
-
       final researchResult = await researchOrchestrator.research(
         collectionId: activeCollectionId!,
-        conversation: conversationHistory,
+        conversation: researchHistory,
         userQuery: text,
         onStatusUpdate: (status) {
           state = state.copyWith(researchStatus: status);
@@ -207,7 +226,7 @@ class ChatController extends StateNotifier<ChatState> {
         
         finalMessage = await chatOrchestrator.synthesize(
           originalQuery: text,
-          conversation: conversationHistory,
+          conversation: chatHistory,
           package: researchResult.package!,
           registry: researchOrchestrator.registry,
         );
@@ -224,7 +243,39 @@ class ChatController extends StateNotifier<ChatState> {
             };
           }
         }
-        await _db.updateMessageMetadata(placeholderMessage.id, citations: jsonEncode(citationData));
+
+        // --- NEW: Persist Research Steps ---
+        final List<ai.ChatMessage> completeSteps = List.from(researchResult.steps ?? []);
+        
+        // Find the delegation tool call and add the final message as its result for futureTurns
+        try {
+          final lastAssistantWithCalls = completeSteps.lastWhere(
+            (s) => s.role == ai.ChatRole.assistant && s.toolCalls != null && s.toolCalls!.any((tc) => tc.function.name == 'delegate_to_synthesizer'),
+          );
+          
+          final delegateCall = lastAssistantWithCalls.toolCalls!.firstWhere(
+            (tc) => tc.function.name == 'delegate_to_synthesizer',
+          );
+          
+          completeSteps.add(ai.ChatMessage(
+            role: ai.ChatRole.tool,
+            content: finalMessage.content,
+            toolCallId: delegateCall.id,
+            name: 'delegate_to_synthesizer',
+          ));
+        } catch (e) {
+          // No delegation found (maybe researcher reached max iterations), skip adding tool result
+        }
+
+        final metadata = <String, dynamic>{
+          'research_steps': completeSteps.map((s) => s.toJson()).toList(),
+        };
+
+        await _db.updateMessageMetadata(
+          placeholderMessage.id, 
+          citations: jsonEncode(citationData),
+          metadata: jsonEncode(metadata),
+        );
       } else {
         await _db.updateMessageContent(placeholderMessage.id, 'I couldn\'t find enough specific information to answer that accurately.');
         throw Exception('I couldn\'t find enough specific information to answer that accurately.');

@@ -11,7 +11,7 @@ class OpenAiService implements IAiService {
   OpenAiService(this._ref);
 
   @override
-  Future<ChatMessage> chat(List<ChatMessage> messages, {List<ToolDefinition>? tools}) async {
+  Future<ChatMessage> chat(List<ChatMessage> messages, {List<ToolDefinition>? tools, String? toolChoice}) async {
     final settings = _ref.read(settingsProvider);
     final baseUrl = settings.llamaServerUrl;
     final model = settings.chatModel;
@@ -22,7 +22,7 @@ class OpenAiService implements IAiService {
         'model': model,
         'messages': messages.map((m) => m.toJson()).toList(),
         if (tools != null && tools.isNotEmpty) 'tools': tools.map((t) => t.toJson()).toList(),
-        if (tools != null && tools.isNotEmpty) 'tool_choice': 'auto',
+        if (tools != null && tools.isNotEmpty) 'tool_choice': toolChoice ?? 'auto',
       },
     );
 

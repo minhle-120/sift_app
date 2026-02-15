@@ -7,7 +7,7 @@ import '../../../../core/services/embedding_service.dart';
 import '../../../../core/services/rerank_service.dart';
 import '../../../../core/storage/sift_database.dart';
 import '../../../../services/ai/i_ai_service.dart';
-import '../../../../core/tools/finalize_research_tool.dart';
+import '../../../../core/tools/delegate_to_synthesizer_tool.dart';
 
 final researchOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
@@ -22,33 +22,27 @@ final researchOrchestratorProvider = Provider((ref) {
     registry: ChunkRegistry(),
   );
 
-  final finalizeTool = FinalizeResearchTool();
+  final delegateTool = DelegateToSynthesizerTool();
   
   return ResearchOrchestrator(
     aiService: aiService,
     ragTool: ragTool,
-    finalizeTool: finalizeTool,
+    delegateTool: delegateTool,
   );
 });
 
-class ResearchResult {
-  final ChatMessage? output;
-  final ResearchPackage? package;
-
-  ResearchResult({this.output, this.package});
-}
 
 class ResearchOrchestrator {
   final IAiService aiService;
   final RAGTool ragTool;
-  final FinalizeResearchTool finalizeTool;
+  final DelegateToSynthesizerTool delegateTool;
 
   ChunkRegistry get registry => ragTool.registry;
 
   ResearchOrchestrator({
     required this.aiService,
     required this.ragTool,
-    required this.finalizeTool,
+    required this.delegateTool,
   });
 
   /// Starts a research session for a given query and context.
@@ -74,9 +68,11 @@ class ResearchOrchestrator {
       ...conversation,
       ChatMessage(
         role: ChatRole.user,
-        content: 'Original Request: $userQuery',
+        content: userQuery,
       ),
     ];
+
+    final int newStepsStartIndex = messages.length; // Start capturing steps AFTER the user query
 
     // 2. ReAct Loop
     int iterations = 0;
@@ -91,15 +87,19 @@ class ResearchOrchestrator {
         messages,
         tools: [
           ragTool.definition,
-          finalizeTool.definition,
+          delegateTool.definition,
         ],
+        toolChoice: 'required',
       );
 
       messages.add(response);
 
       if (response.toolCalls == null || response.toolCalls!.isEmpty) {
         // AI returned a final message (or choice to not use tools)
-        return ResearchResult(output: response);
+        return ResearchResult(
+          output: response,
+          steps: messages.sublist(newStepsStartIndex),
+        );
       }
 
       // Handle Tool Calls
@@ -115,10 +115,10 @@ class ResearchOrchestrator {
             toolCallId: toolCall.id,
             name: RAGTool.name,
           ));
-        } else if (toolCall.function.name == FinalizeResearchTool.name) {
+        } else if (toolCall.function.name == DelegateToSynthesizerTool.name) {
           final args = _parseArgs(toolCall.function.arguments);
-          final package = finalizeTool.execute(args);
-          return ResearchResult(package: package);
+          final package = delegateTool.execute(args);
+          return ResearchResult(package: package, steps: messages.sublist(newStepsStartIndex));
         } else {
           // Handle other tools or error
           messages.add(ChatMessage(
@@ -132,6 +132,7 @@ class ResearchOrchestrator {
     }
 
     return ResearchResult(
+      steps: messages.sublist(newStepsStartIndex),
       output: ChatMessage(
         role: ChatRole.assistant,
         content: 'I have reached the maximum research depth. Here is what I found:\n\n'
@@ -142,22 +143,18 @@ class ResearchOrchestrator {
 
   String _buildSystemPrompt() {
     return '''You are a Research Specialist. Your task is to locate relevant information in the database to answer user queries.
+You have access to the conversation history. Use this context to resolve pronouns (e.g., "he", "they", "that project") and understand the broader goal of the user's current request.
 
 ### Core Objectives:
-1. **Search**: Use `query_knowledge_base` to find relevant document chunks.
-2. **Evaluate**: Review the returned chunks. If more information is needed, search again with different keywords or queries.
-3. **Submit**: Once you have found enough relevant information, call `finalize_research` with the indices of the most relevant chunks.
+1. **Understand Context**: Analyze the provided conversation history to rephrase the user's latest query into standalone search terms if necessary.
+2. **Search**: Use `query_knowledge_base` to find relevant document chunks.
+3. **Evaluate**: Review the returned chunks. If more information is needed, search again with different keywords or queries.
+4. **Delegate**: Once you have found enough relevant information, call `delegate_to_synthesizer` with the indices of the most relevant chunks. This hands off the final answer generation to a specialized Chat model.
 
 ### Rules:
 - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
-- Use stable indices (e.g., [[Chunk 1]]) provided in the search results.
-- Your mission is complete when you have submitted the indices via `finalize_research`.
-
-### Example:
-User: "What are the latest revenue forecasts for Project X?"
-Tool Call: query_knowledge_base(keywords="Project X revenue", query="What are the revenue forecasts for Project X?")
-Observation: [[Chunk 1]] ...
-Tool Call: finalize_research(indices=[1])
+- Use the conversation history to ensure your searches are targeted and context-aware.
+- Your mission is complete when you have delegated the work via `delegate_to_synthesizer`.
 ''';
   }
 
