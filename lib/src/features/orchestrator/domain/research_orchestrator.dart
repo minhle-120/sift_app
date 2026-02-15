@@ -7,6 +7,7 @@ import '../../../../core/services/embedding_service.dart';
 import '../../../../core/services/rerank_service.dart';
 import '../../../../core/storage/sift_database.dart';
 import '../../../../services/ai/i_ai_service.dart';
+import 'package:sift_app/src/features/chat/domain/entities/message.dart' as domain;
 import '../../../../core/tools/delegate_to_synthesizer_tool.dart';
 import '../../../../core/tools/no_info_found_tool.dart';
 
@@ -178,12 +179,12 @@ You have access to the conversation history. Use this context to resolve pronoun
 
   /// Builds a high-fidelity research history from domain messages.
   /// This re-injects internal tool traces to maintain ReAct continuity across turns.
-  List<ChatMessage> buildHistory(List<dynamic> domainMessages) {
+  List<ChatMessage> buildHistory(List<domain.Message> domainMessages) {
     final List<ChatMessage> history = [];
     
     for (int i = 0; i < domainMessages.length; i++) {
       final m = domainMessages[i];
-      final metadata = m.metadata as Map<String, dynamic>?;
+      final metadata = m.metadata;
 
       if (metadata != null && metadata['exclude_from_history'] == true) {
         continue;
@@ -196,7 +197,7 @@ You have access to the conversation history. Use this context to resolve pronoun
         }
       } else {
         history.add(ChatMessage(
-          role: m.role.name == 'user' ? ChatRole.user : ChatRole.assistant,
+          role: m.role == domain.MessageRole.user ? ChatRole.user : ChatRole.assistant,
           content: m.text,
         ));
       }

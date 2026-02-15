@@ -84,6 +84,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (messageCountChanged) {
         _scrollToBottom();
       }
+
+      // Show error snackbar if error occurs
+      if (next.error != null && next.error != previous?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.error!),
+            backgroundColor: theme.colorScheme.error,
+          ),
+        );
+      }
     });
 
     final chatView = Column(

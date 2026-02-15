@@ -24,6 +24,10 @@ class OpenAiService implements IAiService {
         if (tools != null && tools.isNotEmpty) 'tools': tools.map((t) => t.toJson()).toList(),
         if (tools != null && tools.isNotEmpty) 'tool_choice': toolChoice ?? 'auto',
       },
+      options: Options(
+        receiveTimeout: const Duration(seconds: 60),
+        sendTimeout: const Duration(seconds: 30),
+      ),
     );
 
     if (response.statusCode == 200) {

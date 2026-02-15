@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/ai_models.dart';
 import '../../../../core/services/openai_service.dart';
 import '../../../../services/ai/i_ai_service.dart';
+import 'package:sift_app/src/features/chat/domain/entities/message.dart' as domain;
 
 final chatOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
@@ -43,18 +44,16 @@ class ChatOrchestrator {
 
   /// Builds a clean user-visible history from domain messages.
   /// This excludes internal tool calls and internal research steps.
-  List<ChatMessage> buildHistory(List<dynamic> domainMessages) {
+  List<ChatMessage> buildHistory(List<domain.Message> domainMessages) {
     final List<ChatMessage> history = [];
     
     for (final m in domainMessages) {
-      // Use dynamic to avoid import issues if domain.Message is not fully typed here
-      final metadata = m.metadata as Map<String, dynamic>?;
-      if (metadata != null && metadata['exclude_from_history'] == true) {
+      if (m.metadata != null && m.metadata!['exclude_from_history'] == true) {
         continue;
       }
       
       history.add(ChatMessage(
-        role: m.role.name == 'user' ? ChatRole.user : ChatRole.assistant,
+        role: m.role == domain.MessageRole.user ? ChatRole.user : ChatRole.assistant,
         content: m.text,
       ));
     }

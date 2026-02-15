@@ -56,6 +56,7 @@ class ChatController extends StateNotifier<ChatState> {
   final AppDatabase _db;
   final Ref _ref;
   StreamSubscription<List<Message>>? _messagesSubscription;
+  bool _isAiProcessing = false;
 
   ChatController(this._db, this._ref) : super(const ChatState()) {
     // Initial check
@@ -112,7 +113,7 @@ class ChatController extends StateNotifier<ChatState> {
         )).toList();
         
         state = state.copyWith(
-          isLoading: false,
+          isLoading: _isAiProcessing ? state.isLoading : false,
           messages: domainMessages,
         );
       });
@@ -129,7 +130,7 @@ class ChatController extends StateNotifier<ChatState> {
   }
 
   Future<void> sendMessage(String text, int? activeCollectionId) async {
-    if (text.trim().isEmpty) return;
+    if (state.isLoading || text.trim().isEmpty) return;
 
     // 1. Ensure conversation exists
     int? conversationId = state.conversationId;
@@ -152,10 +153,17 @@ class ChatController extends StateNotifier<ChatState> {
       }
     }
 
-    state = state.copyWith(isLoading: true);
+    _isAiProcessing = true;
+    state = state.copyWith(isLoading: true, error: null);
     
     try {
-      // 2. Prepare Isolated Histories via Orchestrators
+      // 2. Pre-flight connection check (Move inside try-catch to ensure isLoading is reset)
+      await checkAiConnection();
+      if (!state.isConnectionValid) {
+        throw Exception(state.connectionError ?? "AI Server is unreachable.");
+      }
+
+      // 3. Prepare Isolated Histories via Orchestrators
       final researchOrchestrator = _ref.read(researchOrchestratorProvider);
       final chatOrchestrator = _ref.read(chatOrchestratorProvider);
 
@@ -278,8 +286,10 @@ class ChatController extends StateNotifier<ChatState> {
 
       state = state.copyWith(isLoading: false, researchStatus: null);
       
-    } catch (e) {
+    } catch (e, stack) {
       state = state.copyWith(isLoading: false, error: "Failed to process research: $e", researchStatus: null);
+    } finally {
+      _isAiProcessing = false;
     }
   }
 
