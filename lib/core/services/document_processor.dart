@@ -13,7 +13,7 @@ class DocumentProcessor {
       if (ext == '.pdf') {
         text = await _extractFromPdf(file);
       } else {
-        // Try reading as string, fall back to malformed-allowed UTF8 if it fails
+        // Basic text file handling with fallback for encoding issues
         try {
           text = await file.readAsString();
         } catch (_) {
@@ -28,82 +28,98 @@ class DocumentProcessor {
     return normalizeText(text);
   }
 
-  /// Cleans up text by collapsing all whitespace (including \r\n) into single spaces.
-  /// This is the most robust approach for fragmented PDF text and noisy documents.
+  /// Normalizes text to be clean for AI consumption while preserving semantic structure.
+  /// It collapses layout-induced breaks but preserves paragraph boundaries.
   String normalizeText(String text) {
     if (text.isEmpty) return text;
 
     return text
-        .replaceAll('\r', '')
-        .replaceAll(RegExp(r'[\n\t ]+'), ' ')
+        // 1. Normalize line endings
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        // 2. Protect paragraph breaks (double newlines)
+        .replaceAll('\n\n', '[[PARA]]')
+        // 3. Collapse single newlines and other whitespace that are often purely layout-based
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .join(' ')
+        // 4. Restore paragraph breaks
+        .replaceAll('[[PARA]]', '\n\n')
+        // 5. Final cleanup of whitespace
+        .replaceAll(RegExp(r' +'), ' ')
         .trim();
   }
 
+  /// Official implementation pattern for PDF text extraction.
   Future<String> _extractFromPdf(File file) async {
-    // Load the PDF document
     final bytes = await file.readAsBytes();
-    final document = PdfDocument(inputBytes: bytes);
+    final PdfDocument document = PdfDocument(inputBytes: bytes);
     
     try {
-      final extractor = PdfTextExtractor(document);
-      final text = extractor.extractText();
+      final PdfTextExtractor extractor = PdfTextExtractor(document);
+      // Extracts all text including layout info
+      final String text = extractor.extractText();
       return text;
     } finally {
+      // CRITICAL: Always dispose documents to prevent memory leaks
       document.dispose();
     }
   }
 
   /// Splits text into units of word count, respecting semantic boundaries.
   /// [chunkSizeWords] is the target number of words per chunk.
-  /// [overlapWords] is the number of words to carry over.
+  /// [overlapWords] is the number of words to carry over for context continuity.
   List<String> chunkText(String text, int chunkSizeWords, int overlapWords) {
     if (text.isEmpty) return [];
     if (chunkSizeWords <= 0) return [text];
     
-    // Priority: Paragraphs -> Newlines -> Sentences -> Words
-    final List<String> separators = ['\n\n', '\n', '. ', ' '];
-    final List<String> pieces = _recursiveSplit(text, separators, chunkSizeWords);
+    // Priority for splitting: Paragraphs -> Newlines -> Sentences -> Words
+    final List<String> separators = ['\n\n', '\n', '. ', '? ', '! ', ' '];
+    final List<String> basePieces = _recursiveSplit(text, separators, chunkSizeWords);
     
     final List<String> chunks = [];
-    List<String> currentChunkPieces = [];
+    List<String> currentChunkBuffer = [];
     int currentWordCount = 0;
 
-    for (final piece in pieces) {
+    for (final piece in basePieces) {
       final pieceWordCount = _countWords(piece);
       
-      if (currentWordCount + pieceWordCount > chunkSizeWords && currentChunkPieces.isNotEmpty) {
-        // Current chunk is full, finish it
-        chunks.add(currentChunkPieces.join('').trim());
+      // If adding this piece exceeds chunk size, finalize current and handle overlap
+      if (currentWordCount + pieceWordCount > chunkSizeWords && currentChunkBuffer.isNotEmpty) {
+        chunks.add(currentChunkBuffer.join('').trim());
         
         // --- Handle Overlap ---
-        // Backtrack to include overlapWords
-        final List<String> nextChunkPieces = [];
+        // Backtrack to reach the overlap target
+        final List<String> overlapPieces = [];
         int overlapCounter = 0;
-        for (int i = currentChunkPieces.length - 1; i >= 0; i--) {
-          final p = currentChunkPieces[i];
+        for (int i = currentChunkBuffer.length - 1; i >= 0; i--) {
+          final p = currentChunkBuffer[i];
           final wc = _countWords(p);
-          if (overlapCounter + wc <= overlapWords || nextChunkPieces.isEmpty) {
-            nextChunkPieces.insert(0, p);
+          if (overlapCounter + wc <= overlapWords || overlapPieces.isEmpty) {
+            overlapPieces.insert(0, p);
             overlapCounter += wc;
           } else {
             break;
           }
         }
-        currentChunkPieces = nextChunkPieces;
+        currentChunkBuffer = overlapPieces;
         currentWordCount = overlapCounter;
       }
       
-      currentChunkPieces.add(piece);
+      currentChunkBuffer.add(piece);
       currentWordCount += pieceWordCount;
     }
     
-    if (currentChunkPieces.isNotEmpty) {
-      chunks.add(currentChunkPieces.join('').trim());
+    // Add the final remaining buffer
+    if (currentChunkBuffer.isNotEmpty) {
+      chunks.add(currentChunkBuffer.join('').trim());
     }
 
     return chunks;
   }
 
+  /// Recursively splits text until parts are within [maxWords].
   List<String> _recursiveSplit(String text, List<String> separators, int maxWords) {
     if (_countWords(text) <= maxWords || separators.isEmpty) {
       return [text];
@@ -117,7 +133,7 @@ class DocumentProcessor {
 
     for (int i = 0; i < parts.length; i++) {
       String part = parts[i];
-      // Re-add the separator to all but the last part (or keep it as it was if possible)
+      // Keep the separator on all but the last part for integrity
       if (i < parts.length - 1) {
         part += separator;
       }
@@ -137,6 +153,7 @@ class DocumentProcessor {
   int _countWords(String text) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return 0;
-    return trimmed.split(RegExp(r'\s+')).length;
+    // Split by any whitespace but count non-empty fragments
+    return trimmed.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
   }
 }
