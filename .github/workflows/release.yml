@@ -62,16 +62,16 @@ jobs:
       - name: Build Windows
         run: flutter build windows --release
 
-      - name: Package Windows
+      - name: Prepare Windows Dist
         run: |
-          dir build\windows\x64\runner\Release
-          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath sift-windows-x64.zip
+          mkdir dist\windows
+          xcopy /E /I build\windows\x64\runner\Release\* dist\windows\
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: sift-windows-x64
-          path: sift-windows-x64.zip
+          path: dist/windows/
 
   create_release:
     name: Create GitHub Release
@@ -85,11 +85,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: sift-linux-x64
+          path: linux-dist
 
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
         with:
           name: sift-windows-x64
+          path: windows-dist
+
+      - name: Package Release Assets
+        run: |
+          sudo apt-get update && sudo apt-get install -y zip
+          cd linux-dist && zip -r ../sift-linux-x64.zip . && cd ..
+          cd windows-dist && zip -r ../sift-windows-x64.zip . && cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
