@@ -8,6 +8,7 @@ import '../controllers/chat_controller.dart';
 import '../widgets/workspace_pane.dart';
 import '../widgets/conversation_drawer.dart';
 import '../widgets/message_bubble.dart';
+import '../widgets/chat_input_field.dart';
 import 'settings_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -18,44 +19,14 @@ class ChatScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
-  final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode = FocusNode();
-  bool _hasText = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(() {
-      final hasText = _controller.text.trim().isNotEmpty;
-      if (hasText != _hasText) {
-        setState(() => _hasText = hasText);
-      }
-    });
-  }
 
   @override
   void dispose() {
-    _controller.dispose();
     _scrollController.dispose();
-    _focusNode.dispose();
     super.dispose();
   }
 
-  void _sendMessage() {
-    final text = _controller.text.trim();
-    if (text.isNotEmpty) {
-      final collectionState = ref.read(collectionProvider);
-      ref.read(chatControllerProvider.notifier).sendMessage(text, collectionState.activeCollection?.id);
-      _controller.clear();
-      _focusNode.requestFocus();
-      _scrollToBottom();
-    }
-  }
-
-  void _stopResponse() {
-    ref.read(chatControllerProvider.notifier).stopResponse();
-  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -119,7 +90,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
 
         if (collectionState.activeCollection != null)
-          _buildInputArea(chatState, theme),
+          const ChatInputField(),
       ],
     );
 
@@ -377,114 +348,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // Remove _buildResearchStatusIndicator
 
-  Widget _buildInputArea(ChatState chatState, ThemeData theme) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: _focusNode.hasFocus 
-                      ? theme.colorScheme.primary.withValues(alpha: 0.5) 
-                      : theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 3),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.add_circle_outline,
-                        color: theme.colorScheme.onSurfaceVariant,
-                        size: 22,
-                      ),
-                      onPressed: () {},
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                      padding: EdgeInsets.zero,
-                    ),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      enabled: !chatState.isLoading,
-                      maxLines: 5,
-                      minLines: 1,
-                      textInputAction: TextInputAction.newline,
-                      style: theme.textTheme.bodyMedium,
-                      decoration: InputDecoration(
-                        hintText: chatState.isLoading 
-                            ? 'Generating...' 
-                            : 'Message Sift...',
-                        hintStyle: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                        ),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 4, 
-                          vertical: 12,
-                        ),
-                      ),
-                      onSubmitted: chatState.isLoading ? null : (_) => _sendMessage(),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4, bottom: 3),
-                    child: chatState.isLoading
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.stop_circle_rounded,
-                              color: theme.colorScheme.error,
-                              size: 28,
-                            ),
-                            onPressed: _stopResponse,
-                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                            padding: EdgeInsets.zero,
-                          )
-                        : AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            child: IconButton(
-                              icon: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                child: Icon(
-                                  Icons.arrow_upward_rounded,
-                                  key: ValueKey(_hasText),
-                                  color: _hasText 
-                                      ? theme.colorScheme.onPrimary
-                                      : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                                  size: 20,
-                                ),
-                              ),
-                              style: IconButton.styleFrom(
-                                backgroundColor: _hasText 
-                                    ? theme.colorScheme.primary 
-                                    : Colors.transparent,
-                                shape: const CircleBorder(),
-                              ),
-                              onPressed: _hasText ? _sendMessage : null,
-                              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                              padding: EdgeInsets.zero,
-                            ),
-                          ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _showCreateCollectionDialog(BuildContext context, WidgetRef ref) {
     final controller = TextEditingController();

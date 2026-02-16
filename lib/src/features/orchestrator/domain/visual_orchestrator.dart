@@ -45,6 +45,7 @@ ${resolvedChunks.join('\n\n')}''',
     // 4. Return result with clean content
     return VisualResult(
       package: package,
+      schema: cleanContent,
       steps: [
         ChatMessage(
           role: response.role,

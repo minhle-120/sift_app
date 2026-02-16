@@ -1,4 +1,8 @@
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+enum VisualizerMode { auto, off, on }
+
 class ResearchPackage {
   final List<int> indices;
 
@@ -12,6 +16,7 @@ class ResearchResult {
   final ChatMessage? output;
   final ResearchPackage? package;
   final VisualPackage? visualPackage;
+  final String? visualSchema;
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
@@ -20,6 +25,7 @@ class ResearchResult {
     this.output,
     this.package,
     this.visualPackage,
+    this.visualSchema,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
@@ -38,9 +44,10 @@ class VisualPackage {
 
 class VisualResult {
   final VisualPackage package;
+  final String schema;
   final List<ChatMessage> steps;
 
-  VisualResult({required this.package, required this.steps});
+  VisualResult({required this.package, required this.schema, required this.steps});
 }
 
 enum ChatRole {
@@ -197,9 +204,12 @@ class RAGResult {
 
 /// Helper to maintain stable indexing for chunks in a single research session.
 class ChunkRegistry {
+  final Ref ref;
   final Map<String, int> _contentToId = {};
   final Map<int, RAGResult> _idToResult = {};
   int _nextId = 1;
+
+  ChunkRegistry(this.ref);
 
   int register(String content, String sourceTitle, int documentId, int chunkIndex, [double? score]) {
     final normalized = content.trim();

@@ -11,9 +11,12 @@ import 'package:sift_app/src/features/chat/domain/entities/message.dart' as doma
 import '../../../../core/tools/delegate_to_synthesizer_tool.dart';
 import '../../../../core/tools/no_info_found_tool.dart';
 import '../../../../core/tools/delegate_to_visualizer_tool.dart';
+import 'visual_orchestrator.dart';
+import '../../chat/presentation/controllers/settings_controller.dart';
 
 final researchOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
+  final visualOrchestrator = ref.watch(visualOrchestratorProvider);
   final database = AppDatabase.instance;
   final embeddingService = ref.watch(embeddingServiceProvider);
   final rerankService = ref.watch(rerankServiceProvider);
@@ -22,7 +25,7 @@ final researchOrchestratorProvider = Provider((ref) {
     database: database,
     embeddingService: embeddingService,
     rerankService: rerankService,
-    registry: ChunkRegistry(),
+    registry: ChunkRegistry(ref),
   );
 
   final delegateTool = DelegateToSynthesizerTool();
@@ -31,6 +34,7 @@ final researchOrchestratorProvider = Provider((ref) {
   
   return ResearchOrchestrator(
     aiService: aiService,
+    visualOrchestrator: visualOrchestrator,
     ragTool: ragTool,
     delegateTool: delegateTool,
     noInfoTool: noInfoTool,
@@ -41,6 +45,7 @@ final researchOrchestratorProvider = Provider((ref) {
 
 class ResearchOrchestrator {
   final IAiService aiService;
+  final VisualOrchestrator visualOrchestrator;
   final RAGTool ragTool;
   final DelegateToSynthesizerTool delegateTool;
   final NoInfoFoundTool noInfoTool;
@@ -50,6 +55,7 @@ class ResearchOrchestrator {
 
   ResearchOrchestrator({
     required this.aiService,
+    required this.visualOrchestrator,
     required this.ragTool,
     required this.delegateTool,
     required this.noInfoTool,
@@ -70,16 +76,33 @@ class ResearchOrchestrator {
     registry.reset();
     onStatusUpdate?.call('Starting research...');
 
+    final settings = registry.ref.read(settingsProvider);
+    final mode = settings.visualizerMode;
+
+    String systemPrompt = _buildSystemPrompt();
+    
+    final List<ToolDefinition> tools = [
+      ragTool.definition,
+      delegateTool.definition,
+      noInfoTool.definition,
+      if (mode != VisualizerMode.off) visualTool.definition,
+    ];
+
+    String finalUserQuery = userQuery;
+    if (mode == VisualizerMode.on) {
+      finalUserQuery = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `delegate_to_visualizer` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.\n\nUser Query: $userQuery';
+    }
+
     // 1. Prepare Unified Context Message
     // This bundles all previous turns and the current query into one user message.
     final contextPrompt = historicalContext.isEmpty 
-        ? userQuery 
-        : '$historicalContext\n\nCurrent query: $userQuery';
+        ? finalUserQuery 
+        : '$historicalContext\n\nCurrent query: $finalUserQuery';
 
     final messages = [
       ChatMessage(
         role: ChatRole.system,
-        content: _buildSystemPrompt(),
+        content: systemPrompt,
       ),
       ChatMessage(
         role: ChatRole.user,
@@ -88,6 +111,7 @@ class ResearchOrchestrator {
     ];
 
     final int newStepsStartIndex = messages.length; // Start capturing steps AFTER the context message
+    String? capturedVisualSchema;
 
     // 2. ReAct Loop
     int iterations = 0;
@@ -100,12 +124,7 @@ class ResearchOrchestrator {
       
       final response = await aiService.chat(
         messages,
-        tools: [
-          ragTool.definition,
-          delegateTool.definition,
-          visualTool.definition,
-          noInfoTool.definition,
-        ],
+        tools: tools, // Use the conditionally built tools list
         toolChoice: 'required',
       );
 
@@ -135,14 +154,32 @@ class ResearchOrchestrator {
         } else if (toolCall.function.name == DelegateToSynthesizerTool.name) {
           final args = _parseArgs(toolCall.function.arguments);
           final package = delegateTool.execute(args);
-          return ResearchResult(package: package, steps: messages.sublist(newStepsStartIndex));
-        } else if (toolCall.function.name == DelegateToVisualizerTool.name) {
-          final args = _parseArgs(toolCall.function.arguments);
-          final package = visualTool.execute(args);
           return ResearchResult(
-            visualPackage: package,
+            package: package, 
+            visualSchema: capturedVisualSchema,
             steps: messages.sublist(newStepsStartIndex),
           );
+        } else if (toolCall.function.name == DelegateToVisualizerTool.name) {
+          final args = _parseArgs(toolCall.function.arguments);
+          onStatusUpdate?.call('Generating visualization for "${args['visualizationGoal'] ?? 'data'}..."');
+          
+          final package = visualTool.execute(args);
+          final visualResult = await visualOrchestrator.visualize(
+            package: package, 
+            registry: registry,
+          );
+
+          capturedVisualSchema = visualResult.schema;
+
+          messages.add(ChatMessage(
+            role: ChatRole.tool,
+            content: 'CHART_GENERATED: ${visualResult.schema}\n\n'
+                     'Assistant Note: The chart is now ready and will be displayed. '
+                     'You should now call delegate_to_synthesizer to provide a textual explanation of '
+                     'what the user is seeing in the chart and answer any remaining parts of their query.',
+            toolCallId: toolCall.id,
+            name: DelegateToVisualizerTool.name,
+          ));
         } else if (toolCall.function.name == NoInfoFoundTool.name) {
           // AI specifically said no info found
           final args = _parseArgs(toolCall.function.arguments);
@@ -184,15 +221,16 @@ You have access to the conversation history. Use this context to resolve pronoun
 3. **Evaluate**: Review the returned chunks. If more information is needed, search again with different keywords or queries.
 4. **No Information Found**: If you have searched and found no relevant information to answer the user query accurately, call `no_info_found`. **CRITICAL**: You MUST attempt at least one `query_knowledge_base` call before concluding that no information exists.
 5. **Synthesis**: If you have enough info to answer as text, call `delegate_to_synthesizer`.
-6. **Visualization**: If the data is inherently visual (comparisons, trends, hierarchies, complex relationships), call `delegate_to_visualizer` with the relevant chunks.
-
-### Rules:
-- **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
-- Use the conversation history to ensure your searches are targeted and context-aware.
-- **Search First**: Do NOT call `no_info_found` unless you have already received search results that were irrelevant or insufficient.
-- If you call `no_info_found`, the research session will terminate immediately.
-- Your mission is complete when you have delegated the work via `delegate_to_synthesizer` or called `no_info_found`.
-''';
+6. **Visualization**: If the data is inherently visual (comparisons, trends, hierarchies, complex relationships), call `delegate_to_visualizer` with the relevant chunks. After calling this, you will receive confirmation and the generated JSON schema. You MUST then use that context to provide a final textual response via `delegate_to_synthesizer`.
+ 
+ ### Rules:
+ - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
+ - Use the conversation history to ensure your searches are targeted and context-aware.
+ - **Search First**: Do NOT call `no_info_found` unless you have already received search results that were irrelevant or insufficient.
+ - If you call `no_info_found`, the research session will terminate immediately.
+- **Visual-Text Synergy**: When you call `delegate_to_visualizer`, the system generates the chart. You should follow up by calling `delegate_to_synthesizer` so the user gets both a visual chart and a helpful textual explanation/summary.
+ - Your mission is complete when you have delegated the work via `delegate_to_synthesizer` or called `no_info_found`.
+ ''';
   }
 
   /// Builds a clean user-assistant chat history string from domain messages.

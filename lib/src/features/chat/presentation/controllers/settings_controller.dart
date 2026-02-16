@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../../core/models/ai_models.dart';
 
 import 'package:dio/dio.dart';
 
@@ -12,6 +13,7 @@ class SettingsState {
   final int chunkSize;
   final int chunkOverlap;
   final bool isSyncEnabled;
+  final VisualizerMode visualizerMode;
   final List<String> availableModels;
   final bool isLoadingModels;
   final String? error;
@@ -25,6 +27,7 @@ class SettingsState {
     this.chunkSize = 100,
     this.chunkOverlap = 50,
     this.isSyncEnabled = true,
+    this.visualizerMode = VisualizerMode.auto,
     this.availableModels = const [],
     this.isLoadingModels = false,
     this.error,
@@ -39,6 +42,7 @@ class SettingsState {
     int? chunkSize,
     int? chunkOverlap,
     bool? isSyncEnabled,
+    VisualizerMode? visualizerMode,
     List<String>? availableModels,
     bool? isLoadingModels,
     String? error,
@@ -52,6 +56,7 @@ class SettingsState {
       chunkSize: chunkSize ?? this.chunkSize,
       chunkOverlap: chunkOverlap ?? this.chunkOverlap,
       isSyncEnabled: isSyncEnabled ?? this.isSyncEnabled,
+      visualizerMode: visualizerMode ?? this.visualizerMode,
       availableModels: availableModels ?? this.availableModels,
       isLoadingModels: isLoadingModels ?? this.isLoadingModels,
       error: error,
@@ -79,6 +84,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       chunkSize: prefs.getInt('chunkSize') ?? 100,
       chunkOverlap: prefs.getInt('chunkOverlap') ?? 50,
       isSyncEnabled: prefs.getBool('isSyncEnabled') ?? true,
+      visualizerMode: VisualizerMode.values[prefs.getInt('visualizerMode') ?? 0],
     );
     
     // Fetch models after loading URL
@@ -172,6 +178,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isSyncEnabled', enabled);
     state = state.copyWith(isSyncEnabled: enabled);
+  }
+
+  Future<void> updateVisualizerMode(VisualizerMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('visualizerMode', mode.index);
+    state = state.copyWith(visualizerMode: mode);
   }
 }
 

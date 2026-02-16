@@ -221,6 +221,24 @@ class ChatController extends StateNotifier<ChatState> {
         return;
       }
 
+      if (researchResult.visualSchema != null) {
+        // --- NEW: Handle Visualization (from intermediate step) ---
+        final schema = researchResult.visualSchema!;
+        
+        // Auto-open the tab
+        _ref.read(workbenchProvider.notifier).addTab(
+          WorkbenchTab(
+            id: 'viz_${placeholderMessage.uuid}',
+            title: 'Visualization',
+            icon: Icons.hub_outlined,
+            type: WorkbenchTabType.visualization,
+            metadata: {'schema': schema},
+          ),
+        );
+
+        // We'll update metadata later in the package block or at the end
+      }
+
       String finalContent = '';
 
       if (researchResult.package != null) {
@@ -250,6 +268,7 @@ class ChatController extends StateNotifier<ChatState> {
           conversation: chatHistory,
           package: researchResult.package!,
           registry: researchOrchestrator.registry,
+          visualSchema: researchResult.visualSchema,
         );
 
         await for (final chunk in stream) {
@@ -258,10 +277,10 @@ class ChatController extends StateNotifier<ChatState> {
           _db.updateMessageContent(placeholderMessage.id, finalContent);
         }
 
-        // --- NEW: Persist Research Steps ---
+        // --- Persist Research Steps & Metadata ---
         final List<ai.ChatMessage> completeSteps = List.from(researchResult.steps ?? []);
         
-        // Find the delegation tool call and add the final message as its result for futureTurns
+        // Add final tool outcome for history tracking
         try {
           final lastAssistantWithCalls = completeSteps.lastWhere(
             (s) => s.role == ai.ChatRole.assistant && s.toolCalls != null && s.toolCalls!.any((tc) => tc.function.name == 'delegate_to_synthesizer'),
@@ -277,12 +296,11 @@ class ChatController extends StateNotifier<ChatState> {
             toolCallId: delegateCall.id,
             name: 'delegate_to_synthesizer',
           ));
-        } catch (e) {
-          // No delegation found (maybe researcher reached max iterations), skip adding tool result
-        }
+        } catch (e) { /* skip */ }
 
         final metadata = <String, dynamic>{
           'research_steps': completeSteps.map((s) => s.toJson()).toList(),
+          if (researchResult.visualSchema != null) 'visual_schema': researchResult.visualSchema,
         };
 
         await _db.updateMessageMetadata(
@@ -290,30 +308,23 @@ class ChatController extends StateNotifier<ChatState> {
           metadata: jsonEncode(metadata),
         );
       } else if (researchResult.visualPackage != null) {
-        // --- NEW: Visual Specialist Delegation (Silent) ---
+        // Fallback for legacy terminal visual calls (if any remain)
         final visualOrchestrator = _ref.read(visualOrchestratorProvider);
         final visualResult = await visualOrchestrator.visualize(
           package: researchResult.visualPackage!,
           registry: researchOrchestrator.registry,
         );
 
-        final schema = visualResult.steps.first.content; // Expecting JSON from AI
-        
-        // Update Assistant Message with a clean, non-chatty confirmation
+        final schema = visualResult.schema;
         await _db.updateMessageContent(placeholderMessage.id, 'Visualization generated based on research data.');
         
         final metadata = <String, dynamic>{
           'visual_schema': schema,
-          'visual_goal': researchResult.visualPackage!.visualizationGoal,
           'research_steps': researchResult.steps?.map((s) => s.toJson()).toList() ?? [],
         };
         
-        await _db.updateMessageMetadata(
-          placeholderMessage.id,
-          metadata: jsonEncode(metadata),
-        );
+        await _db.updateMessageMetadata(placeholderMessage.id, metadata: jsonEncode(metadata));
 
-        // Auto-open the tab
         _ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
             id: 'viz_${placeholderMessage.uuid}',
@@ -324,8 +335,12 @@ class ChatController extends StateNotifier<ChatState> {
           ),
         );
       } else {
-        await _db.updateMessageContent(placeholderMessage.id, 'I couldn\'t find enough specific information to answer that accurately.');
-        throw Exception('I couldn\'t find enough specific information to answer that accurately.');
+        // Case: No synthesizer AND no visualizer (maybe Research AI just chatted)
+        if (researchResult.output != null) {
+           await _db.updateMessageContent(placeholderMessage.id, researchResult.output!.content);
+        } else {
+           await _db.updateMessageContent(placeholderMessage.id, 'I couldn\'t find enough specific information to answer that accurately.');
+        }
       }
 
       state = state.copyWith(isLoading: false, researchStatus: null);

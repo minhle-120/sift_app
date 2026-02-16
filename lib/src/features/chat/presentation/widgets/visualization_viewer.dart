@@ -176,8 +176,8 @@ class _VisualizationViewerState extends State<VisualizationViewer> {
             transformationController: _transformationController,
             constrained: false, // Essential for GraphView to layout freely
             boundaryMargin: const EdgeInsets.all(double.infinity),
-            minScale: 0.01,
-            maxScale: 10,
+            minScale: 0.4,
+            maxScale: 3.0,
             // Near-zero friction effectively disables pan/zoom momentum
             interactionEndFrictionCoefficient: 0.0000000001,
             child: GraphView(
