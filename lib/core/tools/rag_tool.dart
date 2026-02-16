@@ -98,7 +98,11 @@ class RAGTool {
       return a.chunkIndex.compareTo(b.chunkIndex);
     });
 
-    return results.join('\n\n');
+    final resultsText = results.join('\n\n');
+    return '$resultsText\n\n'
+           '**Assistant Evaluation Note**: Review the background knowledge retrieved above. '
+           '1. Is this sufficient to answer the User Query fully? If yes, call `delegate_to_synthesizer`. '
+           '2. Do you need more specific details, numbers, or dates that might be in other parts of the library? If yes, call `query_knowledge_base` again with refined keywords.';
   }
 }
 
