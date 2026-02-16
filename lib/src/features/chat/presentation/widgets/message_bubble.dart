@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'dart:convert';
 import '../../domain/entities/message.dart';
 import '../controllers/workbench_controller.dart';
 
@@ -88,22 +89,37 @@ class MessageBubble extends ConsumerWidget {
   }
 
   Widget _buildVisualTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
+    final schemaStr = message.metadata?['visual_schema'] as String?;
+    String label = 'View Interactive Graph';
+    String tabTitle = 'Visualization';
+
+    if (schemaStr != null) {
+      try {
+        final Map<String, dynamic> schema = jsonDecode(schemaStr);
+        final title = schema['title'] as String?;
+        if (title != null && title.isNotEmpty) {
+          label = 'View $title';
+          tabTitle = title;
+        }
+      } catch (_) {}
+    }
+
     return ElevatedButton.icon(
       onPressed: () {
-        final schema = message.metadata?['visual_schema'] as String;
+        if (schemaStr == null) return;
         
         ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
             id: 'viz_${message.id}',
-            title: 'Visualization',
+            title: tabTitle,
             icon: Icons.hub_outlined,
             type: WorkbenchTabType.visualization,
-            metadata: {'schema': schema},
+            metadata: {'schema': schemaStr},
           ),
         );
       },
       icon: const Icon(Icons.hub_outlined, size: 18),
-      label: const Text('View Interactive Graph'),
+      label: Text(label),
       style: ElevatedButton.styleFrom(
         backgroundColor: theme.colorScheme.secondaryContainer,
         foregroundColor: theme.colorScheme.onSecondaryContainer,

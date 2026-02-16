@@ -322,6 +322,13 @@ class ChatController extends StateNotifier<ChatState> {
         );
 
         final schema = visualResult.schema;
+        String tabTitle = 'Visualization';
+        try {
+          final Map<String, dynamic> parsed = jsonDecode(schema);
+          final title = parsed['title'] as String?;
+          if (title != null && title.isNotEmpty) tabTitle = title;
+        } catch (_) {}
+
         await _db.updateMessageContent(placeholderMessage.id, 'Visualization generated based on research data.');
         
         final metadata = <String, dynamic>{
@@ -334,7 +341,7 @@ class ChatController extends StateNotifier<ChatState> {
         _ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
             id: 'viz_${placeholderMessage.uuid}',
-            title: 'Visualization',
+            title: tabTitle,
             icon: Icons.hub_outlined,
             type: WorkbenchTabType.visualization,
             metadata: {'schema': schema},
