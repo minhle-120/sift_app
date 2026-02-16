@@ -91,8 +91,12 @@ class RAGTool {
       results.add(registry.getResult(index)!);
     }
 
-    // Sort by index for consistent presentation to AI
-    results.sort((a, b) => a.index.compareTo(b.index));
+    // Sort chronologically (by document and then by position in document)
+    results.sort((a, b) {
+      final docCompare = a.documentId.compareTo(b.documentId);
+      if (docCompare != 0) return docCompare;
+      return a.chunkIndex.compareTo(b.chunkIndex);
+    });
 
     return results.join('\n\n');
   }

@@ -20,14 +20,8 @@ class ChatOrchestrator {
     required ResearchPackage package,
     required ChunkRegistry registry,
   }) async {
-    // 1. Resolve Chunks
-    final List<String> resolvedChunks = [];
-    for (final index in package.indices) {
-      final res = registry.getResult(index);
-      if (res != null) {
-        resolvedChunks.add('[[Chunk $index]]\n${res.content}');
-      }
-    }
+    // 1. Resolve and Sort Chunks
+    final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
 
     // 2. Build Message List
     final combinedUserMessage = _buildCombinedMessage(resolvedChunks, originalQuery);
@@ -48,14 +42,8 @@ class ChatOrchestrator {
     required ResearchPackage package,
     required ChunkRegistry registry,
   }) async* {
-    // 1. Resolve Chunks
-    final List<String> resolvedChunks = [];
-    for (final index in package.indices) {
-      final res = registry.getResult(index);
-      if (res != null) {
-        resolvedChunks.add('[[Chunk $index]]\n${res.content}');
-      }
-    }
+    // 1. Resolve and Sort Chunks
+    final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
 
     // 2. Build Message List
     final combinedUserMessage = _buildCombinedMessage(resolvedChunks, originalQuery);
@@ -72,10 +60,16 @@ class ChatOrchestrator {
 
   /// Builds a clean user-visible history from domain messages.
   /// This excludes internal tool calls and internal research steps.
+  /// Limits history to the last 4 turns (8 messages).
   List<ChatMessage> buildHistory(List<domain.Message> domainMessages) {
     final List<ChatMessage> history = [];
     
-    for (final m in domainMessages) {
+    // History Pruning: Only keep the last 4 turns (8 messages)
+    final prunedMessages = domainMessages.length > 8 
+        ? domainMessages.sublist(domainMessages.length - 8) 
+        : domainMessages;
+    
+    for (final m in prunedMessages) {
       if (m.metadata != null && m.metadata!['exclude_from_history'] == true) {
         continue;
       }
@@ -111,5 +105,22 @@ ${chunks.join('\n\n')}
 ### User Query:
 $query
 ''';
+  }
+
+  List<String> _resolveSortedChunks(ResearchPackage package, ChunkRegistry registry) {
+    final List<RAGResult> results = [];
+    for (final index in package.indices) {
+      final res = registry.getResult(index);
+      if (res != null) results.add(res);
+    }
+
+    // Sort chronologically (by document and then by position in document)
+    results.sort((a, b) {
+      final docCompare = a.documentId.compareTo(b.documentId);
+      if (docCompare != 0) return docCompare;
+      return a.chunkIndex.compareTo(b.chunkIndex);
+    });
+
+    return results.map((res) => '[[Chunk ${res.index}]]\n${res.content}').toList();
   }
 }

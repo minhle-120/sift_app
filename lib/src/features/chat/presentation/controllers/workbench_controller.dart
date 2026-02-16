@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum WorkbenchTabType { graph, analysis, sandbox, document, diagram }
+enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization }
 
 class WorkbenchTab {
   final String id;

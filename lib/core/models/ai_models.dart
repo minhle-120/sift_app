@@ -11,6 +11,7 @@ class ResearchPackage {
 class ResearchResult {
   final ChatMessage? output;
   final ResearchPackage? package;
+  final VisualPackage? visualPackage;
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
@@ -18,10 +19,28 @@ class ResearchResult {
   ResearchResult({
     this.output,
     this.package,
+    this.visualPackage,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
   });
+}
+
+class VisualPackage {
+  final List<int> indices;
+  final String visualizationGoal;
+
+  VisualPackage({required this.indices, required this.visualizationGoal});
+
+  @override
+  String toString() => 'VisualPackage(indices: $indices, goal: $visualizationGoal)';
+}
+
+class VisualResult {
+  final VisualPackage package;
+  final List<ChatMessage> steps;
+
+  VisualResult({required this.package, required this.steps});
 }
 
 enum ChatRole {

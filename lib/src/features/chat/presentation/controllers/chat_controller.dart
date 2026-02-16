@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/message.dart' as domain;
 import 'package:sift_app/core/storage/sift_database.dart';
 import 'package:sift_app/core/storage/database_provider.dart';
 import 'package:sift_app/src/features/orchestrator/domain/research_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/chat_orchestrator.dart';
+import 'package:sift_app/src/features/orchestrator/domain/visual_orchestrator.dart';
+import 'package:sift_app/src/features/chat/presentation/controllers/workbench_controller.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
 import 'package:sift_app/core/models/ai_models.dart' as ai;
 import 'package:sift_app/core/services/openai_service.dart';
@@ -285,6 +288,40 @@ class ChatController extends StateNotifier<ChatState> {
         await _db.updateMessageMetadata(
           placeholderMessage.id, 
           metadata: jsonEncode(metadata),
+        );
+      } else if (researchResult.visualPackage != null) {
+        // --- NEW: Visual Specialist Delegation (Silent) ---
+        final visualOrchestrator = _ref.read(visualOrchestratorProvider);
+        final visualResult = await visualOrchestrator.visualize(
+          package: researchResult.visualPackage!,
+          registry: researchOrchestrator.registry,
+        );
+
+        final schema = visualResult.steps.first.content; // Expecting JSON from AI
+        
+        // Update Assistant Message with a clean, non-chatty confirmation
+        await _db.updateMessageContent(placeholderMessage.id, 'Visualization generated based on research data.');
+        
+        final metadata = <String, dynamic>{
+          'visual_schema': schema,
+          'visual_goal': researchResult.visualPackage!.visualizationGoal,
+          'research_steps': researchResult.steps?.map((s) => s.toJson()).toList() ?? [],
+        };
+        
+        await _db.updateMessageMetadata(
+          placeholderMessage.id,
+          metadata: jsonEncode(metadata),
+        );
+
+        // Auto-open the tab
+        _ref.read(workbenchProvider.notifier).addTab(
+          WorkbenchTab(
+            id: 'viz_${placeholderMessage.uuid}',
+            title: 'Visualization',
+            icon: Icons.hub_outlined,
+            type: WorkbenchTabType.visualization,
+            metadata: {'schema': schema},
+          ),
         );
       } else {
         await _db.updateMessageContent(placeholderMessage.id, 'I couldn\'t find enough specific information to answer that accurately.');

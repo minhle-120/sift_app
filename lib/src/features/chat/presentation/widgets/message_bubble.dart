@@ -75,10 +75,45 @@ class MessageBubble extends ConsumerWidget {
                     p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
                   ),
                 ),
+                if (message.metadata?['visual_schema'] != null) ...[
+                  const SizedBox(height: 12),
+                  _buildVisualTrigger(context, ref, theme),
+                ],
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVisualTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
+    return ElevatedButton.icon(
+      onPressed: () {
+        final schema = message.metadata?['visual_schema'] as String;
+        
+        ref.read(workbenchProvider.notifier).addTab(
+          WorkbenchTab(
+            id: 'viz_${message.id}',
+            title: 'Visualization',
+            icon: Icons.hub_outlined,
+            type: WorkbenchTabType.visualization,
+            metadata: {'schema': schema},
+          ),
+        );
+      },
+      icon: const Icon(Icons.hub_outlined, size: 18),
+      label: const Text('View Interactive Graph'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: theme.colorScheme.secondaryContainer,
+        foregroundColor: theme.colorScheme.onSecondaryContainer,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../../../../services/ai/i_ai_service.dart';
 import 'package:sift_app/src/features/chat/domain/entities/message.dart' as domain;
 import '../../../../core/tools/delegate_to_synthesizer_tool.dart';
 import '../../../../core/tools/no_info_found_tool.dart';
+import '../../../../core/tools/delegate_to_visualizer_tool.dart';
 
 final researchOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
@@ -26,12 +27,14 @@ final researchOrchestratorProvider = Provider((ref) {
 
   final delegateTool = DelegateToSynthesizerTool();
   final noInfoTool = NoInfoFoundTool();
+  final visualTool = DelegateToVisualizerTool();
   
   return ResearchOrchestrator(
     aiService: aiService,
     ragTool: ragTool,
     delegateTool: delegateTool,
     noInfoTool: noInfoTool,
+    visualTool: visualTool,
   );
 });
 
@@ -41,6 +44,7 @@ class ResearchOrchestrator {
   final RAGTool ragTool;
   final DelegateToSynthesizerTool delegateTool;
   final NoInfoFoundTool noInfoTool;
+  final DelegateToVisualizerTool visualTool;
 
   ChunkRegistry get registry => ragTool.registry;
 
@@ -49,6 +53,7 @@ class ResearchOrchestrator {
     required this.ragTool,
     required this.delegateTool,
     required this.noInfoTool,
+    required this.visualTool,
   });
 
   /// Starts a research session for a given query and context.
@@ -98,6 +103,7 @@ class ResearchOrchestrator {
         tools: [
           ragTool.definition,
           delegateTool.definition,
+          visualTool.definition,
           noInfoTool.definition,
         ],
         toolChoice: 'required',
@@ -130,6 +136,13 @@ class ResearchOrchestrator {
           final args = _parseArgs(toolCall.function.arguments);
           final package = delegateTool.execute(args);
           return ResearchResult(package: package, steps: messages.sublist(newStepsStartIndex));
+        } else if (toolCall.function.name == DelegateToVisualizerTool.name) {
+          final args = _parseArgs(toolCall.function.arguments);
+          final package = visualTool.execute(args);
+          return ResearchResult(
+            visualPackage: package,
+            steps: messages.sublist(newStepsStartIndex),
+          );
         } else if (toolCall.function.name == NoInfoFoundTool.name) {
           // AI specifically said no info found
           final args = _parseArgs(toolCall.function.arguments);
@@ -170,7 +183,8 @@ You have access to the conversation history. Use this context to resolve pronoun
 2. **Search**: Use `query_knowledge_base` to find relevant document chunks.
 3. **Evaluate**: Review the returned chunks. If more information is needed, search again with different keywords or queries.
 4. **No Information Found**: If you have searched and found no relevant information to answer the user query accurately, call `no_info_found`. **CRITICAL**: You MUST attempt at least one `query_knowledge_base` call before concluding that no information exists.
-5. **Delegate**: Once you have found enough relevant information, call `delegate_to_synthesizer` with the indices of the most relevant chunks. This hands off the final answer generation to a specialized Chat model.
+5. **Synthesis**: If you have enough info to answer as text, call `delegate_to_synthesizer`.
+6. **Visualization**: If the data is inherently visual (comparisons, trends, hierarchies, complex relationships), call `delegate_to_visualizer` with the relevant chunks.
 
 ### Rules:
 - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
@@ -183,11 +197,17 @@ You have access to the conversation history. Use this context to resolve pronoun
 
   /// Builds a clean user-assistant chat history string from domain messages.
   /// This excludes all internal research steps and tool traces.
+  /// Limits history to the last 4 turns (8 messages).
   String buildHistory(List<domain.Message> domainMessages) {
     final StringBuffer buffer = StringBuffer();
     
-    for (int i = 0; i < domainMessages.length; i++) {
-      final m = domainMessages[i];
+    // History Pruning: Only keep the last 4 turns (8 messages)
+    final prunedMessages = domainMessages.length > 8 
+        ? domainMessages.sublist(domainMessages.length - 8) 
+        : domainMessages;
+    
+    for (int i = 0; i < prunedMessages.length; i++) {
+      final m = prunedMessages[i];
       final metadata = m.metadata;
 
       // Skip messages that are explicitly marked for exclusion (e.g., pruned 'no info' turns)

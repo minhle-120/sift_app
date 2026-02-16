@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/workbench_controller.dart';
 import '../../../knowledge/presentation/widgets/document_viewer.dart';
+import 'visualization_viewer.dart';
+import 'dart:convert';
 
 class WorkbenchPanel extends ConsumerWidget {
   const WorkbenchPanel({super.key});
@@ -117,6 +119,26 @@ class WorkbenchPanel extends ConsumerWidget {
           documentId: docId,
           initialChunkIndex: chunkIndex,
         );
+      }
+    } else if (tab.type == WorkbenchTabType.visualization) {
+      final meta = tab.metadata as Map<String, dynamic>?;
+      var schemaStr = meta?['schema'] as String?;
+      
+      if (schemaStr != null) {
+        // Robustness: Strip markdown backticks if they persisted
+        if (schemaStr.contains('```')) {
+          schemaStr = schemaStr.replaceAll(RegExp(r'```json|```'), '').trim();
+        }
+
+        try {
+          final schema = jsonDecode(schemaStr) as Map<String, dynamic>;
+          return VisualizationViewer(
+            key: ValueKey(tab.id),
+            schema: schema,
+          );
+        } catch (e) {
+          return Center(child: Text('Invalid visualization data: $e'));
+        }
       }
     }
     
