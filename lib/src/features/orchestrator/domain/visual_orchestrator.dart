@@ -16,6 +16,8 @@ class VisualOrchestrator {
   Future<VisualResult> visualize({
     required VisualPackage package,
     required ChunkRegistry registry,
+    List<ChatMessage>? history,
+    String? currentSchema,
   }) async {
     // 1. Resolve Chunks
     final List<String> resolvedChunks = [];
@@ -29,6 +31,12 @@ class VisualOrchestrator {
     // 2. Build Messages
     final messages = [
       ChatMessage(role: ChatRole.system, content: _buildSystemPrompt()),
+      if (history != null) ...history,
+      if (currentSchema != null)
+        ChatMessage(
+          role: ChatRole.assistant,
+          content: 'CURRENT_CHART_SCHEMA: $currentSchema',
+        ),
       ChatMessage(
         role: ChatRole.user,
         content: '''Target Visualization: ${package.visualizationGoal}
@@ -215,10 +223,13 @@ Output JSON:
 
 ### INSTRUCTIONS:
 1. **Title**: Always include a concise, descriptive "title" (2-4 words) for the visualization.
-2. **Labels**: Keep labels very concise (2-4 words).
-3. **Node Types**: Use "important" for primary actors/results and "normal" for supporting data.
-4. **Edges**: Always provide a descriptive label for edges to explain the connection.
-5. **Resilience**: Ensure all `id`s used in `edges` exist in the `nodes` list.
+2. **Stateful Updates**: If a `CURRENT_CHART_SCHEMA` is provided in the history, your goal is to **update** or **refactor** it based on the new `Target Visualization` and `Evidence Chunks`. 
+   - Keep the `title` IDENTICAL if you intend to update the same chart series.
+   - If the user's request is fundamentally a new topic, provide a new `title`.
+3. **Labels**: Keep labels very concise (2-4 words).
+4. **Node Types**: Use "important" for primary actors/results and "normal" for supporting data.
+5. **Edges**: Always provide a descriptive label for edges to explain the connection.
+6. **Resilience**: Ensure all `id`s used in `edges` exist in the `nodes` list.
 ''';
   }
 }

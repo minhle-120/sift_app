@@ -133,7 +133,7 @@ class WorkbenchPanel extends ConsumerWidget {
         try {
           final schema = jsonDecode(schemaStr) as Map<String, dynamic>;
           return VisualizationViewer(
-            key: ValueKey(tab.id),
+            key: ValueKey('${tab.id}_${meta?['currentIndex'] ?? 0}'),
             schema: schema,
           );
         } catch (e) {

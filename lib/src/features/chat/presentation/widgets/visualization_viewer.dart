@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:graphview/GraphView.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../controllers/workbench_controller.dart';
 
-class VisualizationViewer extends StatefulWidget {
+class VisualizationViewer extends ConsumerStatefulWidget {
   final Map<String, dynamic> schema;
 
   const VisualizationViewer({super.key, required this.schema});
 
   @override
-  State<VisualizationViewer> createState() => _VisualizationViewerState();
+  ConsumerState<VisualizationViewer> createState() => _VisualizationViewerState();
 }
 
-class _VisualizationViewerState extends State<VisualizationViewer> {
+class _VisualizationViewerState extends ConsumerState<VisualizationViewer> {
   final Graph graph = Graph();
   late final TransformationController _transformationController;
   late final GraphViewController controller;
@@ -202,6 +204,8 @@ class _VisualizationViewerState extends State<VisualizationViewer> {
             ),
           ),
         ),
+        // Version Navigator
+        _buildVersionNavigator(context, theme),
         // Precise Controls
         Positioned(
           bottom: 24,
@@ -223,6 +227,68 @@ class _VisualizationViewerState extends State<VisualizationViewer> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildVersionNavigator(BuildContext context, ThemeData theme) {
+    final workbench = ref.watch(workbenchProvider);
+    final activeTab = workbench.activeTab;
+    
+    if (activeTab == null || activeTab.type != WorkbenchTabType.visualization) {
+      return const SizedBox.shrink();
+    }
+
+    final metadata = activeTab.metadata as Map<String, dynamic>?;
+    final versions = metadata?['versions'] as List<dynamic>?;
+    final currentIndex = metadata?['currentIndex'] as int? ?? 0;
+
+    if (versions == null || versions.length <= 1) {
+      return const SizedBox.shrink();
+    }
+
+    return Positioned(
+      bottom: 24,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(24),
+          color: theme.colorScheme.surface.withValues(alpha: 0.9),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  onPressed: currentIndex > 0 
+                    ? () => ref.read(workbenchProvider.notifier).navigateVersion(activeTab.id, currentIndex - 1)
+                    : null,
+                  tooltip: 'Previous Version',
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'Version ${currentIndex + 1} of ${versions.length}',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right, size: 20),
+                  onPressed: currentIndex < versions.length - 1
+                    ? () => ref.read(workbenchProvider.notifier).navigateVersion(activeTab.id, currentIndex + 1)
+                    : null,
+                  tooltip: 'Next Version',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

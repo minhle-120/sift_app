@@ -191,11 +191,24 @@ class ChatController extends StateNotifier<ChatState> {
 
       state = state.copyWith(researchStatus: 'Initializing research...');
 
+      // --- NEW: Extract Active Schema from Workbench ---
+      final workbench = _ref.read(workbenchProvider);
+      final activeTab = workbench.activeTab;
+      String? currentVisualSchema;
+      if (activeTab != null && activeTab.type == WorkbenchTabType.visualization) {
+        currentVisualSchema = activeTab.metadata?['schema'];
+      }
+
+      // --- NEW: Build Structured History ---
+      final historicalMessages = chatOrchestrator.buildHistory(state.messages);
+
       // 5. Research AI Step
       final researchResult = await researchOrchestrator.research(
         collectionId: activeCollectionId!,
         historicalContext: researchHistory,
         userQuery: text,
+        historicalMessages: historicalMessages,
+        currentSchema: currentVisualSchema,
         onStatusUpdate: (status) {
           state = state.copyWith(researchStatus: status);
           _db.updateMessageContent(placeholderMessage.id, status);

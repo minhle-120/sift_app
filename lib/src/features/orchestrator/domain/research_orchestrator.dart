@@ -71,6 +71,8 @@ class ResearchOrchestrator {
     required int collectionId,
     required String historicalContext,
     required String userQuery,
+    List<ChatMessage>? historicalMessages,
+    String? currentSchema,
     void Function(String status)? onStatusUpdate,
   }) async {
     registry.reset();
@@ -167,6 +169,8 @@ class ResearchOrchestrator {
           final visualResult = await visualOrchestrator.visualize(
             package: package, 
             registry: registry,
+            history: historicalMessages,
+            currentSchema: currentSchema,
           );
 
           capturedVisualSchema = visualResult.schema;

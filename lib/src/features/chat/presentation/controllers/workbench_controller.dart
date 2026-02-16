@@ -94,6 +94,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
   }
 
   void addTab(WorkbenchTab tab) {
+    // 1. Check for exactly the same ID (e.g. reopening a document)
     if (state.tabs.any((t) => t.id == tab.id)) {
       if (tab.metadata != null) {
         updateTabMetadata(tab.id, tab.metadata);
@@ -101,11 +102,98 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
       selectTab(tab.id);
       return;
     }
+
+    // 2. Specialized Logic for Visualizations: Match by Title for Versioning
+    if (tab.type == WorkbenchTabType.visualization) {
+      final String? incomingSchema = tab.metadata?['schema'];
+      if (incomingSchema != null) {
+        // Try to find a tab with the same title
+        final existingTabIndex = state.tabs.indexWhere(
+          (t) => t.type == WorkbenchTabType.visualization && t.title == tab.title
+        );
+
+        if (existingTabIndex != -1) {
+          final existingTab = state.tabs[existingTabIndex];
+          final List<dynamic> versions = List.from(existingTab.metadata?['versions'] ?? [existingTab.metadata?['schema']]);
+          
+          // Check if this exact schema is already in versions to avoid duplicates on rebuilds
+          if (!versions.contains(incomingSchema)) {
+            versions.add(incomingSchema);
+          }
+
+          final updatedTab = WorkbenchTab(
+            id: existingTab.id,
+            title: existingTab.title,
+            icon: existingTab.icon,
+            type: existingTab.type,
+            metadata: {
+              'schema': incomingSchema, // Current active schema
+              'versions': versions,
+              'currentIndex': versions.length - 1,
+            },
+          );
+
+          final newTabs = List<WorkbenchTab>.from(state.tabs);
+          newTabs[existingTabIndex] = updatedTab;
+
+          state = state.copyWith(
+            tabs: newTabs,
+            activeTabId: existingTab.id,
+            isCollapsed: false,
+          );
+          return;
+        }
+      }
+      
+      // If it's a new visualization, initialize the versioning structure
+      final newTab = WorkbenchTab(
+        id: tab.id,
+        title: tab.title,
+        icon: tab.icon,
+        type: tab.type,
+        metadata: {
+          'schema': tab.metadata?['schema'],
+          'versions': [tab.metadata?['schema']],
+          'currentIndex': 0,
+        },
+      );
+      state = state.copyWith(
+        tabs: [...state.tabs, newTab],
+        activeTabId: tab.id,
+        isCollapsed: false,
+      );
+      return;
+    }
+
+    // 3. Default behavior for other tab types
     state = state.copyWith(
       tabs: [...state.tabs, tab],
       activeTabId: tab.id,
       isCollapsed: false,
     );
+  }
+
+  void navigateVersion(String tabId, int index) {
+    final newTabs = state.tabs.map((t) {
+      if (t.id == tabId && t.type == WorkbenchTabType.visualization) {
+        final List<dynamic>? versions = t.metadata?['versions'];
+        if (versions != null && index >= 0 && index < versions.length) {
+          return WorkbenchTab(
+            id: t.id,
+            title: t.title,
+            icon: t.icon,
+            type: t.type,
+            metadata: {
+              ...t.metadata as Map<String, dynamic>,
+              'schema': versions[index],
+              'currentIndex': index,
+            },
+          );
+        }
+      }
+      return t;
+    }).toList();
+    state = state.copyWith(tabs: newTabs);
   }
 
   void updateTabMetadata(String id, dynamic metadata) {
