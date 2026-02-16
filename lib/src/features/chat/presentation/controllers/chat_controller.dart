@@ -199,15 +199,11 @@ class ChatController extends StateNotifier<ChatState> {
         currentVisualSchema = activeTab.metadata?['schema'];
       }
 
-      // --- NEW: Build Structured History ---
-      final historicalMessages = chatOrchestrator.buildHistory(state.messages);
-
       // 5. Research AI Step
       final researchResult = await researchOrchestrator.research(
         collectionId: activeCollectionId!,
         historicalContext: researchHistory,
         userQuery: text,
-        historicalMessages: historicalMessages,
         currentSchema: currentVisualSchema,
         onStatusUpdate: (status) {
           state = state.copyWith(researchStatus: status);

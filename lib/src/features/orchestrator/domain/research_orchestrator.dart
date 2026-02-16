@@ -71,7 +71,6 @@ class ResearchOrchestrator {
     required int collectionId,
     required String historicalContext,
     required String userQuery,
-    List<ChatMessage>? historicalMessages,
     String? currentSchema,
     void Function(String status)? onStatusUpdate,
   }) async {
@@ -169,7 +168,7 @@ class ResearchOrchestrator {
           final visualResult = await visualOrchestrator.visualize(
             package: package, 
             registry: registry,
-            history: historicalMessages,
+            fullContext: contextPrompt,
             currentSchema: currentSchema,
           );
 

@@ -16,7 +16,7 @@ class VisualOrchestrator {
   Future<VisualResult> visualize({
     required VisualPackage package,
     required ChunkRegistry registry,
-    List<ChatMessage>? history,
+    String? fullContext,
     String? currentSchema,
   }) async {
     // 1. Resolve Chunks
@@ -31,7 +31,11 @@ class VisualOrchestrator {
     // 2. Build Messages
     final messages = [
       ChatMessage(role: ChatRole.system, content: _buildSystemPrompt()),
-      if (history != null) ...history,
+      if (fullContext != null)
+        ChatMessage(
+          role: ChatRole.user,
+          content: 'CONVERSATION_HISTORY:\n$fullContext',
+        ),
       if (currentSchema != null)
         ChatMessage(
           role: ChatRole.assistant,
