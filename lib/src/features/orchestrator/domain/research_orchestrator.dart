@@ -44,6 +44,8 @@ final researchOrchestratorProvider = Provider((ref) {
 
 
 class ResearchOrchestrator {
+  static const String visualMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `delegate_to_visualizer` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.';
+
   final IAiService aiService;
   final VisualOrchestrator visualOrchestrator;
   final RAGTool ragTool;
@@ -91,7 +93,7 @@ class ResearchOrchestrator {
 
     String finalUserQuery = userQuery;
     if (mode == VisualizerMode.on) {
-      finalUserQuery = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `delegate_to_visualizer` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.\n\nUser Query: $userQuery';
+      finalUserQuery = '$visualMandate\n\nUser Query: $userQuery';
     }
 
     // 1. Prepare Unified Context Message
@@ -165,10 +167,18 @@ class ResearchOrchestrator {
           onStatusUpdate?.call('Generating visualization for "${args['visualizationGoal'] ?? 'data'}..."');
           
           final package = visualTool.execute(args);
+          
+          // Clean the context for the visualizer (remove system mandates)
+          final cleanContext = contextPrompt
+              .replaceAll(visualMandate, '')
+              .replaceAll('\n\nUser Query: ', '\n')
+              .replaceAll('Current query: \n', 'Current query: ')
+              .trim();
+
           final visualResult = await visualOrchestrator.visualize(
             package: package, 
             registry: registry,
-            fullContext: contextPrompt,
+            fullContext: cleanContext,
             currentSchema: currentSchema,
           );
 
@@ -258,12 +268,14 @@ You have access to the conversation history. Use this context to resolve pronoun
 
       if (m.role == domain.MessageRole.user) {
         if (buffer.isNotEmpty) buffer.write('\n\n');
-        buffer.write('Query: ${m.text}');
+        // Strip the visual mandate from historical user queries to keep context clean
+        final cleanQuery = m.text.replaceAll(visualMandate, '').replaceAll('\n\nUser Query: ', '').trim();
+        buffer.write('Query: $cleanQuery');
       } else if (m.role == domain.MessageRole.assistant) {
         if (buffer.isNotEmpty) buffer.write('\n');
         // Strip Citations: Remove [[Chunk X]] markers to keep history clean for the researcher
-        final cleanText = m.text.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '');
-        buffer.write('Synthesizer answer: ${cleanText.trim()}');
+        final cleanAnswer = m.text.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '');
+        buffer.write('Synthesizer answer: ${cleanAnswer.trim()}');
       }
     }
     
