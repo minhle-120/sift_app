@@ -33,25 +33,29 @@ class DocumentProcessor {
   String _repairNumericEncoding(String text) {
     if (text.isEmpty) return text;
 
-    // We look for high density clusters of a[digits].
-    // If the text is heavily weighted with these sequences, we treat it as encoded.
-    final sequencePattern = RegExp(r'(?:a\d{2,3}){3,}');
-    if (!text.contains(sequencePattern)) return text;
-
-    // Repair pass: find a[digits] and map to char codes
+    // Repair pass: find a[digits] and map to char codes or ligatures
     final unitPattern = RegExp(r'a(\d{2,3})');
+    if (!text.contains(unitPattern)) return text;
     
     return text.replaceAllMapped(unitPattern, (match) {
       final codeStr = match.group(1)!;
       try {
         final code = int.parse(codeStr);
-        // Map common printable ASCII characters
+
+        // Handle common custom ligature markers found in these PDF streams
+        switch (code) {
+          case 27: return 'ff';
+          case 28: return 'fi';
+          case 29: return 'fl';
+          case 30: return 'ffi';
+          case 31: return 'ffl';
+        }
+
+        // Map common printable ASCII characters for numeric-scrambled PDFs
         if ((code >= 32 && code <= 126) || code == 9 || code == 10 || code == 13) {
           return String.fromCharCode(code);
         }
-        // If it's a code like a30 (often space or non-printable in these encodings), 
-        // we keep it as a marker or discard if it creates noise. 
-        // For now, return original to avoid losing potentially relevant markers.
+        
         return match.group(0)!;
       } catch (_) {
         return match.group(0)!;
@@ -89,8 +93,8 @@ class DocumentProcessor {
     
     try {
       final PdfTextExtractor extractor = PdfTextExtractor(document);
-      // Extracts all text including layout info
-      final String text = extractor.extractText();
+      // layoutText: true helps preserve word spacing in complex or non-standard PDFs
+      final String text = extractor.extractText(layoutText: true);
       return text;
     } finally {
       // CRITICAL: Always dispose documents to prevent memory leaks
