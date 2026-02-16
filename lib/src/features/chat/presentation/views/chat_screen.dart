@@ -95,6 +95,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
 
     if (isDesktop) {
+      final workbenchWidth = workbench.isCollapsed ? 0.0 : size.width * workbench.panelRatio;
+      
       return Scaffold(
         drawer: const ConversationDrawer(),
         body: Row(
@@ -103,10 +105,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (!workbench.isCollapsed) ...[
               GestureDetector(
                 onHorizontalDragUpdate: (details) {
-                  ref.read(workbenchProvider.notifier).updateWidth(
-                        workbench.panelWidth - details.delta.dx,
-                        maxAvailableWidth: size.width,
-                      );
+                  final newRatio = (size.width * workbench.panelRatio - details.delta.dx) / size.width;
+                  ref.read(workbenchProvider.notifier).updateRatio(newRatio);
                 },
                 child: MouseRegion(
                   cursor: SystemMouseCursors.resizeLeftRight,
@@ -117,7 +117,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ),
               SizedBox(
-                width: workbench.panelWidth,
+                width: workbenchWidth,
                 child: const WorkbenchPanel(),
               ),
             ],
@@ -165,38 +165,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-           if (hasActiveCollection) ...[
-            IconButton(
-              icon: Icon(
-                ref.watch(workbenchProvider).isCollapsed 
-                    ? Icons.view_sidebar_outlined 
-                    : Icons.view_sidebar,
-              ),
-              tooltip: 'Toggle Workbench',
-              onPressed: () => ref.read(workbenchProvider.notifier).toggleCollapsed(),
+          // Wrap actions in a scroll view to prevent overflow on very narrow views
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasActiveCollection) ...[
+                  IconButton(
+                    icon: Icon(
+                      ref.watch(workbenchProvider).isCollapsed 
+                          ? Icons.view_sidebar_outlined 
+                          : Icons.view_sidebar,
+                    ),
+                    tooltip: 'Toggle Workbench',
+                    onPressed: () => ref.read(workbenchProvider.notifier).toggleCollapsed(),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.description_outlined),
+                    tooltip: 'Collection Documents',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const DocumentsScreen()),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_comment_outlined),
+                    tooltip: 'New Chat',
+                    onPressed: () => ref.read(chatControllerProvider.notifier).newChat(),
+                  ),
+                ],
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
+                  },
+                ),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.description_outlined),
-              tooltip: 'Collection Documents',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const DocumentsScreen()),
-                );
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.add_comment_outlined),
-              tooltip: 'New Chat',
-              onPressed: () => ref.read(chatControllerProvider.notifier).newChat(),
-            ),
-          ],
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              );
-            },
           ),
         ],
       ),

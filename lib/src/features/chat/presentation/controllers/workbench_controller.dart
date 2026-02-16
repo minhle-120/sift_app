@@ -21,13 +21,13 @@ class WorkbenchTab {
 }
 
 class WorkbenchState {
-  final double panelWidth;
+  final double panelRatio;
   final bool isCollapsed;
   final List<WorkbenchTab> tabs;
   final String? activeTabId;
 
   const WorkbenchState({
-    this.panelWidth = 400.0,
+    this.panelRatio = 0.4,
     this.isCollapsed = true,
     this.tabs = const [],
     this.activeTabId,
@@ -43,14 +43,14 @@ class WorkbenchState {
   }
 
   WorkbenchState copyWith({
-    double? panelWidth,
+    double? panelRatio,
     bool? isCollapsed,
     List<WorkbenchTab>? tabs,
     String? activeTabId,
     bool clearActiveTab = false,
   }) {
     return WorkbenchState(
-      panelWidth: panelWidth ?? this.panelWidth,
+      panelRatio: panelRatio ?? this.panelRatio,
       isCollapsed: isCollapsed ?? this.isCollapsed,
       tabs: tabs ?? this.tabs,
       activeTabId: clearActiveTab ? null : (activeTabId ?? this.activeTabId),
@@ -66,23 +66,23 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
   Future<void> _loadState() async {
     final prefs = await SharedPreferences.getInstance();
     final isCollapsed = prefs.getBool('workbench_isCollapsed') ?? true;
-    final panelWidth = prefs.getDouble('workbench_panelWidth') ?? 400.0;
+    final panelRatio = prefs.getDouble('workbench_panelRatio') ?? 0.4;
     
     state = state.copyWith(
       isCollapsed: isCollapsed,
-      panelWidth: panelWidth,
+      panelRatio: panelRatio,
     );
   }
 
-  Future<void> updateWidth(double width, {double? maxAvailableWidth}) async {
-    if (width < 250) width = 250;
-    if (maxAvailableWidth != null && width > maxAvailableWidth * 0.8) {
-      width = maxAvailableWidth * 0.8;
-    }
-    state = state.copyWith(panelWidth: width);
+  Future<void> updateRatio(double ratio) async {
+    // Clamp ratio between 0.2 and 0.8 to preserve chat visibility
+    if (ratio < 0.2) ratio = 0.2;
+    if (ratio > 0.8) ratio = 0.8;
+    
+    state = state.copyWith(panelRatio: ratio);
     
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('workbench_panelWidth', width);
+    await prefs.setDouble('workbench_panelRatio', ratio);
   }
 
   Future<void> toggleCollapsed() async {
