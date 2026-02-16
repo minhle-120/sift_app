@@ -198,7 +198,7 @@ class RAGResult {
 
   @override
   String toString() {
-    return '[[Chunk $index]] Source: $sourceTitle\n$content';
+    return '[[Chunk $index]]\n$content';
   }
 }
 
