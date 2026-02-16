@@ -222,22 +222,28 @@ class ChatController extends StateNotifier<ChatState> {
       }
 
       if (researchResult.visualSchema != null) {
-        // --- NEW: Handle Visualization (from intermediate step) ---
-        final schema = researchResult.visualSchema!;
-        
-        // Auto-open the tab
-        _ref.read(workbenchProvider.notifier).addTab(
-          WorkbenchTab(
-            id: 'viz_${placeholderMessage.uuid}',
-            title: 'Visualization',
-            icon: Icons.hub_outlined,
-            type: WorkbenchTabType.visualization,
-            metadata: {'schema': schema},
-          ),
-        );
-
-        // We'll update metadata later in the package block or at the end
+      // --- NEW: Handle Visualization (from intermediate step) -----
+      final schemaStr = researchResult.visualSchema!;
+      String? parsedTitle;
+      
+      try {
+        final Map<String, dynamic> schema = jsonDecode(schemaStr);
+        parsedTitle = schema['title'] as String?;
+      } catch (e) {
+        debugPrint('Failed to parse visualization title: $e');
       }
+
+      // Auto-open the tab
+      _ref.read(workbenchProvider.notifier).addTab(
+        WorkbenchTab(
+          id: 'viz_${placeholderMessage.uuid}',
+          title: parsedTitle ?? 'Visualization',
+          icon: Icons.hub_outlined,
+          type: WorkbenchTabType.visualization,
+          metadata: {'schema': schemaStr},
+        ),
+      );
+    }
 
       String finalContent = '';
 

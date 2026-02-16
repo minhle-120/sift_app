@@ -204,6 +204,45 @@ class _VisualizationViewerState extends State<VisualizationViewer> {
         ),
         // Precise Controls
         Positioned(
+          top: 20,
+          left: 20,
+          right: 20,
+          child: IgnorePointer(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (widget.schema['title'] != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface.withAlpha(200),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: theme.colorScheme.primary.withAlpha(100),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(20),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      widget.schema['title'],
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        // Precise Controls
+        Positioned(
           bottom: 24,
           right: 24,
           child: Material(

@@ -89,6 +89,7 @@ Output a valid JSON block with the following structure:
 JSON Structure:
 ```json
 {
+  "title": "Concise Chart Title",
   "layoutType": "tree" | "directed" | "circular" | "balloon" | "radial" | "mindmap",
   "nodes": [
     {"id": "unique_id", "label": "Short Display Name", "type": "important" | "normal"}
@@ -106,6 +107,7 @@ Input: "Describe the layers of Classification X."
 Output JSON:
 ```json
 {
+  "title": "Classification Hierarchy",
   "layoutType": "tree",
   "nodes": [
     {"id": "root", "label": "Top Category", "type": "important"},
@@ -124,6 +126,7 @@ Input: "Sequence from Event A to Outcome C."
 Output JSON:
 ```json
 {
+  "title": "Process Flow",
   "layoutType": "directed",
   "nodes": [
     {"id": "a", "label": "Initial Stage A", "type": "normal"},
@@ -211,10 +214,11 @@ Output JSON:
 ```
 
 ### INSTRUCTIONS:
-1. **Labels**: Keep labels very concise (2-4 words).
-2. **Node Types**: Use "important" for primary actors/results and "normal" for supporting data.
-3. **Edges**: Always provide a descriptive label for edges to explain the connection.
-4. **Resilience**: Ensure all `id`s used in `edges` exist in the `nodes` list.
+1. **Title**: Always include a concise, descriptive "title" (2-4 words) for the visualization.
+2. **Labels**: Keep labels very concise (2-4 words).
+3. **Node Types**: Use "important" for primary actors/results and "normal" for supporting data.
+4. **Edges**: Always provide a descriptive label for edges to explain the connection.
+5. **Resilience**: Ensure all `id`s used in `edges` exist in the `nodes` list.
 ''';
   }
 }
