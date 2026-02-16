@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/settings_controller.dart';
 import '../controllers/chat_controller.dart';
@@ -122,18 +123,28 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                     ),
                   ),
                   Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      enabled: !chatState.isLoading,
-                      maxLines: 5,
-                      minLines: 1,
-                      decoration: InputDecoration(
-                        hintText: chatState.isLoading ? 'Thinking...' : 'Message Sift...',
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    child: CallbackShortcuts(
+                      bindings: {
+                        const SingleActivator(LogicalKeyboardKey.enter): () {
+                          if (!chatState.isLoading && _hasText) {
+                            _sendMessage();
+                          }
+                        },
+                      },
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        enabled: !chatState.isLoading,
+                        maxLines: 5,
+                        minLines: 1,
+                        textInputAction: TextInputAction.newline,
+                        decoration: InputDecoration(
+                          hintText: chatState.isLoading ? 'Thinking...' : 'Message Sift...',
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
                       ),
-                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   Padding(
