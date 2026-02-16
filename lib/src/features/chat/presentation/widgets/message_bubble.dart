@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_latex/flutter_markdown_latex.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'dart:convert';
 import '../../domain/entities/message.dart';
@@ -44,13 +45,18 @@ class MessageBubble extends ConsumerWidget {
                   data: message.text,
                   selectable: false,
                   extensionSet: md.ExtensionSet(
-                    [...md.ExtensionSet.gitHubFlavored.blockSyntaxes],
+                    [
+                      ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+                      LatexBlockSyntax(),
+                    ],
                     [
                       ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+                      LatexInlineSyntax(),
                       CitationSyntax(),
                     ],
                   ),
                   builders: {
+                    'latex': LatexElementBuilder(),
                     'citation': CitationBuilder(
                       context: context,
                       citations: message.citations,

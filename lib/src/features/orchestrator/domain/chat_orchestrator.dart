@@ -101,6 +101,12 @@ class ChatOrchestrator {
 3. **No Alternatives**: NEVER use formats like "(Chunk 1)", "Source 1", or "according to xyz". ONLY use the `[[Chunk X]]` tag.
 4. **Multiple Sources**: If multiple chunks support a claim, list them all: `[[Chunk 1]][[Chunk 2]]`.
 
+### Math Formatting:
+- **ALWAYS use LaTeX** for any mathematical expressions, formulas, variables, or equations.
+- **Inline Math**: Use single dollar signs: `$ E=mc^2 $`.
+- **Block Math**: Use double dollar signs for complex or standalone equations: `$$ P(A|B) = \frac{P(A \cap B)}{P(B)} $$`.
+- **Consistency**: Do not mix LaTeX with plain text symbols (like using * instead of \times).
+
 ### Instructions:
 - Answer the user's latest query accurately using the provided context.
 - **Explain Visuals**: If a [VISUAL_CHART_CONTEXT] is provided, it means a interactive chart has ALREADY been rendered in the UI workbench. You MUST provide a textual explanation of what is shown in that chart and how it relates to the research findings. 

@@ -243,6 +243,11 @@ You have access to the conversation history. Use this context to resolve pronoun
  - If you call `no_info_found`, the research session will terminate immediately.
 - **Visual-Text Synergy**: When you call `delegate_to_visualizer`, the system generates the chart. You should follow up by calling `delegate_to_synthesizer` so the user gets both a visual chart and a helpful textual explanation/summary.
  - Your mission is complete when you have delegated the work via `delegate_to_synthesizer` or called `no_info_found`.
+
+ ### Math Formatting:
+- **ALWAYS use LaTeX** for any mathematical expressions, formulas, variables, or equations.
+- **Inline Math**: Use single dollar signs (`\$ ... \$`).
+- **Block Math**: Use double dollar signs for equations on their own line (`\$\$ ... \$\$`).
  ''';
   }
 
