@@ -28,25 +28,33 @@ class VisualOrchestrator {
       }
     }
 
-    // 2. Build Messages
+    // 2. Build Unified Context & Objective Message
+    final StringBuffer contextBuffer = StringBuffer();
+    
+    if (fullContext != null) {
+      contextBuffer.writeln('### CONVERSATION HISTORY');
+      contextBuffer.writeln(fullContext);
+      contextBuffer.writeln();
+    }
+    
+    if (currentSchema != null) {
+      contextBuffer.writeln('### CURRENT_CHART_SCHEMA');
+      contextBuffer.writeln(currentSchema);
+      contextBuffer.writeln();
+    }
+    
+    contextBuffer.writeln('### TARGET VISUALIZATION GOAL');
+    contextBuffer.writeln(package.visualizationGoal);
+    contextBuffer.writeln();
+    
+    contextBuffer.writeln('### EVIDENCE CHUNKS');
+    contextBuffer.writeln(resolvedChunks.join('\n\n'));
+
     final messages = [
       ChatMessage(role: ChatRole.system, content: _buildSystemPrompt()),
-      if (fullContext != null)
-        ChatMessage(
-          role: ChatRole.user,
-          content: 'CONVERSATION_HISTORY:\n$fullContext',
-        ),
-      if (currentSchema != null)
-        ChatMessage(
-          role: ChatRole.assistant,
-          content: 'CURRENT_CHART_SCHEMA: $currentSchema',
-        ),
       ChatMessage(
         role: ChatRole.user,
-        content: '''Target Visualization: ${package.visualizationGoal}
-
-Evidence Chunks:
-${resolvedChunks.join('\n\n')}''',
+        content: contextBuffer.toString(),
       ),
     ];
 
@@ -228,15 +236,17 @@ Output JSON:
 ```
 
 ### INSTRUCTIONS:
-1. **Title**: Always include a concise, descriptive "title" (2-4 words) for the visualization.
-2. **Stateful Updates**: If a `CURRENT_CHART_SCHEMA` is provided in the history, your goal is to **update** or **refactor** it based on the new `Target Visualization` and `Evidence Chunks`. 
-   - **Merge Strategy**: Integrate new evidence into the existing graph. Prefer adding to the current structure over completely replacing it, unless a full refactor is requested.
-   - **Consistency**: Keep the `title` IDENTICAL if you intend to update the same chart series.
-   - **Branching**: If the user's request is fundamentally a new topic, provide a new `title` to create a separate tab.
-3. **Labels**: Keep labels very concise (2-4 words).
-4. **Node Types**: Use "important" for primary actors/results and "normal" for supporting data.
-5. **Edges**: Always provide a descriptive label for edges to explain the connection.
-6. **Resilience**: Ensure all `id`s used in `edges` exist in the `nodes` list.
+1. **Output Format**: Output ONLY the JSON block. Do not provide any conversational text, explanations, or reasoning before or after the JSON.
+2. **Title**: Always include a concise, descriptive "title" (2-4 words) for the visualization.
+3. **Chart Refinement (Update State)**: If a `CURRENT_CHART_SCHEMA` is provided, you are in **UPDATE MODE**. 
+   - **MANDATE**: Build upon the existing structure. Do NOT start over unless the User's goal is diametrically opposed to the current chart.
+   - **Merge Strategy**: Add new nodes and edges, refine existing labels, or reorganize the layout to fit new evidence while preserving the "skeleton" of the previous version.
+   - **Continuity**: Use the EXACT same `title` to maintain the version series in the UI.
+   - **Branching**: Use a DIFFERENT `title` only if you are creating a fundamentally separate visualization.
+4. **Labels**: Keep labels very concise (2-4 words).
+5. **Node Types**: Use "important" for primary actors/results and "normal" for supporting data.
+6. **Edges**: Always provide a descriptive label for edges to explain the connection.
+7. **Resilience**: Ensure all `id`s used in `edges` exist in the `nodes` list.
 ''';
   }
 }
