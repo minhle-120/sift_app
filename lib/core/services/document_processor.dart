@@ -25,7 +25,38 @@ class DocumentProcessor {
       text = '';
     }
     
-    return normalizeText(text);
+    return normalizeText(_repairNumericEncoding(text));
+  }
+
+  /// Some PDFs (subsetted or scrambled) extract as decimal ASCII codes prefixed with 'a'
+  /// (e.g., "a83a116a117a100a121" -> "Study"). This repair pass detects and handles this.
+  String _repairNumericEncoding(String text) {
+    if (text.isEmpty) return text;
+
+    // We look for high density clusters of a[digits].
+    // If the text is heavily weighted with these sequences, we treat it as encoded.
+    final sequencePattern = RegExp(r'(?:a\d{2,3}){3,}');
+    if (!text.contains(sequencePattern)) return text;
+
+    // Repair pass: find a[digits] and map to char codes
+    final unitPattern = RegExp(r'a(\d{2,3})');
+    
+    return text.replaceAllMapped(unitPattern, (match) {
+      final codeStr = match.group(1)!;
+      try {
+        final code = int.parse(codeStr);
+        // Map common printable ASCII characters
+        if ((code >= 32 && code <= 126) || code == 9 || code == 10 || code == 13) {
+          return String.fromCharCode(code);
+        }
+        // If it's a code like a30 (often space or non-printable in these encodings), 
+        // we keep it as a marker or discard if it creates noise. 
+        // For now, return original to avoid losing potentially relevant markers.
+        return match.group(0)!;
+      } catch (_) {
+        return match.group(0)!;
+      }
+    });
   }
 
   /// Normalizes text to be clean for AI consumption while preserving semantic structure.
