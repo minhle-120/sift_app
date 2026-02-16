@@ -34,9 +34,17 @@ jobs:
 
       - name: Package Linux
         run: |
-          cd build/linux/x64/release/bundle
-          zip -r ../../../../sift-linux-x64.zip .
-          cd ../../../../
+          sudo apt-get update && sudo apt-get install -y zip
+          # Dynamically find the bundle directory to handle path variations
+          BUNDLE_DIR=$(find build/linux -name "bundle" -type d | head -n 1)
+          if [ -z "$BUNDLE_DIR" ]; then
+            echo "Error: Bundle directory not found in build/linux"
+            ls -R build/linux
+            exit 1
+          fi
+          echo "Found bundle directory: $BUNDLE_DIR"
+          cd "$BUNDLE_DIR"
+          zip -r "$GITHUB_WORKSPACE/sift-linux-x64.zip" .
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
