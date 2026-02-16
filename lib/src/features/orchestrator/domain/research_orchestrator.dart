@@ -146,7 +146,7 @@ class ResearchOrchestrator {
         if (toolCall.function.name == RAGTool.name) {
           final args = _parseArgs(toolCall.function.arguments);
           onStatusUpdate?.call('Searching library for "${args['keywords'] ?? 'relevant info'}"...');
-          final result = await ragTool.execute(collectionId, args);
+          final result = await ragTool.execute(collectionId, args, userQuery);
           
           messages.add(ChatMessage(
             role: ChatRole.tool,

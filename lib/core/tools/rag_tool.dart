@@ -41,7 +41,7 @@ class RAGTool {
         ),
       );
 
-  Future<String> execute(int collectionId, Map<String, dynamic> args) async {
+  Future<String> execute(int collectionId, Map<String, dynamic> args, String userQuery) async {
     final String keywords = args['keywords'] ?? '';
     final String query = args['query'] ?? '';
 
@@ -101,7 +101,7 @@ class RAGTool {
     final resultsText = results.join('\n\n');
     return '$resultsText\n\n'
            '**Assistant Evaluation Note**: Review the background knowledge retrieved above. '
-           '1. Is this sufficient to answer the User Query ("$query") fully? If yes, call `delegate_to_synthesizer`. '
+           '1. Is this sufficient to answer the User Query ("$userQuery") fully? If yes, proceed with your tasks. '
            '2. Do you need more specific details, numbers, or dates that might be in other parts of the library? If yes, call `query_knowledge_base` again with refined keywords.';
   }
 }
