@@ -208,39 +208,47 @@ class CitationBuilder extends MarkdownElementBuilder {
     final metadata = citations?[rawIndex] as Map<String, dynamic>?;
     final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Source details not available';
 
-    return Tooltip(
-      message: sourceTitle,
-      child: InkWell(
-        onTap: () {
-          debugPrint('Clicked citation: $rawIndex');
-          if (onCitationClick != null) {
-            onCitationClick!(rawIndex, metadata);
-          }
-        },
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          width: 18,
-          height: 18,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.8),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.5),
-              width: 0.5,
+    return Text.rich(
+      TextSpan(
+        children: [
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Tooltip(
+              message: sourceTitle,
+              child: InkWell(
+                onTap: () {
+                  debugPrint('Clicked citation: $rawIndex');
+                  if (onCitationClick != null) {
+                    onCitationClick!(rawIndex, metadata);
+                  }
+                },
+                borderRadius: BorderRadius.circular(4),
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                      width: 0.5,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    rawIndex,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
-          alignment: Alignment.center,
-          child: Text(
-            rawIndex,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onPrimaryContainer,
-              fontWeight: FontWeight.bold,
-              fontSize: 10,
-              height: 1.0,
-            ),
-          ),
-        ),
+        ],
       ),
     );
   }
