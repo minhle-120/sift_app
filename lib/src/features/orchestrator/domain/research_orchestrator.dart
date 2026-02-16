@@ -225,7 +225,7 @@ class ResearchOrchestrator {
   }
 
   String _buildSystemPrompt() {
-    return '''You are a Research Specialist. Your task is to locate relevant information in the database to answer user queries.
+    return r'''You are a Research Specialist. Your task is to locate relevant information in the database to answer user queries.
 You have access to the conversation history. Use this context to resolve pronouns (e.g., "he", "they", "that project") and understand the broader goal of the user's current request.
 
 ### Core Objectives:
@@ -246,9 +246,9 @@ You have access to the conversation history. Use this context to resolve pronoun
 
  ### Math Formatting:
 - **ALWAYS use LaTeX** for any mathematical expressions, formulas, variables, or equations.
-- **Inline Math**: Use single dollar signs (`\$ ... \$`).
-- **Block Math**: Use double dollar signs for equations on their own line (`\$\$ ... \$\$`).
- ''';
+- **Inline Math**: Use single dollar signs ($ ... $).
+- **Block Math**: Use double dollar signs for equations on their own line ($$ ... $$).
+''';
   }
 
   /// Builds a clean user-assistant chat history string from domain messages.
