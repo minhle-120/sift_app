@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/settings_controller.dart';
+import 'local_engine_settings_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -45,24 +46,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // Server Connection
+          // AI Backend
           Text(
-            'Server Connection',
+            'AI Backend',
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.primary,
             ),
           ),
           const SizedBox(height: 16),
-          TextField(
-            controller: _urlController,
-            onChanged: (val) => ref.read(settingsProvider.notifier).updateLlamaServerUrl(val),
-            decoration: const InputDecoration(
+          
+          SegmentedButton<BackendType>(
+            segments: const [
+              ButtonSegment<BackendType>(
+                value: BackendType.external,
+                label: Text('External'),
+                icon: Icon(Icons.cloud_outlined),
+              ),
+              ButtonSegment<BackendType>(
+                value: BackendType.internal,
+                label: Text('Internal (Bundled)'),
+                icon: Icon(Icons.memory),
+              ),
+            ],
+            selected: {settings.backendType},
+            onSelectionChanged: (Set<BackendType> newSelection) {
+              ref.read(settingsProvider.notifier).updateBackendType(newSelection.first);
+            },
+          ),
+          
+          const SizedBox(height: 24),
+
+          if (settings.backendType == BackendType.external) ...[
+            TextField(
+              controller: _urlController,
+              onChanged: (val) => ref.read(settingsProvider.notifier).updateLlamaServerUrl(val),
+              decoration: const InputDecoration(
               labelText: 'Llama.cpp Server URL',
               border: OutlineInputBorder(),
               helperText: 'e.g. http://localhost:8080',
               prefixIcon: Icon(Icons.link),
             ),
           ),
+        ] else ...[
+          // Local AI Executive Navigation
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: theme.colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.terminal_rounded),
+              title: const Text('Configure Local AI Engine'),
+              subtitle: const Text('Manage hardware, models, and engine status'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const LocalEngineSettingsScreen()),
+                );
+              },
+            ),
+          ),
+        ],
           
           const SizedBox(height: 32),
 

@@ -27,6 +27,7 @@ dependencies:
   intl: ^0.20.2
   desktop_drop: ^0.5.0
   graphview: ^1.5.1
+  archive: ^3.6.1
 
 dev_dependencies:
   flutter_test:
