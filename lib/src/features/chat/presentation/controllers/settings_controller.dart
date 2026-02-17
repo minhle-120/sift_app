@@ -4,6 +4,7 @@ import '../../../../../core/models/ai_models.dart';
 import '../../../../../core/services/backend_downloader.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
+import 'dart:io';
 
 enum BackendType { external, internal }
 
@@ -23,6 +24,7 @@ class SettingsState {
   final BackendType backendType;
   final int gpuDeviceIndex;
   final String modelsPath;
+  final String enginesPath;
   final double downloadProgress;
   final bool isDownloading;
   final String downloadStatus;
@@ -33,6 +35,12 @@ class SettingsState {
   final String? selectedDeviceId;
   final List<String> serverLogs;
   final List<String> installedEngineNames;
+  final bool isDownloadingBundle;
+  final double bundleProgress;
+  final String bundleStatus;
+  final bool isInstructInstalled;
+  final bool isEmbeddingInstalled;
+  final bool isRerankerInstalled;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -48,8 +56,9 @@ class SettingsState {
     this.isLoadingModels = false,
     this.error,
     this.backendType = BackendType.external,
-    this.gpuDeviceIndex = 0, // 0 = Auto/CPU, 1 = GPU 0, 2 = GPU 1 etc.
+    this.gpuDeviceIndex = 0,
     this.modelsPath = '',
+    this.enginesPath = '',
     this.downloadProgress = 0.0,
     this.isDownloading = false,
     this.downloadStatus = '',
@@ -60,6 +69,12 @@ class SettingsState {
     this.selectedDeviceId,
     this.serverLogs = const [],
     this.installedEngineNames = const [],
+    this.isDownloadingBundle = false,
+    this.bundleProgress = 0,
+    this.bundleStatus = '',
+    this.isInstructInstalled = false,
+    this.isEmbeddingInstalled = false,
+    this.isRerankerInstalled = false,
   });
 
   SettingsState copyWith({
@@ -78,6 +93,7 @@ class SettingsState {
     BackendType? backendType,
     int? gpuDeviceIndex,
     String? modelsPath,
+    String? enginesPath,
     double? downloadProgress,
     bool? isDownloading,
     String? downloadStatus,
@@ -88,6 +104,12 @@ class SettingsState {
     String? selectedDeviceId,
     List<String>? serverLogs,
     List<String>? installedEngineNames,
+    bool? isDownloadingBundle,
+    double? bundleProgress,
+    String? bundleStatus,
+    bool? isInstructInstalled,
+    bool? isEmbeddingInstalled,
+    bool? isRerankerInstalled,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -101,10 +123,11 @@ class SettingsState {
       visualizerMode: visualizerMode ?? this.visualizerMode,
       availableModels: availableModels ?? this.availableModels,
       isLoadingModels: isLoadingModels ?? this.isLoadingModels,
-      error: error,
+      error: error ?? this.error,
       backendType: backendType ?? this.backendType,
       gpuDeviceIndex: gpuDeviceIndex ?? this.gpuDeviceIndex,
       modelsPath: modelsPath ?? this.modelsPath,
+      enginesPath: enginesPath ?? this.enginesPath,
       downloadProgress: downloadProgress ?? this.downloadProgress,
       isDownloading: isDownloading ?? this.isDownloading,
       downloadStatus: downloadStatus ?? this.downloadStatus,
@@ -115,6 +138,12 @@ class SettingsState {
       selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
       serverLogs: serverLogs ?? this.serverLogs,
       installedEngineNames: installedEngineNames ?? this.installedEngineNames,
+      isDownloadingBundle: isDownloadingBundle ?? this.isDownloadingBundle,
+      bundleProgress: bundleProgress ?? this.bundleProgress,
+      bundleStatus: bundleStatus ?? this.bundleStatus,
+      isInstructInstalled: isInstructInstalled ?? this.isInstructInstalled,
+      isEmbeddingInstalled: isEmbeddingInstalled ?? this.isEmbeddingInstalled,
+      isRerankerInstalled: isRerankerInstalled ?? this.isRerankerInstalled,
     );
   }
 }
@@ -143,16 +172,14 @@ class SettingsController extends StateNotifier<SettingsState> {
       visualizerMode: VisualizerMode.values[prefs.getInt('visualizerMode') ?? 0],
       backendType: BackendType.values[prefs.getInt('backendType') ?? 0],
       gpuDeviceIndex: prefs.getInt('gpuDeviceIndex') ?? 0,
-      modelsPath: prefs.getString('modelsPath') ?? '',
+      modelsPath: prefs.getString('modelsPath') ?? await _downloader.getModelsDirectory(),
+      enginesPath: await _downloader.getEngineDirectory(),
       selectedEngine: prefs.getString('selectedEngine'),
       selectedDeviceId: prefs.getString('selectedDeviceId') ?? 'cpu',
     );
     
-    // Fetch models and engines
     fetchModels();
     fetchEngines();
-
-    // If engine already selected, fetch devices
     if (state.selectedEngine != null) {
       fetchDevices();
     }
@@ -162,14 +189,17 @@ class SettingsController extends StateNotifier<SettingsState> {
     if (state.selectedEngine == null) return;
     final result = await _downloader.listAvailableDevices(state.selectedEngine!);
     
-    // Capture audit output in logs
     appendLog('--- Hardware Device Audit ---');
     appendLog(result.rawOutput);
-    appendLog('-----------------------------');
-    
     state = state.copyWith(availableDevices: result.devices);
 
-    // Safeguard: Ensure currently selected device still exists in the new list
+    final modelsDir = await _downloader.getModelsDirectory();
+    state = state.copyWith(
+      isInstructInstalled: await File(p.join(modelsDir, 'Qwen3-4B-Instruct-Q8_0.gguf')).exists(),
+      isEmbeddingInstalled: await File(p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf')).exists(),
+      isRerankerInstalled: await File(p.join(modelsDir, 'Qwen3-Reranker-0.6B-Q8_0.gguf')).exists(),
+    );
+
     final deviceExists = state.availableDevices.any((d) => d.id == state.selectedDeviceId);
     if (!deviceExists) {
       setSelectedDevice('cpu');
@@ -186,15 +216,18 @@ class SettingsController extends StateNotifier<SettingsState> {
     await _downloader.openEngineFolder();
   }
 
+  Future<void> openModelsFolder() async {
+    await _downloader.openModelsFolder();
+  }
+
   Future<void> refreshIntegrity() async {
     final installed = await _downloader.getInstalledEngineNames();
-    state = state.copyWith(installedEngineNames: installed);
+    state = state.copyWith(installedEngineNames: installed.toList());
   }
 
   void appendLog(String log) {
     final newLogs = List<String>.from(state.serverLogs);
     newLogs.add(log);
-    // Limit to last 1000 lines
     if (newLogs.length > 1000) {
       newLogs.removeAt(0);
     }
@@ -225,14 +258,46 @@ class SettingsController extends StateNotifier<SettingsState> {
       await prefs.setString('selectedEngine', asset.name);
       state = state.copyWith(isDownloading: false, selectedEngine: asset.name);
 
-      // Auto-cleanup old engines
       await _downloader.cleanupLegacyEngines(p.basenameWithoutExtension(asset.name));
 
-      // Fetch devices for the newly downloaded engine
       fetchDevices();
       await refreshIntegrity();
     } catch (e) {
       state = state.copyWith(isDownloading: false, downloadStatus: 'Error: $e');
+    }
+  }
+
+  Future<void> downloadModelBundle() async {
+    state = state.copyWith(
+      isDownloadingBundle: true, 
+      bundleProgress: 0, 
+      bundleStatus: 'Starting bundle download...'
+    );
+
+    try {
+      await _downloader.downloadModelBundle(
+        onProgress: (p) => state = state.copyWith(bundleProgress: p),
+        onStatus: (s) => state = state.copyWith(bundleStatus: s),
+      );
+
+      final modelsDir = await _downloader.getModelsDirectory();
+      
+      await updateChatModel(p.join(modelsDir, 'Qwen3-4B-Instruct-Q8_0.gguf'));
+      await updateEmbeddingModel(p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf'));
+      await updateRerankModel(p.join(modelsDir, 'Qwen3-Reranker-0.6B-Q8_0.gguf'));
+      
+      state = state.copyWith(
+        isDownloadingBundle: false, 
+        bundleStatus: 'Bundle ready!',
+        isInstructInstalled: true,
+        isEmbeddingInstalled: true,
+        isRerankerInstalled: true,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isDownloadingBundle: false, 
+        bundleStatus: 'Error: $e'
+      );
     }
   }
 
@@ -275,9 +340,6 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('llamaServerUrl', url);
     state = state.copyWith(llamaServerUrl: url);
-    
-    // Debounce fetching models or just let user trigger it manually? 
-    // For now, let's trigger it if URL looks valid-ish length
     if (url.length > 10) {
       fetchModels();
     }

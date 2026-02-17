@@ -21,14 +21,14 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16.0),
         children: [
           _buildStatusCard(context, theme, ref, settings),
+          const SizedBox(height: 16),
+          _buildHardwareSection(context, ref, settings),
           const SizedBox(height: 24),
-          _buildHardwareSection(theme, ref, settings),
+          _buildEngineSelectionSection(context, theme, ref, settings),
           const SizedBox(height: 24),
-          _buildEngineSelectionSection(theme, ref, settings),
-          const SizedBox(height: 24),
-          _buildModelLibrarySection(theme, ref, settings),
-          const SizedBox(height: 24),
-          _buildDownloadCenter(theme, settings),
+          _buildModelLibrarySection(context, theme, ref, settings),
+          const SizedBox(height: 16),
+          _buildModelBundleCard(context, ref, settings),
         ],
       ),
     );
@@ -114,7 +114,126 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHardwareSection(ThemeData theme, WidgetRef ref, SettingsState settings) {
+  Widget _buildModelBundleCard(BuildContext context, WidgetRef ref, SettingsState settings) {
+    final theme = Theme.of(context);
+    final isDownloading = settings.isDownloadingBundle;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.1)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome, color: theme.colorScheme.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Qwen3 AI Model Bundle',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Install the recommended Qwen3 suite (Instruct + Embedding + Reranker) for a complete local AI experience.',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+            ),
+            const SizedBox(height: 16),
+            _buildModelStatusItem(theme, 'Instruct (4B)', settings.isInstructInstalled),
+            const Divider(height: 8, indent: 32),
+            _buildModelStatusItem(theme, 'Embedding (0.6B)', settings.isEmbeddingInstalled),
+            const Divider(height: 8, indent: 32),
+            _buildModelStatusItem(theme, 'Reranker (0.6B)', settings.isRerankerInstalled),
+            const SizedBox(height: 20),
+            if (isDownloading) ...[
+              LinearProgressIndicator(
+                value: settings.bundleProgress,
+                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                settings.bundleStatus,
+                style: theme.textTheme.labelSmall?.copyWith(fontFamily: 'monospace'),
+              ),
+            ] else if (settings.isInstructInstalled && settings.isEmbeddingInstalled && settings.isRerankerInstalled)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Bundle Fully Installed',
+                      style: theme.textTheme.labelMedium?.copyWith(color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => ref.read(settingsProvider.notifier).downloadModelBundle(),
+                  icon: const Icon(Icons.download_for_offline_rounded, size: 18),
+                  label: const Text('Download Bundle (Approx. 4GB)'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModelStatusItem(ThemeData theme, String name, bool installed) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(
+            installed ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            color: installed ? Colors.green : theme.hintColor.withValues(alpha: 0.5),
+            size: 18,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            name,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: installed ? null : theme.hintColor,
+              fontWeight: installed ? FontWeight.w500 : null,
+            ),
+          ),
+          const Spacer(),
+          if (installed)
+            Text(
+              'Downloaded',
+              style: theme.textTheme.labelSmall?.copyWith(color: Colors.green, fontWeight: FontWeight.bold),
+            )
+          else
+            Text(
+              'Pending',
+              style: theme.textTheme.labelSmall?.copyWith(color: theme.hintColor),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHardwareSection(BuildContext context, WidgetRef ref, SettingsState settings) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -233,7 +352,7 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEngineSelectionSection(ThemeData theme, WidgetRef ref, SettingsState settings) {
+  Widget _buildEngineSelectionSection(BuildContext context, ThemeData theme, WidgetRef ref, SettingsState settings) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -250,21 +369,24 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            else ...[
-              IconButton(
-                icon: const Icon(Icons.folder_open, size: 20),
-                tooltip: 'Open Engine Folder',
-                onPressed: () => ref.read(settingsProvider.notifier).openEngineFolder(),
-              ),
+            else
               IconButton(
                 icon: const Icon(Icons.refresh, size: 20),
                 tooltip: 'Check for Updates',
                 onPressed: () => ref.read(settingsProvider.notifier).fetchEngines(),
               ),
-            ],
           ],
         ),
         const SizedBox(height: 8),
+        _buildFolderCard(
+          context: context,
+          theme: theme,
+          label: 'Engines Location',
+          path: settings.enginesPath.isEmpty ? 'Not set' : settings.enginesPath,
+          onFolderTap: () => ref.read(settingsProvider.notifier).openEngineFolder(),
+          onChevronTap: () => ref.read(settingsProvider.notifier).openEngineFolder(),
+        ),
+        const SizedBox(height: 12),
         if (settings.isDownloading) ...[
           LinearProgressIndicator(value: settings.downloadProgress),
           const SizedBox(height: 8),
@@ -280,14 +402,17 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
             child: Text('No engines found for your platform.'),
           ))
         else
-          Container(
-            height: 250,
-            decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ListView.separated(
-              itemCount: settings.availableEngines.length,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 300),
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: settings.availableEngines.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final asset = settings.availableEngines[index];
@@ -317,11 +442,12 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
               },
             ),
           ),
+        ),
       ],
     );
   }
 
-  Widget _buildModelLibrarySection(ThemeData theme, WidgetRef ref, SettingsState settings) {
+  Widget _buildModelLibrarySection(BuildContext context, ThemeData theme, WidgetRef ref, SettingsState settings) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -330,46 +456,71 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
           style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
         ),
         const SizedBox(height: 12),
-        InkWell(
-          onTap: () async {
+        _buildFolderCard(
+          context: context,
+          theme: theme,
+          label: 'Models Location',
+          path: settings.modelsPath.isEmpty ? 'Select folder' : settings.modelsPath,
+          onFolderTap: () => ref.read(settingsProvider.notifier).openModelsFolder(),
+          onChevronTap: () async {
             String? result = await FilePicker.platform.getDirectoryPath();
             if (result != null) {
               ref.read(settingsProvider.notifier).updateModelsPath(result);
             }
           },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.folder_open, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Storage Path', style: theme.textTheme.labelMedium),
-                      Text(
-                        settings.modelsPath.isEmpty ? 'Select folder to store GGUF models' : settings.modelsPath,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: settings.modelsPath.isEmpty ? theme.colorScheme.onSurfaceVariant : null,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right, size: 16),
-              ],
-            ),
-          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildFolderCard({
+    required BuildContext context,
+    required ThemeData theme,
+    required String label,
+    required String path,
+    required VoidCallback onFolderTap,
+    required VoidCallback onChevronTap,
+  }) {
+    return InkWell(
+      onTap: onFolderTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.folder_open, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: theme.textTheme.labelMedium),
+                  Text(
+                    path,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: path == 'Not set' || path == 'Select folder' 
+                          ? theme.colorScheme.onSurfaceVariant 
+                          : null,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: onChevronTap,
+              icon: const Icon(Icons.chevron_right, size: 16),
+              constraints: const BoxConstraints(),
+              padding: EdgeInsets.zero,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -473,44 +624,4 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDownloadCenter(ThemeData theme, SettingsState settings) {
-    final curatedModels = [
-      {'name': 'Qwen 2.5 Coder (1.5B)', 'size': '1.2 GB', 'desc': 'Perfect for code assistance.'},
-      {'name': 'Llama 3.1 Sift (3B)', 'size': '2.1 GB', 'desc': 'Balanced for general chat.'},
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Recommended Models',
-              style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
-            ),
-            TextButton(onPressed: () {}, child: const Text('View All')),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...curatedModels.map((model) => Padding(
-          padding: const EdgeInsets.only(bottom: 12.0),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            shape: RoundedRectangleBorder(
-              side: BorderSide(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            leading: const Icon(Icons.cloud_download_outlined),
-            title: Text(model['name']!),
-            subtitle: Text('${model['size']} • ${model['desc']}'),
-            trailing: IconButton(
-              icon: const Icon(Icons.download_rounded),
-              onPressed: () {},
-            ),
-          ),
-        )),
-      ],
-    );
-  }
 }

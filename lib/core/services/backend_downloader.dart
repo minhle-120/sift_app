@@ -71,12 +71,23 @@ class BackendDownloader {
   Future<String> getEngineDirectory() async {
     // Portable Mode: Store 'engines' folder next to the app executable
     final exeDir = File(Platform.resolvedExecutable).parent.path;
-    final engineDir = p.join(exeDir, 'bin', 'engines');
+    final engineDir = p.join(exeDir, 'engines');
     final dir = Directory(engineDir);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
     return engineDir;
+  }
+
+  Future<String> getModelsDirectory() async {
+    // Portable Mode: Store 'models' folder next to the app executable
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final modelsDir = p.join(exeDir, 'models');
+    final dir = Directory(modelsDir);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return modelsDir;
   }
 
   Future<void> cleanupLegacyEngines(String currentEngineName) async {
@@ -172,6 +183,20 @@ class BackendDownloader {
       await Process.run('xdg-open', [engineDir]);
     } else    if (Platform.isMacOS) {
       await Process.run('open', [engineDir]);
+    }
+  }
+
+  Future<void> openModelsFolder() async {
+    final modelsDir = await getModelsDirectory();
+    final dir = Directory(modelsDir);
+    if (!await dir.exists()) await dir.create(recursive: true);
+
+    if (Platform.isWindows) {
+      await Process.run('explorer.exe', [modelsDir]);
+    } else if (Platform.isLinux) {
+      await Process.run('xdg-open', [modelsDir]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', [modelsDir]);
     }
   }
 
@@ -311,9 +336,7 @@ class BackendDownloader {
         }
       }
 
-      // Cleanup
-      await File(tempPath).delete();
-      
+
       // Set execution permissions for Linux/macOS
       if (!Platform.isWindows) {
         final serverPath = await _findServerBinary(extractPath);
@@ -326,6 +349,52 @@ class BackendDownloader {
     } catch (e) {
       onStatus('Error: $e');
       rethrow;
+    } finally {
+      if (await File(tempPath).exists()) {
+        await File(tempPath).delete();
+      }
     }
+  }
+
+  Future<void> downloadModelBundle({
+    required Function(double) onProgress,
+    required Function(String) onStatus,
+  }) async {
+    final modelsDir = await getModelsDirectory();
+    final models = [
+      {
+        'name': 'Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf',
+        'url': 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf?download=true'
+      },
+      {
+        'name': 'Qwen3-Embedding-0.6B-Q8_0.gguf',
+        'url': 'https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf?download=true'
+      },
+      {
+        'name': 'qwen3-reranker-0.6b-q8_0.gguf',
+        'url': 'https://huggingface.co/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF/resolve/main/qwen3-reranker-0.6b-q8_0.gguf?download=true'
+      },
+    ];
+
+    for (int i = 0; i < models.length; i++) {
+      final model = models[i];
+      final modelPath = p.join(modelsDir, model['name']!);
+      
+      onStatus('Downloading ${model['name']} (${i + 1}/${models.length})...');
+      
+      await _dio.download(
+        model['url']!,
+        modelPath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            double currentFileProgress = received / total;
+            // Aggregate progress: each model is 1/3 of total
+            double aggregateProgress = (i + currentFileProgress) / models.length;
+            onProgress(aggregateProgress);
+          }
+        },
+      );
+    }
+    onStatus('Model bundle downloaded successfully!');
   }
 }
