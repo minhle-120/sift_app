@@ -48,6 +48,9 @@ class SettingsState {
   final bool isServerRunning;
   final bool isConfigReady;
   final String configPath;
+  // First-time setup
+  final bool isSetupComplete;
+  final bool isSettingsLoaded;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -86,6 +89,8 @@ class SettingsState {
     this.isServerRunning = false,
     this.isConfigReady = false,
     this.configPath = '',
+    this.isSetupComplete = false,
+    this.isSettingsLoaded = false,
   });
 
   SettingsState copyWith({
@@ -125,6 +130,8 @@ class SettingsState {
     bool? isServerRunning,
     bool? isConfigReady,
     String? configPath,
+    bool? isSetupComplete,
+    bool? isSettingsLoaded,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -163,6 +170,8 @@ class SettingsState {
       isServerRunning: isServerRunning ?? this.isServerRunning,
       isConfigReady: isConfigReady ?? this.isConfigReady,
       configPath: configPath ?? this.configPath,
+      isSetupComplete: isSetupComplete ?? this.isSetupComplete,
+      isSettingsLoaded: isSettingsLoaded ?? this.isSettingsLoaded,
     );
   }
 }
@@ -196,6 +205,8 @@ class SettingsController extends StateNotifier<SettingsState> {
       selectedEngine: prefs.getString('selectedEngine'),
       selectedDeviceId: prefs.getString('selectedDeviceId') ?? 'cpu',
       configPath: await _downloader.getConfigPath(),
+      isSetupComplete: prefs.getBool('isSetupComplete') ?? false,
+      isSettingsLoaded: true,
     );
     
     fetchModels();
@@ -544,6 +555,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('gpuDeviceIndex', index);
     state = state.copyWith(gpuDeviceIndex: index);
+  }
+
+  Future<void> completeSetup() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isSetupComplete', true);
+    state = state.copyWith(isSetupComplete: true);
   }
 
   Future<void> updateModelsPath(String path) async {

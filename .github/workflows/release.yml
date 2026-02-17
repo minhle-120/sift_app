@@ -5,12 +5,32 @@ on:
     branches: [ main, master ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ main, master ]
 
 jobs:
+  # 1. Automatic Versioning (only on main/master push, not on manual tags)
+  tagging:
+    name: Auto Tag version
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.tag_action.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
+      - name: Bump version and push tag
+        id: tag_action
+        uses: anothrNick/github-tag-action@1.64.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          DEFAULT_BUMP: patch
+
+  # 2. Build Jobs (runs when tagging is done OR on manual tag push)
   build_linux:
     name: Build Linux
+    needs: [tagging]
+    if: always() && (needs.tagging.result == 'success' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +66,8 @@ jobs:
 
   build_windows:
     name: Build Windows
+    needs: [tagging]
+    if: always() && (needs.tagging.result == 'success' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,14 +95,25 @@ jobs:
           name: sift-windows-x64
           path: dist/windows/
 
+  # 3. Release Job
   create_release:
     name: Create GitHub Release
-    needs: [build_linux, build_windows]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [tagging, build_linux, build_windows]
+    # Run only if we have a tag (either from tagging job or from manual push)
+    if: always() && (needs.tagging.outputs.new_tag != '' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Get Tag Name
+        id: vars
+        run: |
+          if [ "${{ needs.tagging.outputs.new_tag }}" != "" ]; then
+            echo "tag=${{ needs.tagging.outputs.new_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
@@ -102,6 +135,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.vars.outputs.tag }}
           files: |
             sift-linux-x64.zip
             sift-windows-x64.zip
