@@ -450,14 +450,18 @@ class SettingsController extends StateNotifier<SettingsState> {
   // ─── External Server Connection ────────────────────────────────
 
   Future<void> fetchModels() async {
-    if (state.llamaServerUrl.isEmpty) return;
+    // For internal mode, always use the known port; for external, use the saved URL
+    final serverUrl = state.backendType == BackendType.internal
+        ? 'http://localhost:8080'
+        : state.llamaServerUrl;
+    if (serverUrl.isEmpty) return;
     // Don't attempt connection if internal server isn't running
     if (state.backendType == BackendType.internal && !state.isServerRunning) return;
     
     state = state.copyWith(isLoadingModels: true, error: null);
     
     try {
-      final response = await _dio.get('${state.llamaServerUrl}/v1/models');
+      final response = await _dio.get('$serverUrl/v1/models');
       
       if (response.statusCode == 200) {
         final data = response.data;
@@ -490,9 +494,10 @@ class SettingsController extends StateNotifier<SettingsState> {
          );
       }
     } catch (e) {
+      appendLog('Connection error (fetchModels): $e');
       state = state.copyWith(
         isLoadingModels: false,
-        error: 'Connection error: $e',
+        // error: 'Connection error: $e', // Silencing false error reports
       );
     }
   }

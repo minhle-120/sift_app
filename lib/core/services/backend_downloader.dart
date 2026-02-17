@@ -90,8 +90,9 @@ class BackendDownloader {
     final config = '''[*]
 flash-attn = on
 no-warmup = true
-backend-sampling = true
 parallel = 1
+mlock = true
+no-mmap = true
 
 [Qwen3-4B-Instruct-2507]
 model = $instructPath
@@ -172,7 +173,7 @@ n-gpu-layers = 99
     }
 
     // Build launch arguments
-    final args = ['--models-preset', configPath];
+    final args = ['--port', '8080', '--models-max', '1', '--models-preset', configPath];
     if (deviceId != 'cpu') {
       args.addAll(['--device', deviceId]);
     }
