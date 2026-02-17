@@ -80,10 +80,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             TextField(
               controller: _urlController,
               onChanged: (val) => ref.read(settingsProvider.notifier).updateLlamaServerUrl(val),
+              onSubmitted: (_) => ref.read(settingsProvider.notifier).fetchModels(),
               decoration: const InputDecoration(
               labelText: 'Llama.cpp Server URL',
               border: OutlineInputBorder(),
-              helperText: 'e.g. http://localhost:8080',
+              helperText: 'e.g. http://localhost:8080  (press Enter to connect)',
               prefixIcon: Icon(Icons.link),
             ),
           ),

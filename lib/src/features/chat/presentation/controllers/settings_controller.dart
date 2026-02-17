@@ -179,6 +179,7 @@ class SettingsState {
 class SettingsController extends StateNotifier<SettingsState> {
   final Dio _dio = Dio();
   final BackendDownloader _downloader = BackendDownloader();
+  BackendDownloader get downloader => _downloader;
 
   SettingsController() : super(const SettingsState()) {
     _loadSettings();
@@ -209,7 +210,10 @@ class SettingsController extends StateNotifier<SettingsState> {
       isSettingsLoaded: true,
     );
     
-    fetchModels();
+    // Only auto-fetch models if server is expected to be reachable
+    if (state.backendType == BackendType.external) {
+      fetchModels();
+    }
     fetchEngines();
 
     // Verify engine + config integrity on disk
@@ -447,6 +451,8 @@ class SettingsController extends StateNotifier<SettingsState> {
 
   Future<void> fetchModels() async {
     if (state.llamaServerUrl.isEmpty) return;
+    // Don't attempt connection if internal server isn't running
+    if (state.backendType == BackendType.internal && !state.isServerRunning) return;
     
     state = state.copyWith(isLoadingModels: true, error: null);
     
@@ -465,6 +471,17 @@ class SettingsController extends StateNotifier<SettingsState> {
             availableModels: models,
             isLoadingModels: false,
           );
+
+          // Auto-select bundled models if in Internal mode
+          if (state.backendType == BackendType.internal) {
+            final instruct = models.firstWhere((m) => m.contains('Instruct'), orElse: () => '');
+            final embedding = models.firstWhere((m) => m.contains('Embedding'), orElse: () => '');
+            final reranker = models.firstWhere((m) => m.toLowerCase().contains('reranker'), orElse: () => '');
+
+            if (instruct.isNotEmpty) await updateChatModel(instruct);
+            if (embedding.isNotEmpty) await updateEmbeddingModel(embedding);
+            if (reranker.isNotEmpty) await updateRerankModel(reranker);
+          }
         }
       } else {
          state = state.copyWith(
@@ -485,10 +502,7 @@ class SettingsController extends StateNotifier<SettingsState> {
   Future<void> updateLlamaServerUrl(String url) async {
     final prefs = await PortableSettings.getInstance();
     await prefs.setString('llamaServerUrl', url);
-    state = state.copyWith(llamaServerUrl: url);
-    if (url.length > 10) {
-      fetchModels();
-    }
+    state = state.copyWith(llamaServerUrl: url, error: null);
   }
 
   Future<void> updateChatModel(String model) async {
@@ -543,12 +557,16 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setInt('backendType', type.index);
     
-    // If switching to internal, default the URL and refresh
+    // Clear any stale connection errors from the previous mode
+    state = state.copyWith(backendType: type, error: null);
+
+    // If switching to internal, default the URL
     if (type == BackendType.internal) {
       await updateLlamaServerUrl('http://localhost:8080');
+    } else {
+      // External mode: try to reach the server right away
+      fetchModels();
     }
-    
-    state = state.copyWith(backendType: type);
   }
 
   Future<void> updateGpuDeviceIndex(int index) async {

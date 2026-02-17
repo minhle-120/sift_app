@@ -179,13 +179,24 @@ n-gpu-layers = 99
 
     onLog('> ${p.basename(serverPath)} ${args.map((a) => a.contains(' ') ? '"$a"' : a).join(' ')}');
 
-    _serverProcess = await Process.start(
-      serverPath,
-      args,
-      environment: Platform.isLinux ? {
-        'LD_LIBRARY_PATH': '${p.dirname(serverPath)}:${p.dirname(p.dirname(serverPath))}',
-      } : null,
-    );
+    if (Platform.isWindows) {
+      _serverProcess = await Process.start(
+        serverPath,
+        args,
+      );
+    } else {
+      // Linux/macOS: Use setsid to create a new process group.
+      // 'exec' replaces the shell so there's only one process to manage.
+      // Killing the process group (-PGID) guarantees all children die.
+      final quotedArgs = args.map((a) => "'$a'").join(' ');
+      _serverProcess = await Process.start(
+        'setsid',
+        ['/bin/sh', '-c', "exec '${p.absolute(serverPath)}' $quotedArgs"],
+        environment: Platform.isLinux ? {
+          'LD_LIBRARY_PATH': '${p.dirname(serverPath)}:${p.dirname(p.dirname(serverPath))}',
+        } : null,
+      );
+    }
 
     // Stream stdout and stderr
     _serverProcess!.stdout.transform(const SystemEncoding().decoder).listen((data) {
@@ -204,15 +215,24 @@ n-gpu-layers = 99
 
   Future<void> stopServer() async {
     if (_serverProcess != null) {
-      _serverProcess!.kill(); // SIGTERM on Unix, TerminateProcess on Windows
+      final pid = _serverProcess!.pid;
+
+      if (Platform.isWindows) {
+        // /T kills the entire process tree, /F forces it
+        Process.runSync('taskkill', ['/F', '/T', '/PID', '$pid']);
+      } else {
+        // Kill the entire process group (negative PID = group kill)
+        // setsid made the server the group leader, so -PID kills it + all children
+        Process.runSync('kill', ['--', '-$pid']);
+      }
+
       try {
         await _serverProcess!.exitCode.timeout(
-          const Duration(seconds: 5),
+          const Duration(seconds: 3),
           onTimeout: () {
-            if (Platform.isWindows) {
-              Process.runSync('taskkill', ['/F', '/PID', '${_serverProcess!.pid}']);
-            } else {
-              _serverProcess!.kill(ProcessSignal.sigkill);
+            // Nuclear option: SIGKILL the group
+            if (!Platform.isWindows) {
+              Process.runSync('kill', ['-9', '--', '-$pid']);
             }
             return -1;
           },
