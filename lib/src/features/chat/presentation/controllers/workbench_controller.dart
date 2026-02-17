@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../../core/services/portable_settings.dart';
 
 enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization }
 
@@ -64,7 +64,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
   }
 
   Future<void> _loadState() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     final isCollapsed = prefs.getBool('workbench_isCollapsed') ?? true;
     final panelRatio = prefs.getDouble('workbench_panelRatio') ?? 0.4;
     
@@ -81,7 +81,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
     
     state = state.copyWith(panelRatio: ratio);
     
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setDouble('workbench_panelRatio', ratio);
   }
 
@@ -89,7 +89,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
     final newState = !state.isCollapsed;
     state = state.copyWith(isCollapsed: newState);
     
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setBool('workbench_isCollapsed', newState);
   }
 

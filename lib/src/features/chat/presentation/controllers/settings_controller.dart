@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../../core/services/portable_settings.dart';
 import '../../../../../core/models/ai_models.dart';
 import '../../../../../core/services/backend_downloader.dart';
 import 'package:dio/dio.dart';
@@ -185,7 +185,7 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     final url = prefs.getString('llamaServerUrl') ?? 'http://localhost:8080';
     
     state = state.copyWith(
@@ -344,7 +344,7 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   Future<void> setSelectedDevice(String devId) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setString('selectedDeviceId', devId);
     state = state.copyWith(selectedDeviceId: devId);
   }
@@ -388,7 +388,7 @@ class SettingsController extends StateNotifier<SettingsState> {
         onStatus: (s) => state = state.copyWith(downloadStatus: s),
       );
       
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await PortableSettings.getInstance();
       await prefs.setString('selectedEngine', asset.name);
       state = state.copyWith(isDownloading: false, selectedEngine: asset.name);
 
@@ -483,7 +483,7 @@ class SettingsController extends StateNotifier<SettingsState> {
   // ─── Settings Updates ──────────────────────────────────────────
 
   Future<void> updateLlamaServerUrl(String url) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setString('llamaServerUrl', url);
     state = state.copyWith(llamaServerUrl: url);
     if (url.length > 10) {
@@ -492,55 +492,55 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   Future<void> updateChatModel(String model) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setString('chatModel', model);
     state = state.copyWith(chatModel: model);
   }
 
   Future<void> updateEmbeddingModel(String model) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setString('embeddingModel', model);
     state = state.copyWith(embeddingModel: model);
   }
 
   Future<void> updateRerankModel(String model) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setString('rerankModel', model);
     state = state.copyWith(rerankModel: model);
   }
 
   Future<void> updateEmbeddingDimensions(int dim) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setInt('embeddingDimensions', dim);
     state = state.copyWith(embeddingDimensions: dim);
   }
 
   Future<void> updateChunkSize(int size) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setInt('chunkSize', size);
     state = state.copyWith(chunkSize: size);
   }
 
   Future<void> updateChunkOverlap(int overlap) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setInt('chunkOverlap', overlap);
     state = state.copyWith(chunkOverlap: overlap);
   }
 
   Future<void> toggleSync(bool enabled) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setBool('isSyncEnabled', enabled);
     state = state.copyWith(isSyncEnabled: enabled);
   }
 
   Future<void> updateVisualizerMode(VisualizerMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setInt('visualizerMode', mode.index);
     state = state.copyWith(visualizerMode: mode);
   }
 
   Future<void> updateBackendType(BackendType type) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setInt('backendType', type.index);
     
     // If switching to internal, default the URL and refresh
@@ -552,19 +552,19 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   Future<void> updateGpuDeviceIndex(int index) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setInt('gpuDeviceIndex', index);
     state = state.copyWith(gpuDeviceIndex: index);
   }
 
   Future<void> completeSetup() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setBool('isSetupComplete', true);
     state = state.copyWith(isSetupComplete: true);
   }
 
   Future<void> updateModelsPath(String path) async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await PortableSettings.getInstance();
     await prefs.setString('modelsPath', path);
     state = state.copyWith(modelsPath: path);
   }

@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:math' as math;
 import 'package:uuid/uuid.dart';
@@ -317,8 +316,12 @@ const _uuid = Uuid();
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'sift.sqlite'));
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final dataDir = Directory(p.join(exeDir, 'data'));
+    if (!await dataDir.exists()) {
+      await dataDir.create(recursive: true);
+    }
+    final file = File(p.join(dataDir.path, 'sift.sqlite'));
     return NativeDatabase.createInBackground(file);
   });
 }
