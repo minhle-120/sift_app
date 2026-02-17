@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as p;
 import '../controllers/settings_controller.dart';
 
 class LocalEngineSettingsScreen extends ConsumerWidget {
@@ -19,7 +20,7 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          _buildStatusCard(theme, settings),
+          _buildStatusCard(context, theme, ref, settings),
           const SizedBox(height: 24),
           _buildHardwareSection(theme, ref, settings),
           const SizedBox(height: 24),
@@ -33,7 +34,7 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatusCard(ThemeData theme, SettingsState settings) {
+  Widget _buildStatusCard(BuildContext context, ThemeData theme, WidgetRef ref, SettingsState settings) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -67,6 +68,12 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
+                OutlinedButton.icon(
+                  onPressed: () => _showLogsModal(context, settings, ref),
+                  icon: const Icon(Icons.terminal, size: 18),
+                  label: const Text('Logs'),
+                ),
+                const SizedBox(width: 8),
                 OutlinedButton.icon(
                   onPressed: () {
                     // Start Engine Logic
@@ -116,28 +123,111 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
           style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
         ),
         const SizedBox(height: 12),
-        _buildDropdownSetting(
-          theme,
-          label: 'Inference Engine',
-          value: 'Vulkan', // Hardcoded for UI first
-          items: ['CPU Only', 'Vulkan', 'CUDA'],
-          icon: Icons.bolt,
-          onChanged: (val) {},
+        Card(
+          elevation: 0,
+          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                _buildSettingRow(
+                  theme,
+                  'Engine Type',
+                  'Vulkan (Cross-Vendor GPU)',
+                  const Icon(Icons.bolt, size: 20, color: Colors.orange),
+                ),
+                const Divider(height: 32),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.memory, size: 20),
+                        const SizedBox(width: 12),
+                        Text('Process on Device', style: theme.textTheme.bodyMedium),
+                        const Spacer(),
+                        if (settings.availableDevices.isEmpty && settings.selectedEngine != null)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (settings.availableDevices.isNotEmpty)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              key: Key('${settings.selectedDeviceId}_${settings.availableDevices.length}'),
+                              initialValue: settings.availableDevices.any((d) => d.id == settings.selectedDeviceId)
+                                  ? settings.selectedDeviceId
+                                  : 'cpu',
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                fillColor: theme.colorScheme.surface,
+                                filled: true,
+                              ),
+                              items: settings.availableDevices.map((device) {
+                                return DropdownMenuItem<String>(
+                                  value: device.id,
+                                  child: Text(
+                                    device.name,
+                                    style: const TextStyle(fontSize: 13),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  ref.read(settingsProvider.notifier).setSelectedDevice(val);
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.refresh, size: 20),
+                            tooltip: 'Refresh Hardware List',
+                            onPressed: () => ref.read(settingsProvider.notifier).fetchDevices(),
+                          ),
+                        ],
+                      )
+                    else
+                      const Text(
+                        'Select or download an engine to see available hardware.',
+                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 16),
-        _buildDropdownSetting(
-          theme,
-          label: 'Primary Device',
-          value: settings.gpuDeviceIndex,
-          items: [
-            {'label': 'Automatic', 'value': 0},
-            {'label': 'NVIDIA RTX 3050 Ti', 'value': 1},
-            {'label': 'AMD Radeon Graphics', 'value': 2},
-          ],
-          icon: Icons.memory,
-          onChanged: (val) {
-             if (val is int) ref.read(settingsProvider.notifier).updateGpuDeviceIndex(val);
-          },
+      ],
+    );
+  }
+
+  Widget _buildSettingRow(ThemeData theme, String label, String value, Widget icon) {
+    return Row(
+      children: [
+        icon,
+        const SizedBox(width: 12),
+        Text(label, style: theme.textTheme.bodyMedium),
+        const Spacer(),
+        Text(
+          value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ],
     );
@@ -160,12 +250,18 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            else
+            else ...[
+              IconButton(
+                icon: const Icon(Icons.folder_open, size: 20),
+                tooltip: 'Open Engine Folder',
+                onPressed: () => ref.read(settingsProvider.notifier).openEngineFolder(),
+              ),
               IconButton(
                 icon: const Icon(Icons.refresh, size: 20),
                 tooltip: 'Check for Updates',
                 onPressed: () => ref.read(settingsProvider.notifier).fetchEngines(),
               ),
+            ],
           ],
         ),
         const SizedBox(height: 8),
@@ -196,16 +292,23 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final asset = settings.availableEngines[index];
                 final isSelected = settings.selectedEngine == asset.name;
+                final engineFolderName = p.basenameWithoutExtension(asset.name);
+                final isInstalled = settings.installedEngineNames.contains(engineFolderName);
                 final sizeMb = (asset.size / (1024 * 1024)).toStringAsFixed(1);
 
                 return ListTile(
                   dense: true,
                   title: Text(asset.name, style: const TextStyle(fontSize: 13)),
-                  subtitle: Text('$sizeMb MB'),
-                  trailing: isSelected
+                  subtitle: Text('$sizeMb MB${!isInstalled && isSelected ? " (Missing files!)" : ""}'),
+                  trailing: (isInstalled && isSelected)
                       ? const Icon(Icons.check_circle, color: Colors.green)
                       : IconButton(
-                          icon: const Icon(Icons.download, size: 20),
+                          icon: Icon(
+                            isSelected ? Icons.replay_rounded : Icons.download,
+                            size: 20,
+                            color: isSelected ? theme.colorScheme.primary : null,
+                          ),
+                          tooltip: isSelected ? 'Re-download Missing Files' : 'Download',
                           onPressed: settings.isDownloading 
                               ? null 
                               : () => ref.read(settingsProvider.notifier).downloadEngine(asset),
@@ -270,6 +373,106 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
     );
   }
 
+  void _showLogsModal(BuildContext context, SettingsState settings, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Consumer(
+        builder: (context, ref, _) {
+          final currentSettings = ref.watch(settingsProvider);
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.7,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF2D2D2D),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.terminal, color: Colors.greenAccent, size: 20),
+                          const SizedBox(width: 12),
+                          Text(
+                            'llama-server logs',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: Colors.white,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.delete_sweep, color: Colors.white70, size: 20),
+                            onPressed: () => ref.read(settingsProvider.notifier).clearLogs(),
+                            tooltip: 'Clear Logs',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    child: currentSettings.serverLogs.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No logs recorded yet.',
+                              style: TextStyle(color: Colors.white38, fontFamily: 'monospace'),
+                            ),
+                          )
+                        : ListView.builder(
+                            reverse: true, // Show latest at bootom, scrollable upwards
+                            itemCount: currentSettings.serverLogs.length,
+                            itemBuilder: (context, index) {
+                              final log = currentSettings.serverLogs[currentSettings.serverLogs.length - 1 - index];
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                child: Text(
+                                  log,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'monospace',
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildDownloadCenter(ThemeData theme, SettingsState settings) {
     final curatedModels = [
       {'name': 'Qwen 2.5 Coder (1.5B)', 'size': '1.2 GB', 'desc': 'Perfect for code assistance.'},
@@ -308,40 +511,6 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
           ),
         )),
       ],
-    );
-  }
-
-  Widget _buildDropdownSetting(
-    ThemeData theme, {
-    required String label,
-    required dynamic value,
-    required List<dynamic> items,
-    required IconData icon,
-    required Function(dynamic) onChanged,
-  }) {
-    return InputDecorator(
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        prefixIcon: Icon(icon, size: 20),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<dynamic>(
-          value: value,
-          isExpanded: true,
-          isDense: true,
-          onChanged: onChanged,
-          items: items.map((item) {
-            final val = item is Map ? item['value'] : item;
-            final text = item is Map ? item['label'] : item.toString();
-            return DropdownMenuItem<dynamic>(
-              value: val,
-              child: Text(text, overflow: TextOverflow.ellipsis),
-            );
-          }).toList(),
-        ),
-      ),
     );
   }
 }

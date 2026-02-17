@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../core/models/ai_models.dart';
 import '../../../../../core/services/backend_downloader.dart';
 import 'package:dio/dio.dart';
+import 'package:path/path.dart' as p;
 
 enum BackendType { external, internal }
 
@@ -28,6 +29,10 @@ class SettingsState {
   final bool isFetchingEngines;
   final List<GitHubAsset> availableEngines;
   final String? selectedEngine;
+  final List<DeviceInfo> availableDevices;
+  final String? selectedDeviceId;
+  final List<String> serverLogs;
+  final List<String> installedEngineNames;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -51,6 +56,10 @@ class SettingsState {
     this.isFetchingEngines = false,
     this.availableEngines = const [],
     this.selectedEngine,
+    this.availableDevices = const [],
+    this.selectedDeviceId,
+    this.serverLogs = const [],
+    this.installedEngineNames = const [],
   });
 
   SettingsState copyWith({
@@ -75,6 +84,10 @@ class SettingsState {
     bool? isFetchingEngines,
     List<GitHubAsset>? availableEngines,
     String? selectedEngine,
+    List<DeviceInfo>? availableDevices,
+    String? selectedDeviceId,
+    List<String>? serverLogs,
+    List<String>? installedEngineNames,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -98,6 +111,10 @@ class SettingsState {
       isFetchingEngines: isFetchingEngines ?? this.isFetchingEngines,
       availableEngines: availableEngines ?? this.availableEngines,
       selectedEngine: selectedEngine ?? this.selectedEngine,
+      availableDevices: availableDevices ?? this.availableDevices,
+      selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
+      serverLogs: serverLogs ?? this.serverLogs,
+      installedEngineNames: installedEngineNames ?? this.installedEngineNames,
     );
   }
 }
@@ -128,16 +145,70 @@ class SettingsController extends StateNotifier<SettingsState> {
       gpuDeviceIndex: prefs.getInt('gpuDeviceIndex') ?? 0,
       modelsPath: prefs.getString('modelsPath') ?? '',
       selectedEngine: prefs.getString('selectedEngine'),
+      selectedDeviceId: prefs.getString('selectedDeviceId') ?? 'cpu',
     );
     
     // Fetch models and engines
     fetchModels();
     fetchEngines();
+
+    // If engine already selected, fetch devices
+    if (state.selectedEngine != null) {
+      fetchDevices();
+    }
+  }
+
+  Future<void> fetchDevices() async {
+    if (state.selectedEngine == null) return;
+    final result = await _downloader.listAvailableDevices(state.selectedEngine!);
+    
+    // Capture audit output in logs
+    appendLog('--- Hardware Device Audit ---');
+    appendLog(result.rawOutput);
+    appendLog('-----------------------------');
+    
+    state = state.copyWith(availableDevices: result.devices);
+
+    // Safeguard: Ensure currently selected device still exists in the new list
+    final deviceExists = state.availableDevices.any((d) => d.id == state.selectedDeviceId);
+    if (!deviceExists) {
+      setSelectedDevice('cpu');
+    }
+  }
+
+  Future<void> setSelectedDevice(String devId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selectedDeviceId', devId);
+    state = state.copyWith(selectedDeviceId: devId);
+  }
+
+  Future<void> openEngineFolder() async {
+    await _downloader.openEngineFolder();
+  }
+
+  Future<void> refreshIntegrity() async {
+    final installed = await _downloader.getInstalledEngineNames();
+    state = state.copyWith(installedEngineNames: installed);
+  }
+
+  void appendLog(String log) {
+    final newLogs = List<String>.from(state.serverLogs);
+    newLogs.add(log);
+    // Limit to last 1000 lines
+    if (newLogs.length > 1000) {
+      newLogs.removeAt(0);
+    }
+    state = state.copyWith(serverLogs: newLogs);
+  }
+
+  void clearLogs() {
+    state = state.copyWith(serverLogs: const []);
   }
 
   Future<void> fetchEngines() async {
     state = state.copyWith(isFetchingEngines: true);
     final engines = await _downloader.fetchAvailableEngines();
+    await refreshIntegrity();
     state = state.copyWith(availableEngines: engines, isFetchingEngines: false);
   }
 
@@ -153,6 +224,13 @@ class SettingsController extends StateNotifier<SettingsState> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('selectedEngine', asset.name);
       state = state.copyWith(isDownloading: false, selectedEngine: asset.name);
+
+      // Auto-cleanup old engines
+      await _downloader.cleanupLegacyEngines(p.basenameWithoutExtension(asset.name));
+
+      // Fetch devices for the newly downloaded engine
+      fetchDevices();
+      await refreshIntegrity();
     } catch (e) {
       state = state.copyWith(isDownloading: false, downloadStatus: 'Error: $e');
     }
