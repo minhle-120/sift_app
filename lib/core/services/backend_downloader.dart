@@ -563,9 +563,28 @@ n-gpu-layers = 99
       },
     ];
 
+    onStatus('Calculating bundle size...');
+    int totalBundleSize = 0;
+    final List<int> fileSizes = [];
+
+    for (final model in models) {
+      try {
+        final response = await _dio.head(model['url']!);
+        final size = int.tryParse(response.headers.value('content-length') ?? '0') ?? 0;
+        fileSizes.add(size);
+        totalBundleSize += size;
+      } catch (e) {
+        // Fallback or handle error - if HEAD fails, we might need a default or just fail early
+        fileSizes.add(0); 
+      }
+    }
+
+    int bytesDownloadedBeforeCurrentFile = 0;
+
     for (int i = 0; i < models.length; i++) {
       final model = models[i];
       final modelPath = p.join(modelsDir, model['name']!);
+      final currentFileSize = fileSizes[i];
       
       onStatus('Downloading ${model['name']} (${i + 1}/${models.length})...');
       
@@ -573,13 +592,13 @@ n-gpu-layers = 99
         model['url']!,
         modelPath,
         onReceiveProgress: (received, total) {
-          if (total != -1) {
-            double currentFileProgress = received / total;
-            double aggregateProgress = (i + currentFileProgress) / models.length;
-            onProgress(aggregateProgress);
+          if (totalBundleSize > 0) {
+            double aggregateProgress = (bytesDownloadedBeforeCurrentFile + received) / totalBundleSize;
+            onProgress(aggregateProgress * 100); // UI expects percentage
           }
         },
       );
+      bytesDownloadedBeforeCurrentFile += currentFileSize;
     }
     onStatus('Model bundle downloaded successfully!');
   }

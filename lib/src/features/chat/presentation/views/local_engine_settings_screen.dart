@@ -21,7 +21,15 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16.0),
         children: [
           _buildStatusCard(context, theme, ref, settings),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            title: const Text('Launch on Startup'),
+            subtitle: const Text('Automatically start the server when Sift opens'),
+            value: settings.autoStartServer,
+            onChanged: (val) => ref.read(settingsProvider.notifier).updateAutoStartServer(val),
+            secondary: const Icon(Icons.bolt),
+          ),
+          const SizedBox(height: 24),
           _buildHardwareSection(context, ref, settings),
           const SizedBox(height: 24),
           _buildEngineSelectionSection(context, theme, ref, settings),
@@ -29,6 +37,23 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
           _buildModelLibrarySection(context, theme, ref, settings),
           const SizedBox(height: 16),
           _buildModelBundleCard(context, ref, settings),
+          if (!settings.isSetupComplete) ...[
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: (settings.isEngineVerified && settings.isInstructInstalled)
+                    ? () {
+                        Navigator.of(context).pop();
+                        ref.read(settingsProvider.notifier).completeSetup();
+                      }
+                    : null,
+                child: const Text('Finish Setup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
         ],
       ),
     );

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../chat/presentation/controllers/settings_controller.dart';
-import '../../../chat/presentation/views/local_engine_settings_screen.dart';
+import 'external_config_screen.dart';
+import 'internal_config_screen.dart';
 
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
@@ -12,13 +13,6 @@ class SetupScreen extends ConsumerStatefulWidget {
 
 class _SetupScreenState extends ConsumerState<SetupScreen> {
   BackendType? _selectedType;
-  final _urlController = TextEditingController(text: 'http://localhost:8080');
-
-  @override
-  void dispose() {
-    _urlController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -155,35 +149,22 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     }
 
     if (_selectedType == BackendType.external) {
-      return Column(
+      return SizedBox(
         key: const ValueKey('external'),
-        children: [
-          TextField(
-            controller: _urlController,
-            decoration: const InputDecoration(
-              labelText: 'Server URL',
-              border: OutlineInputBorder(),
-              helperText: 'e.g. http://192.168.1.100:8080',
-              prefixIcon: Icon(Icons.link),
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: () async {
-                final notifier = ref.read(settingsProvider.notifier);
-                await notifier.updateBackendType(BackendType.external);
-                await notifier.updateLlamaServerUrl(_urlController.text.trim());
-                await notifier.completeSetup();
-                // _AppGate will reactively switch to ChatScreen
-              },
-              icon: const Icon(Icons.arrow_forward_rounded),
-              label: const Text('Continue'),
-            ),
-          ),
-        ],
+        width: double.infinity,
+        height: 48,
+        child: FilledButton.icon(
+          onPressed: () async {
+            await ref.read(settingsProvider.notifier).updateBackendType(BackendType.external);
+            if (mounted) {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ExternalConfigScreen()),
+              );
+            }
+          },
+          icon: const Icon(Icons.arrow_forward_rounded),
+          label: const Text('Configure External Server'),
+        ),
       );
     }
 
@@ -204,12 +185,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             onPressed: () async {
               final notifier = ref.read(settingsProvider.notifier);
               await notifier.updateBackendType(BackendType.internal);
-              await notifier.completeSetup();
+              // In internal mode, we push the settings screen directly
+              // so they can download the engine/models.
               if (mounted) {
-                // completeSetup triggers _AppGate to show ChatScreen,
-                // then push LocalEngineSettings on top so user can configure
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const LocalEngineSettingsScreen()),
+                  MaterialPageRoute(builder: (_) => const InternalConfigScreen()),
                 );
               }
             },

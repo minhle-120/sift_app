@@ -51,6 +51,8 @@ class SettingsState {
   // First-time setup
   final bool isSetupComplete;
   final bool isSettingsLoaded;
+  // Preferences
+  final bool autoStartServer;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -91,6 +93,7 @@ class SettingsState {
     this.configPath = '',
     this.isSetupComplete = false,
     this.isSettingsLoaded = false,
+    this.autoStartServer = true,
   });
 
   SettingsState copyWith({
@@ -132,6 +135,7 @@ class SettingsState {
     String? configPath,
     bool? isSetupComplete,
     bool? isSettingsLoaded,
+    bool? autoStartServer,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -172,6 +176,7 @@ class SettingsState {
       configPath: configPath ?? this.configPath,
       isSetupComplete: isSetupComplete ?? this.isSetupComplete,
       isSettingsLoaded: isSettingsLoaded ?? this.isSettingsLoaded,
+      autoStartServer: autoStartServer ?? this.autoStartServer,
     );
   }
 }
@@ -207,12 +212,22 @@ class SettingsController extends StateNotifier<SettingsState> {
       selectedDeviceId: prefs.getString('selectedDeviceId') ?? 'cpu',
       configPath: await _downloader.getConfigPath(),
       isSetupComplete: prefs.getBool('isSetupComplete') ?? false,
+      autoStartServer: prefs.getBool('autoStartServer') ?? true,
       isSettingsLoaded: true,
     );
     
     // Only auto-fetch models if server is expected to be reachable
     if (state.backendType == BackendType.external) {
       fetchModels();
+    }
+    // Auto-start server if enabled and conditions are met
+    if (state.autoStartServer && 
+        state.backendType == BackendType.internal && 
+        state.isEngineVerified && 
+        state.isConfigReady && 
+        state.isInstructInstalled && 
+        state.selectedDeviceId != null) {
+      startServer();
     }
     fetchEngines();
 
@@ -381,6 +396,10 @@ class SettingsController extends StateNotifier<SettingsState> {
     final engines = await _downloader.fetchAvailableEngines();
     await verifyEngineIntegrity();
     state = state.copyWith(availableEngines: engines, isFetchingEngines: false);
+  }
+
+  void setSelectedEngine(String name) {
+    state = state.copyWith(selectedEngine: name);
   }
 
   Future<void> downloadEngine(GitHubAsset asset) async {
@@ -584,12 +603,28 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setBool('isSetupComplete', true);
     state = state.copyWith(isSetupComplete: true);
+
+    // Auto-start server immediately after setup completion if conditions are met
+    if (state.autoStartServer && 
+        state.backendType == BackendType.internal && 
+        state.isEngineVerified && 
+        state.isConfigReady && 
+        state.isInstructInstalled && 
+        state.selectedDeviceId != null) {
+      startServer();
+    }
   }
 
   Future<void> updateModelsPath(String path) async {
     final prefs = await PortableSettings.getInstance();
     await prefs.setString('modelsPath', path);
     state = state.copyWith(modelsPath: path);
+  }
+
+  Future<void> updateAutoStartServer(bool value) async {
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setBool('autoStartServer', value);
+    state = state.copyWith(autoStartServer: value);
   }
 }
 
