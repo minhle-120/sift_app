@@ -203,14 +203,20 @@ n-gpu-layers = 99
 
   Future<void> stopServer() async {
     if (_serverProcess != null) {
-      _serverProcess!.kill(ProcessSignal.sigterm);
-      await _serverProcess!.exitCode.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          _serverProcess!.kill(ProcessSignal.sigkill);
-          return -1;
-        },
-      );
+      _serverProcess!.kill(); // SIGTERM on Unix, TerminateProcess on Windows
+      try {
+        await _serverProcess!.exitCode.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            if (Platform.isWindows) {
+              Process.runSync('taskkill', ['/F', '/PID', '${_serverProcess!.pid}']);
+            } else {
+              _serverProcess!.kill(ProcessSignal.sigkill);
+            }
+            return -1;
+          },
+        );
+      } catch (_) {}
       _serverProcess = null;
     }
   }
@@ -223,22 +229,40 @@ n-gpu-layers = 99
     try {
       final response = await _dio.get('https://api.github.com/repos/$_repo/releases/latest');
       if (response.statusCode == 200) {
-        final List<dynamic> assetsJson = response.data['assets'];
+        // Handle both parsed JSON and raw string responses
+        dynamic data = response.data;
+        if (data is String) {
+          data = await _dio.get(
+            'https://api.github.com/repos/$_repo/releases/latest',
+            options: Options(responseType: ResponseType.json),
+          ).then((r) => r.data);
+        }
+
+        final List<dynamic> assetsJson = data['assets'];
         final List<GitHubAsset> allAssets = assetsJson.map((json) => GitHubAsset.fromJson(json)).toList();
 
-        final String osName = Platform.isWindows ? 'win' : Platform.isLinux ? 'ubuntu' : Platform.isMacOS ? 'macos' : '';
-        if (osName.isEmpty) return [];
+        // Determine OS filter keyword
+        final String osFilter;
+        if (Platform.isWindows) {
+          osFilter = '-win-';
+        } else if (Platform.isLinux) {
+          osFilter = '-ubuntu-';
+        } else if (Platform.isMacOS) {
+          osFilter = '-macos-';
+        } else {
+          return [];
+        }
 
         return allAssets.where((asset) {
           final name = asset.name.toLowerCase();
-          return name.contains('-bin-') && 
-                 name.contains(osName) && 
+          // Must be a binary release for this OS with Vulkan support
+          return name.contains(osFilter) && 
                  name.contains('vulkan') &&
                  (name.endsWith('.zip') || name.endsWith('.tar.gz'));
         }).toList();
       }
     } catch (e) {
-      // Silently handle
+      // Silently handle - errors are expected when offline
     }
     return [];
   }
