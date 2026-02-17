@@ -34,13 +34,20 @@ class SettingsState {
   final List<DeviceInfo> availableDevices;
   final String? selectedDeviceId;
   final List<String> serverLogs;
-  final List<String> installedEngineNames;
+  // Engine verification (filesystem-checked)
+  final String? installedEngineName;
+  final bool isEngineVerified;
+  // Model bundle
   final bool isDownloadingBundle;
   final double bundleProgress;
   final String bundleStatus;
   final bool isInstructInstalled;
   final bool isEmbeddingInstalled;
   final bool isRerankerInstalled;
+  // Server lifecycle
+  final bool isServerRunning;
+  final bool isConfigReady;
+  final String configPath;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -68,13 +75,17 @@ class SettingsState {
     this.availableDevices = const [],
     this.selectedDeviceId,
     this.serverLogs = const [],
-    this.installedEngineNames = const [],
+    this.installedEngineName,
+    this.isEngineVerified = false,
     this.isDownloadingBundle = false,
     this.bundleProgress = 0,
     this.bundleStatus = '',
     this.isInstructInstalled = false,
     this.isEmbeddingInstalled = false,
     this.isRerankerInstalled = false,
+    this.isServerRunning = false,
+    this.isConfigReady = false,
+    this.configPath = '',
   });
 
   SettingsState copyWith({
@@ -103,13 +114,17 @@ class SettingsState {
     List<DeviceInfo>? availableDevices,
     String? selectedDeviceId,
     List<String>? serverLogs,
-    List<String>? installedEngineNames,
+    String? installedEngineName,
+    bool? isEngineVerified,
     bool? isDownloadingBundle,
     double? bundleProgress,
     String? bundleStatus,
     bool? isInstructInstalled,
     bool? isEmbeddingInstalled,
     bool? isRerankerInstalled,
+    bool? isServerRunning,
+    bool? isConfigReady,
+    String? configPath,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -137,13 +152,17 @@ class SettingsState {
       availableDevices: availableDevices ?? this.availableDevices,
       selectedDeviceId: selectedDeviceId ?? this.selectedDeviceId,
       serverLogs: serverLogs ?? this.serverLogs,
-      installedEngineNames: installedEngineNames ?? this.installedEngineNames,
+      installedEngineName: installedEngineName ?? this.installedEngineName,
+      isEngineVerified: isEngineVerified ?? this.isEngineVerified,
       isDownloadingBundle: isDownloadingBundle ?? this.isDownloadingBundle,
       bundleProgress: bundleProgress ?? this.bundleProgress,
       bundleStatus: bundleStatus ?? this.bundleStatus,
       isInstructInstalled: isInstructInstalled ?? this.isInstructInstalled,
       isEmbeddingInstalled: isEmbeddingInstalled ?? this.isEmbeddingInstalled,
       isRerankerInstalled: isRerankerInstalled ?? this.isRerankerInstalled,
+      isServerRunning: isServerRunning ?? this.isServerRunning,
+      isConfigReady: isConfigReady ?? this.isConfigReady,
+      configPath: configPath ?? this.configPath,
     );
   }
 }
@@ -176,29 +195,136 @@ class SettingsController extends StateNotifier<SettingsState> {
       enginesPath: await _downloader.getEngineDirectory(),
       selectedEngine: prefs.getString('selectedEngine'),
       selectedDeviceId: prefs.getString('selectedDeviceId') ?? 'cpu',
+      configPath: await _downloader.getConfigPath(),
     );
     
     fetchModels();
     fetchEngines();
-    if (state.selectedEngine != null) {
+
+    // Verify engine + config integrity on disk
+    await verifyEngineIntegrity();
+    await verifyConfig();
+
+    if (state.selectedEngine != null && state.isEngineVerified) {
       fetchDevices();
     }
   }
 
+  // ─── Filesystem Verification ───────────────────────────────────
+
+  Future<void> verifyEngineIntegrity() async {
+    final installed = await _downloader.getInstalledEngineNames();
+    
+    if (installed.isEmpty) {
+      state = state.copyWith(
+        installedEngineName: null,
+        isEngineVerified: false,
+      );
+      return;
+    }
+
+    final engineName = installed.first;
+    state = state.copyWith(
+      installedEngineName: engineName,
+      isEngineVerified: true,
+    );
+
+    // Verify model files on disk
+    final modelsDir = await _downloader.getModelsDirectory();
+    state = state.copyWith(
+      isInstructInstalled: await File(p.join(modelsDir, 'Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf')).exists(),
+      isEmbeddingInstalled: await File(p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf')).exists(),
+      isRerankerInstalled: await File(p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf')).exists(),
+    );
+  }
+
+  Future<void> verifyConfig() async {
+    final exists = await _downloader.configExists();
+    state = state.copyWith(isConfigReady: exists);
+  }
+
+  // ─── Server Lifecycle ──────────────────────────────────────────
+
+  Future<void> startServer() async {
+    if (state.selectedEngine == null || !state.isEngineVerified) {
+      appendLog('Cannot start: No verified engine found.');
+      return;
+    }
+
+    if (!state.isInstructInstalled || !state.isEmbeddingInstalled || !state.isRerankerInstalled) {
+      appendLog('Cannot start: One or more models are missing. Please download the Qwen3 bundle.');
+      return;
+    }
+
+    // Auto-generate config if missing
+    if (!state.isConfigReady) {
+      appendLog('Config not found. Generating default config...');
+      await _downloader.generateDefaultConfig();
+      await verifyConfig();
+    }
+
+    try {
+      appendLog('Starting server...');
+      state = state.copyWith(isServerRunning: true);
+
+      final process = await _downloader.startServer(
+        engineName: state.selectedEngine!,
+        deviceId: state.selectedDeviceId ?? 'cpu',
+        onLog: (line) => appendLog(line),
+      );
+
+      // Monitor process exit
+      process.exitCode.then((code) {
+        appendLog('--- Server exited with code $code ---');
+        state = state.copyWith(isServerRunning: false);
+      });
+
+      // Give the server a moment to bind to the port, then fetch models
+      Future.delayed(const Duration(seconds: 2), () {
+        if (state.isServerRunning) {
+          fetchModels();
+        }
+      });
+    } catch (e) {
+      appendLog('Failed to start server: $e');
+      state = state.copyWith(isServerRunning: false);
+    }
+  }
+
+  Future<void> stopServer() async {
+    appendLog('Stopping server...');
+    await _downloader.stopServer();
+    state = state.copyWith(isServerRunning: false);
+    appendLog('Server stopped.');
+  }
+
+  // ─── Config Management ─────────────────────────────────────────
+
+  Future<void> openConfig() async {
+    await _downloader.openConfigFile();
+  }
+
+  Future<void> resetConfig() async {
+    await _downloader.resetConfig();
+    await verifyConfig();
+    appendLog('Config reset to default.');
+  }
+
+  // ─── Device & Folder Management ────────────────────────────────
+
   Future<void> fetchDevices() async {
     if (state.selectedEngine == null) return;
+    
+    if (!state.isEngineVerified) {
+      await verifyEngineIntegrity();
+      if (!state.isEngineVerified) return;
+    }
+
     final result = await _downloader.listAvailableDevices(state.selectedEngine!);
     
     appendLog('--- Hardware Device Audit ---');
     appendLog(result.rawOutput);
     state = state.copyWith(availableDevices: result.devices);
-
-    final modelsDir = await _downloader.getModelsDirectory();
-    state = state.copyWith(
-      isInstructInstalled: await File(p.join(modelsDir, 'Qwen3-4B-Instruct-Q8_0.gguf')).exists(),
-      isEmbeddingInstalled: await File(p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf')).exists(),
-      isRerankerInstalled: await File(p.join(modelsDir, 'Qwen3-Reranker-0.6B-Q8_0.gguf')).exists(),
-    );
 
     final deviceExists = state.availableDevices.any((d) => d.id == state.selectedDeviceId);
     if (!deviceExists) {
@@ -220,11 +346,6 @@ class SettingsController extends StateNotifier<SettingsState> {
     await _downloader.openModelsFolder();
   }
 
-  Future<void> refreshIntegrity() async {
-    final installed = await _downloader.getInstalledEngineNames();
-    state = state.copyWith(installedEngineNames: installed.toList());
-  }
-
   void appendLog(String log) {
     final newLogs = List<String>.from(state.serverLogs);
     newLogs.add(log);
@@ -238,10 +359,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     state = state.copyWith(serverLogs: const []);
   }
 
+  // ─── Engine Download ───────────────────────────────────────────
+
   Future<void> fetchEngines() async {
     state = state.copyWith(isFetchingEngines: true);
     final engines = await _downloader.fetchAvailableEngines();
-    await refreshIntegrity();
+    await verifyEngineIntegrity();
     state = state.copyWith(availableEngines: engines, isFetchingEngines: false);
   }
 
@@ -260,12 +383,14 @@ class SettingsController extends StateNotifier<SettingsState> {
 
       await _downloader.cleanupLegacyEngines(p.basenameWithoutExtension(asset.name));
 
+      await verifyEngineIntegrity();
       fetchDevices();
-      await refreshIntegrity();
     } catch (e) {
       state = state.copyWith(isDownloading: false, downloadStatus: 'Error: $e');
     }
   }
+
+  // ─── Model Bundle Download ─────────────────────────────────────
 
   Future<void> downloadModelBundle() async {
     state = state.copyWith(
@@ -282,9 +407,15 @@ class SettingsController extends StateNotifier<SettingsState> {
 
       final modelsDir = await _downloader.getModelsDirectory();
       
-      await updateChatModel(p.join(modelsDir, 'Qwen3-4B-Instruct-Q8_0.gguf'));
+      await updateChatModel(p.join(modelsDir, 'Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf'));
       await updateEmbeddingModel(p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf'));
-      await updateRerankModel(p.join(modelsDir, 'Qwen3-Reranker-0.6B-Q8_0.gguf'));
+      await updateRerankModel(p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf'));
+
+      // Auto-generate config after bundle download
+      appendLog('Generating default config (sift_config.ini)...');
+      await _downloader.generateDefaultConfig();
+      await verifyConfig();
+      appendLog('Config ready!');
       
       state = state.copyWith(
         isDownloadingBundle: false, 
@@ -300,6 +431,8 @@ class SettingsController extends StateNotifier<SettingsState> {
       );
     }
   }
+
+  // ─── External Server Connection ────────────────────────────────
 
   Future<void> fetchModels() async {
     if (state.llamaServerUrl.isEmpty) return;
@@ -335,6 +468,8 @@ class SettingsController extends StateNotifier<SettingsState> {
       );
     }
   }
+
+  // ─── Settings Updates ──────────────────────────────────────────
 
   Future<void> updateLlamaServerUrl(String url) async {
     final prefs = await SharedPreferences.getInstance();
@@ -396,6 +531,12 @@ class SettingsController extends StateNotifier<SettingsState> {
   Future<void> updateBackendType(BackendType type) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('backendType', type.index);
+    
+    // If switching to internal, default the URL and refresh
+    if (type == BackendType.internal) {
+      await updateLlamaServerUrl('http://localhost:8080');
+    }
+    
     state = state.copyWith(backendType: type);
   }
 

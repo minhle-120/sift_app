@@ -35,6 +35,34 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
   }
 
   Widget _buildStatusCard(BuildContext context, ThemeData theme, WidgetRef ref, SettingsState settings) {
+    // Dynamic status
+    final Color statusColor;
+    final String statusLabel;
+    final bool isModelsReady = settings.isInstructInstalled && settings.isEmbeddingInstalled && settings.isRerankerInstalled;
+
+    if (settings.isServerRunning) {
+      statusColor = Colors.green;
+      statusLabel = 'Server Running';
+    } else if (settings.isEngineVerified && isModelsReady) {
+      statusColor = Colors.orange;
+      statusLabel = 'Server Stopped';
+    } else if (settings.isEngineVerified && !isModelsReady) {
+      statusColor = Colors.orange;
+      statusLabel = 'Models Missing';
+    } else {
+      statusColor = Colors.grey;
+      statusLabel = 'Not Ready';
+    }
+
+    // Compute stats
+    final deviceName = settings.availableDevices
+        .where((d) => d.id == settings.selectedDeviceId)
+        .map((d) => d.name)
+        .firstOrNull ?? 'None';
+    final engineStatus = settings.isEngineVerified ? 'Ready' : 'Missing';
+    final configStatus = settings.isConfigReady ? 'Ready' : 'Missing';
+    final modelsStatus = isModelsReady ? 'Ready' : 'Missing';
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -45,17 +73,18 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
+            // Top row: status + actions
             Row(
               children: [
                 Container(
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: Colors.grey, // Ready/Idle status
+                    color: statusColor,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withValues(alpha: 0.5),
+                        color: statusColor.withValues(alpha: 0.5),
                         blurRadius: 4,
                         spreadRadius: 2,
                       ),
@@ -64,7 +93,7 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'Engine: Ready',
+                  statusLabel,
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
@@ -74,22 +103,68 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
                   label: const Text('Logs'),
                 ),
                 const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    // Start Engine Logic
-                  },
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start'),
+                settings.isServerRunning
+                    ? FilledButton.icon(
+                        onPressed: () => ref.read(settingsProvider.notifier).stopServer(),
+                        icon: const Icon(Icons.stop_rounded, size: 18),
+                        label: const Text('Stop'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red.shade700,
+                        ),
+                      )
+                    : FilledButton.icon(
+                        onPressed: (settings.isEngineVerified && isModelsReady)
+                            ? () => ref.read(settingsProvider.notifier).startServer()
+                            : null,
+                        icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                        label: const Text('Start'),
+                      ),
+              ],
+            ),
+
+            // Config management row
+            const Divider(height: 24),
+            Row(
+              children: [
+                Icon(
+                  settings.isConfigReady ? Icons.description_outlined : Icons.warning_amber_rounded,
+                  size: 16,
+                  color: settings.isConfigReady ? theme.hintColor : Colors.orange,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    settings.configPath.isNotEmpty
+                        ? p.basename(settings.configPath)
+                        : 'sift_config.ini',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                      color: theme.hintColor,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => ref.read(settingsProvider.notifier).openConfig(),
+                  icon: const Icon(Icons.edit_note_rounded, size: 16),
+                  label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                ),
+                TextButton.icon(
+                  onPressed: () => ref.read(settingsProvider.notifier).resetConfig(),
+                  icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                  label: const Text('Reset', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
-            const Divider(height: 32),
+
+            // Stats row
+            const Divider(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildSimpleStat(theme, 'Backend', 'Vulkan'),
-                _buildSimpleStat(theme, 'Device', 'RTX 3050 Ti'),
-                _buildSimpleStat(theme, 'Models', '12 Found'),
+                _buildSimpleStat(theme, 'Engine', engineStatus),
+                _buildSimpleStat(theme, 'Device', deviceName.length > 12 ? '${deviceName.substring(0, 12)}…' : deviceName),
+                _buildSimpleStat(theme, 'Config', configStatus),
+                _buildSimpleStat(theme, 'Models', modelsStatus),
               ],
             ),
           ],
@@ -356,11 +431,12 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Section header with status summary
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Available Engines (GitHub)',
+              'Inference Engine',
               style: theme.textTheme.titleSmall?.copyWith(color: theme.colorScheme.primary),
             ),
             if (settings.isFetchingEngines)
@@ -372,12 +448,29 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
             else
               IconButton(
                 icon: const Icon(Icons.refresh, size: 20),
-                tooltip: 'Check for Updates',
+                tooltip: 'Verify & Refresh',
                 onPressed: () => ref.read(settingsProvider.notifier).fetchEngines(),
               ),
           ],
         ),
         const SizedBox(height: 8),
+
+        // Current engine status card (filesystem-verified)
+        _buildCurrentEngineStatus(context, theme, ref, settings),
+        const SizedBox(height: 12),
+
+        // Download progress
+        if (settings.isDownloading) ...[
+          LinearProgressIndicator(value: settings.downloadProgress),
+          const SizedBox(height: 8),
+          Text(
+            settings.downloadStatus,
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Engine location
         _buildFolderCard(
           context: context,
           theme: theme,
@@ -387,19 +480,15 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
           onChevronTap: () => ref.read(settingsProvider.notifier).openEngineFolder(),
         ),
         const SizedBox(height: 12),
-        if (settings.isDownloading) ...[
-          LinearProgressIndicator(value: settings.downloadProgress),
-          const SizedBox(height: 8),
-          Text(
-            settings.downloadStatus,
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
-          ),
-          const SizedBox(height: 16),
-        ],
+
+        // Available engines list
         if (settings.availableEngines.isEmpty)
-          const Center(child: Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text('No engines found for your platform.'),
+          Center(child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              settings.isFetchingEngines ? 'Fetching...' : 'No engines found for your platform.',
+              style: theme.textTheme.bodySmall,
+            ),
           ))
         else
           ConstrainedBox(
@@ -413,37 +502,138 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
                 shrinkWrap: true,
                 padding: EdgeInsets.zero,
                 itemCount: settings.availableEngines.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final asset = settings.availableEngines[index];
-                final isSelected = settings.selectedEngine == asset.name;
-                final engineFolderName = p.basenameWithoutExtension(asset.name);
-                final isInstalled = settings.installedEngineNames.contains(engineFolderName);
-                final sizeMb = (asset.size / (1024 * 1024)).toStringAsFixed(1);
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final asset = settings.availableEngines[index];
+                  final engineFolderName = p.basenameWithoutExtension(asset.name);
+                  final isOnDisk = settings.installedEngineName == engineFolderName;
+                  final isSelected = settings.selectedEngine == asset.name;
+                  final sizeMb = (asset.size / (1024 * 1024)).toStringAsFixed(1);
 
-                return ListTile(
-                  dense: true,
-                  title: Text(asset.name, style: const TextStyle(fontSize: 13)),
-                  subtitle: Text('$sizeMb MB${!isInstalled && isSelected ? " (Missing files!)" : ""}'),
-                  trailing: (isInstalled && isSelected)
-                      ? const Icon(Icons.check_circle, color: Colors.green)
-                      : IconButton(
-                          icon: Icon(
-                            isSelected ? Icons.replay_rounded : Icons.download,
-                            size: 20,
-                            color: isSelected ? theme.colorScheme.primary : null,
-                          ),
-                          tooltip: isSelected ? 'Re-download Missing Files' : 'Download',
-                          onPressed: settings.isDownloading 
-                              ? null 
-                              : () => ref.read(settingsProvider.notifier).downloadEngine(asset),
-                        ),
-                );
-              },
+                  // Determine status
+                  Widget trailing;
+                  Widget? subtitle;
+
+                  if (isOnDisk && isSelected) {
+                    // ✅ Installed & verified on disk
+                    trailing = Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.verified_rounded, color: Colors.green, size: 14),
+                          SizedBox(width: 4),
+                          Text('Installed', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    );
+                    subtitle = Text('$sizeMb MB · Verified on disk', style: TextStyle(fontSize: 11, color: Colors.green.withValues(alpha: 0.8)));
+                  } else if (isOnDisk && !isSelected) {
+                    // 🔄 On disk but not the selected one (edge case, shouldn't happen often)
+                    trailing = IconButton(
+                      icon: const Icon(Icons.download, size: 20),
+                      tooltip: 'Download this version',
+                      onPressed: settings.isDownloading ? null : () => ref.read(settingsProvider.notifier).downloadEngine(asset),
+                    );
+                    subtitle = Text('$sizeMb MB', style: const TextStyle(fontSize: 11));
+                  } else if (settings.isEngineVerified && !isOnDisk) {
+                    // 🔄 An engine exists but a newer version is available 
+                    trailing = TextButton.icon(
+                      icon: const Icon(Icons.upgrade_rounded, size: 16),
+                      label: const Text('Update', style: TextStyle(fontSize: 11)),
+                      onPressed: settings.isDownloading ? null : () => ref.read(settingsProvider.notifier).downloadEngine(asset),
+                    );
+                    subtitle = Text('$sizeMb MB · Newer version', style: TextStyle(fontSize: 11, color: theme.colorScheme.primary));
+                  } else {
+                    // ⬇️ No engine at all, fresh download
+                    trailing = IconButton(
+                      icon: const Icon(Icons.download_rounded, size: 20),
+                      tooltip: 'Download',
+                      onPressed: settings.isDownloading ? null : () => ref.read(settingsProvider.notifier).downloadEngine(asset),
+                    );
+                    subtitle = Text('$sizeMb MB', style: const TextStyle(fontSize: 11));
+                  }
+
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      asset.name,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isOnDisk ? FontWeight.w600 : null,
+                      ),
+                    ),
+                    subtitle: subtitle,
+                    trailing: trailing,
+                  );
+                },
+              ),
             ),
           ),
-        ),
       ],
+    );
+  }
+
+  Widget _buildCurrentEngineStatus(BuildContext context, ThemeData theme, WidgetRef ref, SettingsState settings) {
+    final Color statusColor;
+    final IconData statusIcon;
+    final String statusText;
+    final String statusDetail;
+
+    if (settings.isEngineVerified && settings.installedEngineName != null) {
+      statusColor = Colors.green;
+      statusIcon = Icons.check_circle_rounded;
+      statusText = 'Engine Ready';
+      statusDetail = settings.installedEngineName!;
+    } else if (settings.selectedEngine != null && !settings.isEngineVerified) {
+      statusColor = Colors.orange;
+      statusIcon = Icons.warning_amber_rounded;
+      statusText = 'Engine Missing';
+      statusDetail = 'Binary not found on disk. Re-download required.';
+    } else {
+      statusColor = theme.hintColor;
+      statusIcon = Icons.info_outline_rounded;
+      statusText = 'No Engine';
+      statusDetail = 'Download an engine below to get started.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: statusColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: statusColor.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(statusIcon, color: statusColor, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  statusText,
+                  style: theme.textTheme.labelLarge?.copyWith(color: statusColor, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  statusDetail,
+                  style: theme.textTheme.bodySmall?.copyWith(color: statusColor.withValues(alpha: 0.8), fontSize: 11),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

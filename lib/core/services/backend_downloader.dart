@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
@@ -24,8 +25,8 @@ class GitHubAsset {
 }
 
 class DeviceInfo {
-  final String id; // e.g., "Vulkan0"
-  final String name; // e.g., "NVIDIA GeForce RTX 3050 Ti"
+  final String id;
+  final String name;
   final bool isGpu;
 
   DeviceInfo({required this.id, required this.name, required this.isGpu});
@@ -41,35 +42,11 @@ class AuditResult {
 class BackendDownloader {
   final Dio _dio = Dio();
   static const String _repo = 'ggml-org/llama.cpp';
+  Process? _serverProcess;
 
-  Future<List<GitHubAsset>> fetchAvailableEngines() async {
-    try {
-      final response = await _dio.get('https://api.github.com/repos/$_repo/releases/latest');
-      if (response.statusCode == 200) {
-        final List<dynamic> assetsJson = response.data['assets'];
-        final List<GitHubAsset> allAssets = assetsJson.map((json) => GitHubAsset.fromJson(json)).toList();
-
-        // Detect OS and filter
-        final String osName = Platform.isWindows ? 'win' : Platform.isLinux ? 'ubuntu' : Platform.isMacOS ? 'macos' : '';
-        if (osName.isEmpty) return [];
-
-        return allAssets.where((asset) {
-          final name = asset.name.toLowerCase();
-          // Filter for Vulkan binaries specifically
-          return name.contains('-bin-') && 
-                 name.contains(osName) && 
-                 name.contains('vulkan') &&
-                 (name.endsWith('.zip') || name.endsWith('.tar.gz'));
-        }).toList();
-      }
-    } catch (e) {
-      // Log error silently or handle it
-    }
-    return [];
-  }
+  // ─── Directory Management ──────────────────────────────────────
 
   Future<String> getEngineDirectory() async {
-    // Portable Mode: Store 'engines' folder next to the app executable
     final exeDir = File(Platform.resolvedExecutable).parent.path;
     final engineDir = p.join(exeDir, 'engines');
     final dir = Directory(engineDir);
@@ -80,7 +57,6 @@ class BackendDownloader {
   }
 
   Future<String> getModelsDirectory() async {
-    // Portable Mode: Store 'models' folder next to the app executable
     final exeDir = File(Platform.resolvedExecutable).parent.path;
     final modelsDir = p.join(exeDir, 'models');
     final dir = Directory(modelsDir);
@@ -89,6 +65,185 @@ class BackendDownloader {
     }
     return modelsDir;
   }
+
+  // ─── Config File Management ────────────────────────────────────
+
+  Future<String> getConfigPath() async {
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    return p.join(exeDir, 'sift_config.ini');
+  }
+
+  Future<bool> configExists() async {
+    final configPath = await getConfigPath();
+    return File(configPath).exists();
+  }
+
+  Future<void> generateDefaultConfig() async {
+    final modelsDir = await getModelsDirectory();
+    final configPath = await getConfigPath();
+
+    final instructPath = p.join(modelsDir, 'Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf');
+    final embeddingPath = p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf');
+    final rerankerPath = p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf');
+
+    final config = '''[*]
+flash-attn = on
+no-warmup = true
+backend-sampling = true
+parallel = 1
+
+[Qwen3-4B-Instruct-2507]
+model = $instructPath
+ctx-size = 8192
+cache-type-k = q8_0
+cache-type-v = q8_0
+n-gpu-layers = 99
+temp = 0.7
+min-p = 0.00
+top-p = 0.80
+top-k = 20
+presence-penalty = 1.0
+
+[Qwen3-Embedding-0.6B]
+model = $embeddingPath
+embedding = true
+ctx-size = 2048
+ubatch-size = 2048
+batch-size = 2048
+n-gpu-layers = 99
+
+[Qwen3-Reranker-0.6B]
+model = $rerankerPath
+reranking = true
+ctx-size = 2048
+ubatch-size = 2048
+batch-size = 2048
+n-gpu-layers = 99
+''';
+
+    await File(configPath).writeAsString(config);
+  }
+
+  Future<void> resetConfig() async {
+    final configPath = await getConfigPath();
+    final file = File(configPath);
+    if (await file.exists()) {
+      await file.delete();
+    }
+    await generateDefaultConfig();
+  }
+
+  Future<void> openConfigFile() async {
+    final configPath = await getConfigPath();
+    final file = File(configPath);
+    if (!await file.exists()) {
+      await generateDefaultConfig();
+    }
+
+    if (Platform.isWindows) {
+      await Process.start('notepad.exe', [configPath]);
+    } else if (Platform.isLinux) {
+      await Process.start('xdg-open', [configPath]);
+    } else if (Platform.isMacOS) {
+      await Process.start('open', [configPath]);
+    }
+  }
+
+  // ─── Server Lifecycle ──────────────────────────────────────────
+
+  Future<Process> startServer({
+    required String engineName,
+    required String deviceId,
+    required Function(String) onLog,
+  }) async {
+    final engineDir = await getEngineDirectory();
+    final extractPath = p.join(engineDir, p.basenameWithoutExtension(engineName));
+    final serverPath = await _findServerBinary(extractPath);
+
+    if (serverPath == null) {
+      throw Exception('Engine binary not found in $extractPath');
+    }
+
+    // Ensure config exists
+    final configPath = await getConfigPath();
+    if (!await File(configPath).exists()) {
+      await generateDefaultConfig();
+    }
+
+    // Build launch arguments
+    final args = ['--models-preset', configPath];
+    if (deviceId != 'cpu') {
+      args.addAll(['--device', deviceId]);
+    }
+
+    onLog('> ${p.basename(serverPath)} ${args.map((a) => a.contains(' ') ? '"$a"' : a).join(' ')}');
+
+    _serverProcess = await Process.start(
+      serverPath,
+      args,
+      environment: Platform.isLinux ? {
+        'LD_LIBRARY_PATH': '${p.dirname(serverPath)}:${p.dirname(p.dirname(serverPath))}',
+      } : null,
+    );
+
+    // Stream stdout and stderr
+    _serverProcess!.stdout.transform(const SystemEncoding().decoder).listen((data) {
+      for (final line in data.split('\n')) {
+        if (line.trim().isNotEmpty) onLog(line);
+      }
+    });
+    _serverProcess!.stderr.transform(const SystemEncoding().decoder).listen((data) {
+      for (final line in data.split('\n')) {
+        if (line.trim().isNotEmpty) onLog('[stderr] $line');
+      }
+    });
+
+    return _serverProcess!;
+  }
+
+  Future<void> stopServer() async {
+    if (_serverProcess != null) {
+      _serverProcess!.kill(ProcessSignal.sigterm);
+      await _serverProcess!.exitCode.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          _serverProcess!.kill(ProcessSignal.sigkill);
+          return -1;
+        },
+      );
+      _serverProcess = null;
+    }
+  }
+
+  bool get isServerRunning => _serverProcess != null;
+
+  // ─── GitHub Engine Fetching ────────────────────────────────────
+
+  Future<List<GitHubAsset>> fetchAvailableEngines() async {
+    try {
+      final response = await _dio.get('https://api.github.com/repos/$_repo/releases/latest');
+      if (response.statusCode == 200) {
+        final List<dynamic> assetsJson = response.data['assets'];
+        final List<GitHubAsset> allAssets = assetsJson.map((json) => GitHubAsset.fromJson(json)).toList();
+
+        final String osName = Platform.isWindows ? 'win' : Platform.isLinux ? 'ubuntu' : Platform.isMacOS ? 'macos' : '';
+        if (osName.isEmpty) return [];
+
+        return allAssets.where((asset) {
+          final name = asset.name.toLowerCase();
+          return name.contains('-bin-') && 
+                 name.contains(osName) && 
+                 name.contains('vulkan') &&
+                 (name.endsWith('.zip') || name.endsWith('.tar.gz'));
+        }).toList();
+      }
+    } catch (e) {
+      // Silently handle
+    }
+    return [];
+  }
+
+  // ─── Engine Cleanup & Verification ─────────────────────────────
 
   Future<void> cleanupLegacyEngines(String currentEngineName) async {
     try {
@@ -99,7 +254,6 @@ class BackendDownloader {
         for (final entity in entities) {
           if (entity is Directory) {
             final name = p.basename(entity.path);
-            // Delete if it's not the currently selected engine
             if (name != currentEngineName && name != 'temp_download') {
               await entity.delete(recursive: true);
             }
@@ -107,7 +261,7 @@ class BackendDownloader {
         }
       }
     } catch (e) {
-      // Log cleanup error silently
+      // Silently handle
     }
   }
 
@@ -135,7 +289,6 @@ class BackendDownloader {
       );
       rawOutput = result.stdout.toString() + result.stderr.toString();
 
-      // Simple parsing logic for "Available devices:"
       final lines = rawOutput.split('\n');
       bool inAvailableDevices = false;
 
@@ -146,18 +299,12 @@ class BackendDownloader {
         }
 
         if (inAvailableDevices && line.trim().isNotEmpty) {
-          // Format e.g.: "  Vulkan1: NVIDIA GeForce RTX 3050 Ti Laptop GPU (3962 MiB, 3367 MiB free)"
           final match = RegExp(r'\s*(Vulkan\d+):\s*([^(\n]+)').firstMatch(line);
           if (match != null) {
             final id = match.group(1)!;
             final name = match.group(2)!.trim();
-            // Case-insensitive ID check to prevent duplicates
             if (!devices.any((d) => d.id == id)) {
-              devices.add(DeviceInfo(
-                id: id,
-                name: name,
-                isGpu: true,
-              ));
+              devices.add(DeviceInfo(id: id, name: name, isGpu: true));
             }
           }
         }
@@ -172,16 +319,13 @@ class BackendDownloader {
   Future<void> openEngineFolder() async {
     final engineDir = await getEngineDirectory();
     final dir = Directory(engineDir);
-
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
+    if (!await dir.exists()) await dir.create(recursive: true);
 
     if (Platform.isWindows) {
       await Process.run('explorer.exe', [engineDir]);
     } else if (Platform.isLinux) {
       await Process.run('xdg-open', [engineDir]);
-    } else    if (Platform.isMacOS) {
+    } else if (Platform.isMacOS) {
       await Process.run('open', [engineDir]);
     }
   }
@@ -234,7 +378,7 @@ class BackendDownloader {
     final rootPath = p.join(baseDir, serverExe);
     if (await File(rootPath).exists()) return rootPath;
 
-    // Check one level deep (standard for llama.cpp releases)
+    // Check one level deep
     try {
       final List<FileSystemEntity> entities = await dir.list().toList();
       for (final entity in entities) {
@@ -248,6 +392,8 @@ class BackendDownloader {
     return null;
   }
 
+  // ─── Download & Extract ────────────────────────────────────────
+
   Future<void> downloadAndExtract(
     GitHubAsset asset, {
     required Function(double) onProgress,
@@ -258,7 +404,6 @@ class BackendDownloader {
     final extractPath = p.join(engineDir, p.basenameWithoutExtension(asset.name));
 
     try {
-      // Clean start: Wipe existing engine folder if present
       final dir = Directory(extractPath);
       if (await dir.exists()) {
         await dir.delete(recursive: true);
@@ -295,13 +440,11 @@ class BackendDownloader {
       } else if (asset.name.endsWith('.tar.gz')) {
         if (Platform.isLinux || Platform.isMacOS) {
           try {
-            // Use system tar for reliable symlink and permission handling
             final res = await Process.run('tar', ['-xzf', tempPath, '-C', extractPath]);
             if (res.exitCode != 0) {
               throw Exception('System tar failed: ${res.stderr}');
             }
           } catch (e) {
-            // Fallback to Dart archive package (might lose symlinks)
             final gzipBytes = GZipDecoder().decodeBytes(bytes);
             final archive = TarDecoder().decodeBytes(gzipBytes);
             for (final file in archive) {
@@ -318,7 +461,6 @@ class BackendDownloader {
             }
           }
         } else {
-          // Windows or other: Fallback to Dart archive package
           final gzipBytes = GZipDecoder().decodeBytes(bytes);
           final archive = TarDecoder().decodeBytes(gzipBytes);
           for (final file in archive) {
@@ -336,8 +478,7 @@ class BackendDownloader {
         }
       }
 
-
-      // Set execution permissions for Linux/macOS
+      // Set execution permissions
       if (!Platform.isWindows) {
         final serverPath = await _findServerBinary(extractPath);
         if (serverPath != null) {
@@ -388,7 +529,6 @@ class BackendDownloader {
         onReceiveProgress: (received, total) {
           if (total != -1) {
             double currentFileProgress = received / total;
-            // Aggregate progress: each model is 1/3 of total
             double aggregateProgress = (i + currentFileProgress) / models.length;
             onProgress(aggregateProgress);
           }
