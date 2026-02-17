@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
@@ -227,15 +228,15 @@ n-gpu-layers = 99
 
   Future<List<GitHubAsset>> fetchAvailableEngines() async {
     try {
-      final response = await _dio.get('https://api.github.com/repos/$_repo/releases/latest');
+      final response = await _dio.get(
+        'https://api.github.com/repos/$_repo/releases/latest',
+        options: Options(responseType: ResponseType.json),
+      );
       if (response.statusCode == 200) {
-        // Handle both parsed JSON and raw string responses
+        // Handle both parsed JSON and raw string responses (Windows Dio quirk)
         dynamic data = response.data;
         if (data is String) {
-          data = await _dio.get(
-            'https://api.github.com/repos/$_repo/releases/latest',
-            options: Options(responseType: ResponseType.json),
-          ).then((r) => r.data);
+          data = jsonDecode(data);
         }
 
         final List<dynamic> assetsJson = data['assets'];
