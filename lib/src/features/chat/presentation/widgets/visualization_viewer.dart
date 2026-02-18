@@ -213,7 +213,7 @@ class _VisualizationViewerState extends ConsumerState<VisualizationViewer> {
           child: Material(
             elevation: 8,
             borderRadius: BorderRadius.circular(12),
-            color: theme.colorScheme.surface.withValues(alpha: 0.9),
+            color: theme.colorScheme.primaryContainer,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -221,6 +221,7 @@ class _VisualizationViewerState extends ConsumerState<VisualizationViewer> {
                   icon: Icons.fullscreen_exit,
                   tooltip: 'Zoom to Fit',
                   onPressed: () => controller.zoomToFit(),
+                  theme: theme,
                 ),
               ],
             ),
@@ -296,12 +297,15 @@ class _VisualizationViewerState extends ConsumerState<VisualizationViewer> {
     required IconData icon,
     required String tooltip,
     required VoidCallback onPressed,
+    required ThemeData theme,
   }) {
     return IconButton(
       icon: Icon(icon, size: 20),
       tooltip: tooltip,
       onPressed: onPressed,
       style: IconButton.styleFrom(
+        foregroundColor: theme.colorScheme.onPrimaryContainer,
+        backgroundColor: Colors.transparent,
         padding: const EdgeInsets.all(12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
