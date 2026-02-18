@@ -220,6 +220,10 @@ class SettingsController extends StateNotifier<SettingsState> {
       isSettingsLoaded: true,
     );
     
+    // Verify engine + config integrity on disk BEFORE auto-start check
+    await verifyEngineIntegrity();
+    await verifyConfig();
+
     // Only auto-fetch models if server is expected to be reachable
     if (state.backendType == BackendType.external) {
       fetchModels();
@@ -234,10 +238,6 @@ class SettingsController extends StateNotifier<SettingsState> {
       startServer(delaySeconds: 5);
     }
     fetchEngines();
-
-    // Verify engine + config integrity on disk
-    await verifyEngineIntegrity();
-    await verifyConfig();
 
     if (state.selectedEngine != null && state.isEngineVerified) {
       fetchDevices();
@@ -321,14 +321,14 @@ class SettingsController extends StateNotifier<SettingsState> {
       });
     } catch (e) {
       appendLog('Failed to start server: $e');
-      state = state.copyWith(isServerRunning: false);
+      state = state.copyWith(isServerRunning: false, availableModels: []);
     }
   }
 
   Future<void> stopServer() async {
     appendLog('Stopping server...');
     await _downloader.stopServer();
-    state = state.copyWith(isServerRunning: false);
+    state = state.copyWith(isServerRunning: false, availableModels: []);
     appendLog('Server stopped.');
   }
 
@@ -528,6 +528,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       appendLog('Connection error (fetchModels): $e');
       state = state.copyWith(
         isLoadingModels: false,
+        availableModels: [],
         // error: 'Connection error: $e', // Silencing false error reports
       );
     }

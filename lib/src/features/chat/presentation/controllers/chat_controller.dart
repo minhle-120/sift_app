@@ -65,17 +65,35 @@ class ChatController extends StateNotifier<ChatState> {
     // Initial check
     checkAiConnection();
     
-    // Watch for settings changes (URL or Model) to re-verify connectivity
+    // Watch for settings changes to re-verify connectivity
     _ref.listen<SettingsState>(settingsProvider, (previous, next) {
-      if (previous?.llamaServerUrl != next.llamaServerUrl || 
-          previous?.chatModel != next.chatModel) {
+      final urlChanged = previous?.llamaServerUrl != next.llamaServerUrl;
+      final modelChanged = previous?.chatModel != next.chatModel;
+      final serverStarted = previous?.isServerRunning == false && next.isServerRunning == true;
+      final modelsLoaded = previous?.isLoadingModels == true && next.isLoadingModels == false;
+
+      if (urlChanged || modelChanged || serverStarted || modelsLoaded) {
         checkAiConnection();
       }
     });
   }
 
   Future<void> checkAiConnection() async {
+    final settings = _ref.read(settingsProvider);
     final aiService = _ref.read(aiServiceProvider);
+    
+    // Suppress "unreachable" error if internal server is explicitly starting up or loading models.
+    // This prevents the red banner from flashing during the initial 5s boot delay.
+    if (settings.backendType == BackendType.internal && settings.isServerRunning) {
+      if (settings.availableModels.isEmpty || settings.isLoadingModels) {
+        state = state.copyWith(
+          isConnectionValid: true,
+          connectionError: null,
+        );
+        return;
+      }
+    }
+
     final isValid = await aiService.checkConnection();
     
     state = state.copyWith(
