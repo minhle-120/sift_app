@@ -53,6 +53,7 @@ class SettingsState {
   final bool isSettingsLoaded;
   // Preferences
   final bool autoStartServer;
+  final String? engineFetchError;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -94,6 +95,7 @@ class SettingsState {
     this.isSetupComplete = false,
     this.isSettingsLoaded = false,
     this.autoStartServer = true,
+    this.engineFetchError,
   });
 
   SettingsState copyWith({
@@ -136,6 +138,7 @@ class SettingsState {
     bool? isSetupComplete,
     bool? isSettingsLoaded,
     bool? autoStartServer,
+    String? engineFetchError,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -177,6 +180,7 @@ class SettingsState {
       isSetupComplete: isSetupComplete ?? this.isSetupComplete,
       isSettingsLoaded: isSettingsLoaded ?? this.isSettingsLoaded,
       autoStartServer: autoStartServer ?? this.autoStartServer,
+      engineFetchError: engineFetchError ?? this.engineFetchError,
     );
   }
 }
@@ -391,11 +395,19 @@ class SettingsController extends StateNotifier<SettingsState> {
 
   // ─── Engine Download ───────────────────────────────────────────
 
-  Future<void> fetchEngines() async {
-    state = state.copyWith(isFetchingEngines: true);
-    final engines = await _downloader.fetchAvailableEngines();
-    await verifyEngineIntegrity();
-    state = state.copyWith(availableEngines: engines, isFetchingEngines: false);
+  Future<void> fetchEngines({bool forceRefresh = false}) async {
+    state = state.copyWith(isFetchingEngines: true, engineFetchError: null);
+    try {
+      final engines = await _downloader.fetchAvailableEngines(forceRefresh: forceRefresh);
+      await verifyEngineIntegrity();
+      state = state.copyWith(availableEngines: engines, isFetchingEngines: false);
+    } catch (e) {
+      state = state.copyWith(
+        availableEngines: [],
+        isFetchingEngines: false,
+        engineFetchError: e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
   }
 
   void setSelectedEngine(String name) {

@@ -185,10 +185,19 @@ class _InternalConfigScreenState extends ConsumerState<InternalConfigScreen> {
           Center(
             child: Column(
               children: [
-                const Text('No engines found. Check your connection.'),
-                const SizedBox(height: 8),
+                if (settings.engineFetchError != null) ...[
+                  Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error, size: 48),
+                  const SizedBox(height: 16),
+                  Text(
+                    settings.engineFetchError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ] else
+                  const Text('No engines found. Check your connection.'),
+                const SizedBox(height: 16),
                 FilledButton.icon(
-                  onPressed: () => ref.read(settingsProvider.notifier).fetchEngines(),
+                  onPressed: () => ref.read(settingsProvider.notifier).fetchEngines(forceRefresh: true),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry Fetch'),
                 ),

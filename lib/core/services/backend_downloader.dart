@@ -41,9 +41,14 @@ class AuditResult {
 }
 
 class BackendDownloader {
-  final Dio _dio = Dio();
+  final Dio _dio = Dio(BaseOptions(
+    headers: {'User-Agent': 'SiftApp/1.0'},
+  ));
   static const String _repo = 'ggml-org/llama.cpp';
   Process? _serverProcess;
+
+  // Cache for engines to prevent rate limiting
+  List<GitHubAsset>? _engineCache;
 
   // ─── Directory Management ──────────────────────────────────────
 
@@ -247,14 +252,22 @@ n-gpu-layers = 99
 
   // ─── GitHub Engine Fetching ────────────────────────────────────
 
-  Future<List<GitHubAsset>> fetchAvailableEngines() async {
+  Future<List<GitHubAsset>> fetchAvailableEngines({bool forceRefresh = false}) async {
+    if (!forceRefresh && _engineCache != null) {
+      return _engineCache!;
+    }
+
     try {
       final response = await _dio.get(
         'https://api.github.com/repos/$_repo/releases/latest',
-        options: Options(responseType: ResponseType.json),
+        options: Options(
+          responseType: ResponseType.json,
+          receiveTimeout: const Duration(seconds: 10),
+          sendTimeout: const Duration(seconds: 10),
+        ),
       );
+
       if (response.statusCode == 200) {
-        // Handle both parsed JSON and raw string responses (Windows Dio quirk)
         dynamic data = response.data;
         if (data is String) {
           data = jsonDecode(data);
@@ -263,7 +276,6 @@ n-gpu-layers = 99
         final List<dynamic> assetsJson = data['assets'];
         final List<GitHubAsset> allAssets = assetsJson.map((json) => GitHubAsset.fromJson(json)).toList();
 
-        // Determine OS filter keyword
         final String osFilter;
         if (Platform.isWindows) {
           osFilter = '-win-';
@@ -275,18 +287,29 @@ n-gpu-layers = 99
           return [];
         }
 
-        return allAssets.where((asset) {
+        final filtered = allAssets.where((asset) {
           final name = asset.name.toLowerCase();
-          // Must be a binary release for this OS with Vulkan support
           return name.contains(osFilter) && 
                  name.contains('vulkan') &&
                  (name.endsWith('.zip') || name.endsWith('.tar.gz'));
         }).toList();
+
+        _engineCache = filtered;
+        return filtered;
+      } else {
+        throw Exception('GitHub API returned ${response.statusCode}: ${response.statusMessage}');
       }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 403 || e.response?.statusCode == 429) {
+        throw Exception('GitHub API rate limit exceeded. Please try again in 15-30 minutes.');
+      }
+      if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+        throw Exception('Connection timed out. Please check your internet connection.');
+      }
+      throw Exception('Network error: ${e.message ?? e.toString()}');
     } catch (e) {
-      // Silently handle - errors are expected when offline
+      throw Exception('Failed to fetch engines: $e');
     }
-    return [];
   }
 
   // ─── Engine Cleanup & Verification ─────────────────────────────
