@@ -74,6 +74,15 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                   duration: const Duration(milliseconds: 250),
                   child: _buildSelectionContent(theme),
                 ),
+
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => ref.read(settingsProvider.notifier).completeSetup(),
+                  child: Text(
+                    'Skip Setup (Manual Configuration)',
+                    style: TextStyle(color: theme.hintColor),
+                  ),
+                ),
               ],
             ),
           ),
