@@ -307,17 +307,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required Function(String?) onChanged,
     required IconData icon,
   }) {
-    // Ensure value is in items, or null if items is empty
+    // Check if the current value is genuinely available on the server
+    
+    // Ensure value is in items for the DropdownButton to work correctly
     String? dropdownValue = items.contains(value) ? value : null;
     
     // If value is set but not in items (e.g. manually set before or legacy), 
-    // we might want to still show it or add it to items. 
-    // For now, let's just add it if it's not empty and items is not empty
+    // add it to the list temporarily for display purposes
+    List<String> displayItems = List.from(items);
     if (value.isNotEmpty && !items.contains(value)) {
-       // Option: add it to the list temporarily so it can be selected?
-       // Or just default to null/first?
-       // Let's add it to the list of items for display
-       items = [...items, value];
+       displayItems.add(value);
        dropdownValue = value;
     }
 
@@ -334,10 +333,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           isExpanded: true,
           isDense: true,
           onChanged: onChanged,
-          items: items.map((String item) {
+          items: displayItems.map((String item) {
+            final bool itemAvailable = items.contains(item);
             return DropdownMenuItem<String>(
               value: item,
-              child: Text(item, overflow: TextOverflow.ellipsis),
+              child: Row(
+                children: [
+                  Expanded(child: Text(item, overflow: TextOverflow.ellipsis)),
+                  if (item.isNotEmpty)
+                    Icon(
+                      itemAvailable ? Icons.check_circle : Icons.error_outline,
+                      size: 14,
+                      color: itemAvailable ? Colors.green.withValues(alpha: 0.7) : theme.colorScheme.error.withValues(alpha: 0.7),
+                    ),
+                ],
+              ),
             );
           }).toList(),
           hint: const Text('Select a model'),
