@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
 
@@ -41,9 +42,23 @@ class AuditResult {
 }
 
 class BackendDownloader {
-  final Dio _dio = Dio(BaseOptions(
-    headers: {'User-Agent': 'SiftApp/1.0'},
-  ));
+  late final Dio _dio;
+
+  BackendDownloader() {
+    _dio = Dio(BaseOptions(
+      headers: {'User-Agent': 'SiftApp/1.0'},
+    ));
+
+    // Bypass SSL certificate verification for environments with missing/misconfigured root CAs
+    _dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+        return client;
+      },
+    );
+  }
+
   static const String _repo = 'ggml-org/llama.cpp';
   Process? _serverProcess;
 
