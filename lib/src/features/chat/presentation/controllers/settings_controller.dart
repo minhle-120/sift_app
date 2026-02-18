@@ -231,7 +231,7 @@ class SettingsController extends StateNotifier<SettingsState> {
         state.isConfigReady && 
         state.isInstructInstalled && 
         state.selectedDeviceId != null) {
-      startServer();
+      startServer(delaySeconds: 5);
     }
     fetchEngines();
 
@@ -279,7 +279,7 @@ class SettingsController extends StateNotifier<SettingsState> {
 
   // ─── Server Lifecycle ──────────────────────────────────────────
 
-  Future<void> startServer() async {
+  Future<void> startServer({int delaySeconds = 2}) async {
     if (state.selectedEngine == null || !state.isEngineVerified) {
       appendLog('Cannot start: No verified engine found.');
       return;
@@ -314,7 +314,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       });
 
       // Give the server a moment to bind to the port, then fetch models
-      Future.delayed(const Duration(seconds: 2), () {
+      Future.delayed(Duration(seconds: delaySeconds), () {
         if (state.isServerRunning) {
           fetchModels();
         }
@@ -623,7 +623,7 @@ class SettingsController extends StateNotifier<SettingsState> {
         state.isConfigReady && 
         state.isInstructInstalled && 
         state.selectedDeviceId != null) {
-      startServer();
+      startServer(delaySeconds: 5);
     }
   }
 

@@ -133,16 +133,17 @@ jobs:
       - name: Package Release Assets
         run: |
           sudo apt-get update && sudo apt-get install -y zip
-          cd linux-dist && zip -r ../sift-linux-x64.zip . && cd ..
-          cd windows-dist && zip -r ../sift-windows-x64.zip . && cd ..
+          TAG=${{ steps.vars.outputs.tag }}
+          cd linux-dist && zip -r ../sift-${TAG}-linux-x64.zip . && cd ..
+          cd windows-dist && zip -r ../sift-${TAG}-windows-x64.zip . && cd ..
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           files: |
-            sift-linux-x64.zip
-            sift-windows-x64.zip
+            sift-${{ steps.vars.outputs.tag }}-linux-x64.zip
+            sift-${{ steps.vars.outputs.tag }}-windows-x64.zip
           draft: false
           prerelease: false
         env:
