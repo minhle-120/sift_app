@@ -5,6 +5,7 @@ import '../controllers/settings_controller.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/collection_controller.dart';
 import '../views/settings_screen.dart';
+import '../../../knowledge/presentation/views/documents_screen.dart';
 import '../../../../../core/models/ai_models.dart';
 
 class ChatInputField extends ConsumerStatefulWidget {
@@ -58,6 +59,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
     final settings = ref.watch(settingsProvider);
     final settingsNotifier = ref.read(settingsProvider.notifier);
     final chatState = ref.watch(chatControllerProvider);
+    final collectionState = ref.watch(collectionProvider);
 
     return SafeArea(
       top: false,
@@ -101,6 +103,33 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
               ),
             ),
             const SizedBox(height: 12),
+            // Guidance/Blocker if no documents
+            if (!collectionState.hasDocuments && collectionState.activeCollection != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withAlpha(25),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: theme.colorScheme.primary.withAlpha(50)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 20, color: theme.colorScheme.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'This collection is empty. Please upload documents to start researching.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // Input Pill
             Container(
               decoration: BoxDecoration(
@@ -119,14 +148,19 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                     padding: const EdgeInsets.only(left: 4, bottom: 3),
                     child: IconButton(
                       icon: const Icon(Icons.add_circle_outline),
-                      onPressed: () {},
+                      tooltip: 'Upload Documents',
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const DocumentsScreen()),
+                        );
+                      },
                     ),
                   ),
                   Expanded(
                     child: CallbackShortcuts(
                       bindings: {
                         const SingleActivator(LogicalKeyboardKey.enter): () {
-                          if (!chatState.isLoading && _hasText) {
+                          if (!chatState.isLoading && _hasText && collectionState.hasDocuments) {
                             _sendMessage();
                           }
                         },
@@ -134,16 +168,20 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                       child: TextField(
                         controller: _controller,
                         focusNode: _focusNode,
-                        enabled: !chatState.isLoading,
+                        enabled: !chatState.isLoading && collectionState.hasDocuments,
                         maxLines: 5,
                         minLines: 1,
                         textInputAction: TextInputAction.newline,
                         decoration: InputDecoration(
-                          hintText: chatState.isLoading ? 'Thinking...' : 'Message Sift...',
+                          hintText: chatState.isLoading 
+                              ? 'Thinking...' 
+                              : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...'),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                         ),
-                        onSubmitted: (_) => _sendMessage(),
+                        onSubmitted: (_) {
+                          if (collectionState.hasDocuments) _sendMessage();
+                        },
                       ),
                     ),
                   ),
@@ -157,10 +195,10 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                       : IconButton(
                           icon: const Icon(Icons.arrow_upward_rounded),
                           style: IconButton.styleFrom(
-                            backgroundColor: _hasText ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHigh,
-                            foregroundColor: _hasText ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant.withAlpha(100),
+                            backgroundColor: (_hasText && collectionState.hasDocuments) ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHigh,
+                            foregroundColor: (_hasText && collectionState.hasDocuments) ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant.withAlpha(100),
                           ),
-                          onPressed: _hasText ? _sendMessage : null,
+                          onPressed: (_hasText && collectionState.hasDocuments) ? _sendMessage : null,
                         ),
                   ),
                 ],

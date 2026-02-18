@@ -316,29 +316,46 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildEmptyChatState(ThemeData theme) {
+    final collectionState = ref.watch(collectionProvider);
+    final bool hasDocs = collectionState.hasDocuments;
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.auto_awesome,
+            hasDocs ? Icons.auto_awesome : Icons.description_outlined,
             size: 48,
             color: theme.colorScheme.primary.withValues(alpha: 0.4),
           ),
           const SizedBox(height: 16),
           Text(
-            'What can I help you with?',
+            hasDocs ? 'What can I help you with?' : 'No Research Context',
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Ask a question based on this collection\'s documents.',
+            hasDocs 
+                ? 'Ask a question based on this collection\'s documents.'
+                : 'Upload documents to this collection to start chatting.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
             ),
           ),
+          if (!hasDocs) ...[
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const DocumentsScreen()),
+                );
+              },
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Upload Documents'),
+            ),
+          ],
         ],
       ),
     );
