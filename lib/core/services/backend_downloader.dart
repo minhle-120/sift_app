@@ -193,7 +193,12 @@ n-gpu-layers = 99
     }
 
     // Build launch arguments
-    final args = ['--port', '8080', '--models-max', '1', '--models-preset', configPath];
+    final args = [
+      '--port', '8080', 
+      '--models-max', '1', 
+      '--models-preset', configPath,
+      '--sleep-idle-seconds', '300',
+    ];
     if (deviceId != 'cpu') {
       args.addAll(['--device', deviceId]);
     }
@@ -351,7 +356,7 @@ n-gpu-layers = 99
 
   Future<AuditResult> listAvailableDevices(String engineName) async {
     final List<DeviceInfo> devices = [
-      DeviceInfo(id: 'cpu', name: 'CPU Fallback', isGpu: false),
+      DeviceInfo(id: 'cpu', name: 'Auto', isGpu: false),
     ];
     String rawOutput = '';
 
