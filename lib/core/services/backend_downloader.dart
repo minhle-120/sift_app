@@ -356,7 +356,7 @@ n-gpu-layers = 99
 
   Future<AuditResult> listAvailableDevices(String engineName) async {
     final List<DeviceInfo> devices = [
-      DeviceInfo(id: 'cpu', name: 'Auto', isGpu: false),
+      DeviceInfo(id: 'cpu', name: 'Auto (not recommended)', isGpu: false),
     ];
     String rawOutput = '';
 

@@ -245,11 +245,6 @@ class _InternalConfigScreenState extends ConsumerState<InternalConfigScreen> {
               label: const Text('Download and Install Engine'),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'We recommend Vulkan or CUDA for GPU acceleration.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
-          ),
         ],
       ],
     );
@@ -259,7 +254,7 @@ class _InternalConfigScreenState extends ConsumerState<InternalConfigScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Select the hardware you want to use for AI inference. GPUs (Vulkan/CUDA) are significantly faster than CPU.'),
+        const Text('Select the hardware you want to use for AI inference.'),
         const SizedBox(height: 16),
         if (settings.availableDevices.isEmpty)
           Align(
@@ -281,7 +276,6 @@ class _InternalConfigScreenState extends ConsumerState<InternalConfigScreen> {
             child: Column(
               children: settings.availableDevices.map((device) => RadioListTile<String>(
                 title: Text(device.name),
-                subtitle: Text(device.isGpu ? 'Hardware Accelerator (GPU)' : 'Standard Processor (CPU)'),
                 value: device.id,
               )).toList(),
             ),
