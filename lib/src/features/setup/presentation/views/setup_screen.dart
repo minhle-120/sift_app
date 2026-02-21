@@ -21,7 +21,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      body: Center(
+      body: SafeArea(
+        child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: SingleChildScrollView(
@@ -92,7 +93,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildOptionCard({

@@ -40,6 +40,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final settings = ref.watch(settingsProvider);
     final theme = Theme.of(context);
+    final isMobileInternal = (Platform.isAndroid || Platform.isIOS) && settings.backendType == BackendType.internal;
 
     return Scaffold(
       appBar: AppBar(
@@ -152,91 +153,118 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 32),
 
           // Model Selection
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Model Selection',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              if (settings.isLoadingModels)
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () => ref.read(settingsProvider.notifier).fetchModels(),
-                  tooltip: 'Refresh Models',
-                ),
-            ],
-          ),
-          if (settings.error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(
-                settings.error!,
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+          Opacity(
+            opacity: isMobileInternal ? 0.5 : 1.0,
+            child: AbsorbPointer(
+              absorbing: isMobileInternal,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Model Selection',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      if (settings.isLoadingModels)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else if (!isMobileInternal)
+                        IconButton(
+                          icon: const Icon(Icons.refresh),
+                          onPressed: () => ref.read(settingsProvider.notifier).fetchModels(),
+                          tooltip: 'Refresh Models',
+                        ),
+                    ],
+                  ),
+                  if (isMobileInternal)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock_clock_outlined, size: 14, color: theme.hintColor),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Managed by Mobile AI Engine above.',
+                              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (settings.error != null && !isMobileInternal)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        settings.error!,
+                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  
+                  _buildModelDropdown(
+                    theme,
+                    label: 'Chat Model',
+                    value: settings.chatModel,
+                    items: settings.availableModels,
+                    onChanged: (val) {
+                      if (val != null) ref.read(settingsProvider.notifier).updateChatModel(val);
+                    },
+                    icon: Icons.smart_toy_outlined,
+                  ),
+                  
+                  const SizedBox(height: 16),
+        
+                  _buildModelDropdown(
+                    theme,
+                    label: 'Embedding Model',
+                    value: settings.embeddingModel,
+                    items: settings.availableModels,
+                    onChanged: (val) {
+                      if (val != null) ref.read(settingsProvider.notifier).updateEmbeddingModel(val);
+                    },
+                    icon: Icons.numbers,
+                  ),
+                  
+                  if (settings.embeddingModel.isNotEmpty && !isMobileInternal) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const SizedBox(width: 12),
+                        const Icon(Icons.info_outline, size: 14, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Text(
+                          settings.detectedEmbeddingDimension != null 
+                              ? 'Auto-detected Dimension: ${settings.detectedEmbeddingDimension}'
+                              : 'Detecting dimension...',
+                          style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, color: theme.hintColor),
+                        ),
+                      ],
+                    ),
+                  ],
+        
+                  const SizedBox(height: 16),
+                  
+                  _buildModelDropdown(
+                    theme,
+                    label: 'Rerank Model',
+                    value: settings.rerankModel,
+                    items: settings.availableModels,
+                    onChanged: (val) {
+                      if (val != null) ref.read(settingsProvider.notifier).updateRerankModel(val);
+                    },
+                    icon: Icons.sort,
+                  ),
+                ],
               ),
             ),
-          const SizedBox(height: 16),
-          
-          _buildModelDropdown(
-            theme,
-            label: 'Chat Model',
-            value: settings.chatModel,
-            items: settings.availableModels,
-            onChanged: (val) {
-              if (val != null) ref.read(settingsProvider.notifier).updateChatModel(val);
-            },
-            icon: Icons.smart_toy_outlined,
-          ),
-          
-          const SizedBox(height: 16),
-
-          _buildModelDropdown(
-            theme,
-            label: 'Embedding Model',
-            value: settings.embeddingModel,
-            items: settings.availableModels,
-            onChanged: (val) {
-              if (val != null) ref.read(settingsProvider.notifier).updateEmbeddingModel(val);
-            },
-            icon: Icons.numbers,
-          ),
-          
-          if (settings.embeddingModel.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const SizedBox(width: 12),
-                const Icon(Icons.info_outline, size: 14, color: Colors.grey),
-                const SizedBox(width: 8),
-                Text(
-                  settings.detectedEmbeddingDimension != null 
-                      ? 'Auto-detected Dimension: ${settings.detectedEmbeddingDimension}'
-                      : 'Detecting dimension...',
-                  style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, color: theme.hintColor),
-                ),
-              ],
-            ),
-          ],
-
-          const SizedBox(height: 16),
-          
-          _buildModelDropdown(
-            theme,
-            label: 'Rerank Model',
-            value: settings.rerankModel,
-            items: settings.availableModels,
-            onChanged: (val) {
-              if (val != null) ref.read(settingsProvider.notifier).updateRerankModel(val);
-            },
-            icon: Icons.sort,
           ),
 
           const SizedBox(height: 32),

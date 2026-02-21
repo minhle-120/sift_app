@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final embeddingPlatformServiceProvider = Provider((ref) => EmbeddingPlatformService());
 
 /// Service that handles communication with the native Android embedding layer.
 /// Uses MediaPipe TextEmbedder via MethodChannel.

@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../src/features/chat/presentation/controllers/settings_controller.dart';
+import 'embedding_platform_service.dart';
+import 'dart:io';
 
 final embeddingServiceProvider = Provider((ref) => EmbeddingService(ref));
 
@@ -15,14 +17,26 @@ class EmbeddingService {
     final baseUrl = settings.llamaServerUrl;
     final model = settings.embeddingModel;
 
-    if (baseUrl.isEmpty) {
-      throw Exception('Llama Server URL is not configured');
+    if (model.isEmpty && !((Platform.isAndroid || Platform.isIOS) && settings.backendType == BackendType.internal)) {
+       throw Exception('No embedding model selected');
     }
 
-    if (model.isEmpty) {
-       // Optional: fetch models or throw? 
-       // For now throw to urge user to select model
-       throw Exception('No embedding model selected');
+    // --- BRANCH: Mobile Native vs Desktop/Remote ---
+    if ((Platform.isAndroid || Platform.isIOS) && settings.backendType == BackendType.internal) {
+      final nativeEmbedder = _ref.read(embeddingPlatformServiceProvider);
+      try {
+        final dynamic result = await nativeEmbedder.getEmbeddings(texts);
+        if (result is List) {
+          return result.map((e) => (e as List).cast<double>()).toList();
+        }
+        throw Exception('Native embedding returned unexpected type: ${result.runtimeType}');
+      } catch (e) {
+        throw Exception('Native embedding failed: $e');
+      }
+    }
+
+    if (baseUrl.isEmpty) {
+      throw Exception('Llama Server URL is not configured');
     }
 
     try {

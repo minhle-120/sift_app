@@ -133,7 +133,7 @@ class ModelManager(private val context: Context) {
                 backend = if (useGpu) Backend.GPU else Backend.CPU,
                 visionBackend = null,
                 audioBackend = null,
-                maxNumTokens = 2048,
+                maxNumTokens = 4096,
                 cacheDir = null
             )
             val newEngine = Engine(config)
@@ -147,9 +147,9 @@ class ModelManager(private val context: Context) {
                 ConversationConfig(
                     systemInstruction = systemContents,
                     samplerConfig = SamplerConfig(
-                        topK = 40,
-                        topP = 0.9,
-                        temperature = 0.7
+                        topK = 64,
+                        topP = 0.95,
+                        temperature = 1.0
                     )
                 )
             )
@@ -176,9 +176,9 @@ class ModelManager(private val context: Context) {
             ConversationConfig(
                 systemInstruction = systemContents,
                 samplerConfig = SamplerConfig(
-                    topK = 40,
-                    topP = 0.9,
-                    temperature = 0.7
+                    topK = 64,
+                    topP = 0.95,
+                    temperature = 1.0
                 )
             )
         )
@@ -216,6 +216,7 @@ class ModelManager(private val context: Context) {
             override fun onMessage(message: Message) {
                 handler.post {
                     val data = mapOf(
+                        "type" to "partial",
                         "text" to message.toString(),
                         "done" to false,
                         "requestId" to requestId
@@ -227,6 +228,7 @@ class ModelManager(private val context: Context) {
             override fun onDone() {
                 handler.post {
                     val data = mapOf(
+                        "type" to "done",
                         "text" to "",
                         "done" to true,
                         "requestId" to requestId
@@ -238,7 +240,12 @@ class ModelManager(private val context: Context) {
             override fun onError(throwable: Throwable) {
                 handler.post {
                     Log.e(TAG, "Inference error", throwable)
-                    sink?.error("INFERENCE_FAILED", throwable.message, null)
+                    val data = mapOf(
+                        "type" to "error",
+                        "error" to (throwable.message ?: "Unknown native error"),
+                        "requestId" to requestId
+                    )
+                    sink?.success(data)
                 }
             }
         })

@@ -12,6 +12,9 @@ import 'package:sift_app/src/features/chat/presentation/controllers/workbench_co
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
 import 'package:sift_app/core/models/ai_models.dart' as ai;
 import 'package:sift_app/core/services/openai_service.dart';
+import 'package:sift_app/core/services/model_platform_service.dart';
+import 'package:sift_app/core/services/embedding_platform_service.dart';
+import 'dart:io';
 
 class ChatState {
   final bool isLoading;
@@ -82,6 +85,18 @@ class ChatController extends StateNotifier<ChatState> {
     final settings = _ref.read(settingsProvider);
     final aiService = _ref.read(aiServiceProvider);
     
+    final isMobileInternal = (Platform.isAndroid || Platform.isIOS) && settings.backendType == BackendType.internal;
+
+    if (isMobileInternal) {
+      // For mobile internal, "connected" means initialized or at least configured
+      final isReady = settings.isMobileEngineInitialized && settings.isMobileEmbedderInitialized;
+      state = state.copyWith(
+        isConnectionValid: true, // we don't show a red "unreachable" banner for local mobile AI
+        connectionError: isReady ? null : "Mobile AI engines not initialized. Please check settings.",
+      );
+      return;
+    }
+
     // Suppress "unreachable" error if internal server is explicitly starting up or loading models.
     // This prevents the red banner from flashing during the initial 5s boot delay.
     if (settings.backendType == BackendType.internal && settings.isServerRunning) {
@@ -178,10 +193,20 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(isLoading: true, error: null);
     
     try {
-      // 2. Pre-flight connection check (Move inside try-catch to ensure isLoading is reset)
-      await checkAiConnection();
-      if (!state.isConnectionValid) {
-        throw Exception(state.connectionError ?? "AI Server is unreachable.");
+      // 2. Pre-flight connection check
+      final settings = _ref.read(settingsProvider);
+      final isMobileInternal = (Platform.isAndroid || Platform.isIOS) && settings.backendType == BackendType.internal;
+
+      if (!isMobileInternal) {
+        await checkAiConnection();
+        if (!state.isConnectionValid) {
+          throw Exception(state.connectionError ?? "AI Server is unreachable.");
+        }
+      } else {
+        // For mobile internal, check if engines are initialized
+        if (!settings.isMobileEngineInitialized || !settings.isMobileEmbedderInitialized) {
+          throw Exception("Mobile AI engines are not initialized. Please check settings.");
+        }
       }
 
       // 3. Prepare Isolated Histories via Orchestrators
@@ -203,11 +228,18 @@ class ChatController extends StateNotifier<ChatState> {
       final placeholderMessage = await _db.insertMessage(
         conversationId: conversationId,
         role: 'assistant',
-        content: 'Researching...',
+        content: isMobileInternal ? 'Searching local knowledge...' : 'Researching...',
         sortOrder: state.messages.length + 1,
       );
 
-      state = state.copyWith(researchStatus: 'Initializing research...');
+      state = state.copyWith(researchStatus: isMobileInternal ? 'Searching...' : 'Initializing research...');
+
+      // --- BRANCH: Mobile Lite-RAG vs Desktop Orchestrator ---
+      if (isMobileInternal) {
+        await _handleMobileLiteRag(text, activeCollectionId!, placeholderMessage, chatHistory);
+        state = state.copyWith(isLoading: false, researchStatus: null);
+        return;
+      }
 
       // --- NEW: Extract Active Schema from Workbench ---
       final workbench = _ref.read(workbenchProvider);
@@ -394,6 +426,119 @@ class ChatController extends StateNotifier<ChatState> {
 
   void stopResponse() {
     state = state.copyWith(isLoading: false);
+  }
+
+  Future<void> _handleMobileLiteRag(
+    String query,
+    int collectionId,
+    Message placeholderMessage,
+    List<ai.ChatMessage> history,
+  ) async {
+    try {
+      final embedPlatform = _ref.read(embeddingPlatformServiceProvider);
+      final modelPlatform = _ref.read(modelPlatformServiceProvider);
+      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
+
+      // 1. Vector Search
+      state = state.copyWith(researchStatus: 'Generating embedding...');
+      final List<dynamic> embeddingResult = await embedPlatform.getEmbeddings(query);
+      final List<double> queryVector = embeddingResult.cast<double>();
+
+      state = state.copyWith(researchStatus: 'Searching database...');
+      final searchResults = await _db.vectorSearch(
+        collectionId: collectionId,
+        queryEmbedding: queryVector,
+        limit: 3,
+      );
+
+      if (searchResults.isEmpty) {
+        await _db.updateMessageContent(placeholderMessage.id, "I couldn't find any relevant information in your collection to answer that.");
+        return;
+      }
+
+      // 2. Prepare Context
+      final List<String> contextChunks = [];
+      final citationData = <String, dynamic>{};
+      
+      for (int i = 0; i < searchResults.length; i++) {
+        final row = searchResults[i];
+        final chunk = row.readTable(_db.documentChunks);
+        final doc = row.readTable(_db.documents);
+        
+        final chunkLabel = '[[Chunk ${i + 1}]]';
+        contextChunks.add('$chunkLabel\n${chunk.content}');
+        
+        citationData[(i + 1).toString()] = {
+          'documentId': doc.id,
+          'sourceTitle': doc.title,
+          'chunkIndex': chunk.index,
+        };
+      }
+
+      await _db.updateMessageMetadata(
+        placeholderMessage.id,
+        citations: jsonEncode(citationData),
+      );
+
+      // 3. Prompt Injection (Using simplified Lite prompt + Last Turn history)
+      final systemPrompt = chatOrchestrator.buildLiteSystemPrompt();
+      
+      // We only take the last User/AI turn (2 messages) to keep context clean
+      final lastTurn = history.length >= 2 ? history.sublist(history.length - 2) : history;
+      
+      final combinedUserMessage = chatOrchestrator.buildCombinedMessage(
+        contextChunks, 
+        query,
+        history: lastTurn,
+      );
+
+      debugPrint('==== MOBILE LITE RAG PROMPT ====');
+      debugPrint('SYSTEM INSTRUCTION:\n$systemPrompt');
+      debugPrint('USER PROMPT:\n$combinedUserMessage');
+      debugPrint('================================');
+
+      state = state.copyWith(researchStatus: 'Generating answer...');
+      
+      // 4. Native Generation
+      // Reset first to ensure we don't have double-history (native + our injection)
+      await modelPlatform.resetConversation();
+      Completer<void> completer = Completer();
+      String finalContent = '';
+      
+      StreamSubscription? sub;
+      sub = modelPlatform.responseStream.listen((event) async {
+        final type = event['type'] as String?;
+        final text = event['text'] as String?;
+        
+        if (type == 'partial' && text != null) {
+          // Robust token handling: If the native side sends the full accumulated response,
+          // we use it. If it sends deltas, we append. 
+          // (LiteRT LTM usually sends deltas, but some MediaPipe GenAI versions send full string)
+          if (text.length > finalContent.length && text.startsWith(finalContent)) {
+            finalContent = text;
+          } else {
+            finalContent += text;
+          }
+          _db.updateMessageContent(placeholderMessage.id, finalContent);
+        } else if (type == 'done') {
+          sub?.cancel();
+          completer.complete();
+        } else if (type == 'error') {
+          sub?.cancel();
+          completer.completeError(event['error'] ?? 'Unknown native error');
+        }
+      });
+
+      await modelPlatform.generateResponse(
+        combinedUserMessage,
+        systemInstruction: systemPrompt,
+      );
+
+      await completer.future;
+    } catch (e) {
+      _db.updateMessageContent(placeholderMessage.id, "Error: $e");
+      rethrow;
+    }
   }
 
   domain.MessageRole _parseRole(String role) {

@@ -25,14 +25,14 @@ class ChatOrchestrator {
     final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
 
     // 2. Build Message List
-    final combinedUserMessage = _buildCombinedMessage(
+    final combinedUserMessage = buildCombinedMessage(
       resolvedChunks,
       originalQuery,
       visualSchema: visualSchema,
     );
 
     final messages = [
-      ChatMessage(role: ChatRole.system, content: _buildSystemPrompt()),
+      ChatMessage(role: ChatRole.system, content: buildSystemPrompt()),
       ...conversation,
       ChatMessage(role: ChatRole.user, content: combinedUserMessage),
     ];
@@ -52,14 +52,14 @@ class ChatOrchestrator {
     final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
 
     // 2. Build Message List
-    final combinedUserMessage = _buildCombinedMessage(
+    final combinedUserMessage = buildCombinedMessage(
       resolvedChunks,
       originalQuery,
       visualSchema: visualSchema,
     );
 
     final messages = [
-      ChatMessage(role: ChatRole.system, content: _buildSystemPrompt()),
+      ChatMessage(role: ChatRole.system, content: buildSystemPrompt()),
       ...conversation,
       ChatMessage(role: ChatRole.user, content: combinedUserMessage),
     ];
@@ -92,7 +92,7 @@ class ChatOrchestrator {
     return history;
   }
 
-  String _buildSystemPrompt() {
+  String buildSystemPrompt() {
     return r'''You are Sift, a helpful AI assistant. Your goal is to answer the user's question accurately using the provided background knowledge chunks.
 
 ### Citation Rules:
@@ -116,8 +116,23 @@ class ChatOrchestrator {
 ''';
   }
 
-  String _buildCombinedMessage(List<String> chunks, String query, {String? visualSchema}) {
-    return '''${visualSchema != null ? '[RENDERED_VISUAL_CHART_CONTEXT]\n$visualSchema\n(Note: The chart above has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}### Knowledge Chunks:
+  String buildLiteSystemPrompt() {
+    return r'''You are Sift, a helpful AI assistant. Your goal is to answer the user's question accurately using the provided background knowledge chunks.
+
+### Instructions:
+1. **Cite Sources**: Whenever you use information from a background chunk, you MUST cite it at the end of the sentence as [[Chunk X]] where X is the number (e.g., "The sky is blue [[Chunk 1]].").
+2. **Math**: Use LaTeX for all math: $E=mc^2$ for inline, and $$...$$ for blocks.
+3. **Stick to Context**: Only answer based on the provided chunks. If the answer isn't there, say you don't know.
+4. **Tone**: Be concise, professional, and helpful.
+''';
+  }
+
+  String buildCombinedMessage(List<String> chunks, String query, {String? visualSchema, List<ChatMessage>? history}) {
+    final historySection = (history != null && history.isNotEmpty)
+        ? '### Background History (Last Turn):\n${history.map((m) => '${m.role == ChatRole.user ? 'User' : 'Assistant'}: ${m.content}').join('\n')}\n\n'
+        : '';
+
+    return '''$historySection${visualSchema != null ? '[RENDERED_VISUAL_CHART_CONTEXT]\n$visualSchema\n(Note: The chart above has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
 ### User Query:

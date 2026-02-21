@@ -184,7 +184,7 @@ class MessageBubble extends ConsumerWidget {
 }
 
 class CitationSyntax extends md.InlineSyntax {
-  CitationSyntax() : super(r'\[{1,2}(?:Chunk\s+)?(\d+)\]{1,2}');
+  CitationSyntax() : super(r'\[{1,2}(?:Chunk\s*)?(\d+)\]{1,2}');
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {

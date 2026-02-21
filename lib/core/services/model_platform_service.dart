@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
+
+final modelPlatformServiceProvider = Provider((ref) => ModelPlatformService());
 
 /// A service that communicates with the native Android layer via [MethodChannel]
 /// and [EventChannel] to manage the LiteRT LM model.

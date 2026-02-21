@@ -148,7 +148,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       return Scaffold(
         drawer: const ConversationDrawer(),
-        body: chatView,
+        body: SafeArea(child: chatView),
       );
     }
   }

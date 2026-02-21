@@ -28,6 +28,7 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
           _buildSectionHeader(theme, 'Generation Model (LiteRT)'),
           _buildModelPicker(
             theme,
+            ref: ref,
             label: 'LiteRT Model (.task)',
             path: settings.mobileGenModelPath,
             isInitialized: settings.isMobileEngineInitialized,
@@ -38,6 +39,7 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
           _buildSectionHeader(theme, 'Embedding Model (MediaPipe)'),
           _buildModelPicker(
             theme,
+            ref: ref,
             label: 'Embedding Model (.tflite)',
             path: settings.mobileEmbedModelPath,
             isInitialized: settings.isMobileEmbedderInitialized,
@@ -88,8 +90,13 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
             title: const Text('Use GPU Acceleration'),
             subtitle: const Text('Enable mobile GPU for faster inference'),
             value: settings.mobileUseGpu,
-            onChanged: (val) => ref.read(settingsProvider.notifier).updateMobileUseGpu(val),
-            secondary: const Icon(Icons.bolt_rounded, color: Colors.orange),
+            onChanged: settings.isInitializingMobileEngine 
+              ? null 
+              : (val) => ref.read(settingsProvider.notifier).updateMobileUseGpu(val),
+            secondary: Icon(
+              Icons.bolt_rounded, 
+              color: settings.isInitializingMobileEngine ? theme.disabledColor : Colors.orange,
+            ),
           ),
           if (settings.mobileEngineError != null) ...[
             const SizedBox(height: 16),
@@ -234,83 +241,86 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
 
   Widget _buildModelPicker(
     ThemeData theme, {
+    required WidgetRef ref,
     required String label,
     required String path,
     required bool isInitialized,
     required VoidCallback onPick,
     required VoidCallback onInitialize,
   }) {
-    return Card(
-      elevation: 0,
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-      shape: RoundedRectangleBorder(
+    final bool isGenModel = label.contains('LiteRT');
+    final bool isInitializing = isGenModel && ref.watch(settingsProvider).isInitializingMobileEngine;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.file_present_rounded, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(label, style: theme.textTheme.labelMedium),
-                      Text(
-                        path.isEmpty ? 'No model selected' : p.basename(path),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontFamily: path.isEmpty ? null : 'monospace',
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
                 ),
-                IconButton(
-                  onPressed: onPick,
-                  icon: const Icon(Icons.folder_open_rounded),
-                  tooltip: 'Select Model',
+              ),
+              if (isInitializing) ...[
+                const SizedBox(width: 12),
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ],
-            ),
-            if (path.isNotEmpty) ...[
-              const Divider(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        isInitialized ? Icons.verified_user_rounded : Icons.update_disabled_rounded,
-                        color: isInitialized ? Colors.green : theme.hintColor,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        isInitialized ? 'Loaded & Ready' : 'Uninitialized',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: isInitialized ? Colors.green : theme.hintColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  TextButton.icon(
-                    onPressed: onInitialize,
-                    icon: Icon(isInitialized ? Icons.refresh_rounded : Icons.play_arrow_rounded, size: 18),
-                    label: Text(isInitialized ? 'Re-initialize' : 'Initialize'),
-                  ),
-                ],
-              ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  path.isEmpty ? 'Not selected' : p.basename(path),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: path.isEmpty ? theme.hintColor : theme.colorScheme.onSurface,
+                    fontStyle: path.isEmpty ? FontStyle.italic : FontStyle.normal,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (path.isEmpty || !isInitialized)
+                ElevatedButton(
+                  onPressed: isInitializing ? null : (path.isEmpty ? onPick : onInitialize),
+                  style: ElevatedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: Text(isInitializing 
+                    ? 'Wait...' 
+                    : (path.isEmpty ? 'Select' : 'Initialize')),
+                )
+              else
+                Icon(Icons.check_circle, color: theme.colorScheme.primary, size: 24),
+            ],
+          ),
+          if (path.isNotEmpty && isInitialized) ...[
+             const SizedBox(height: 8),
+             Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: isInitializing ? null : onInitialize,
+                icon: const Icon(Icons.refresh, size: 14),
+                label: const Text('Re-initialize', style: TextStyle(fontSize: 10)),
+                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }

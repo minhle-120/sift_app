@@ -70,6 +70,7 @@ class SettingsState {
   final bool isMobileEngineInitialized;
   final bool isMobileEmbedderInitialized;
   final double mobileImportProgress;
+  final bool isInitializingMobileEngine;
   final String? mobileEngineError;
 
   const SettingsState({
@@ -121,6 +122,7 @@ class SettingsState {
     this.isMobileEngineInitialized = false,
     this.isMobileEmbedderInitialized = false,
     this.mobileImportProgress = 0.0,
+    this.isInitializingMobileEngine = false,
     this.mobileEngineError,
   });
 
@@ -173,6 +175,7 @@ class SettingsState {
     bool? isMobileEngineInitialized,
     bool? isMobileEmbedderInitialized,
     double? mobileImportProgress,
+    bool? isInitializingMobileEngine,
     String? mobileEngineError,
   }) {
     return SettingsState(
@@ -224,6 +227,7 @@ class SettingsState {
       isMobileEngineInitialized: isMobileEngineInitialized ?? this.isMobileEngineInitialized,
       isMobileEmbedderInitialized: isMobileEmbedderInitialized ?? this.isMobileEmbedderInitialized,
       mobileImportProgress: mobileImportProgress ?? this.mobileImportProgress,
+      isInitializingMobileEngine: isInitializingMobileEngine ?? this.isInitializingMobileEngine,
       mobileEngineError: mobileEngineError ?? this.mobileEngineError,
     );
   }
@@ -746,6 +750,11 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setBool('mobileUseGpu', useGpu);
     state = state.copyWith(mobileUseGpu: useGpu);
+    
+    // Auto-reinitialize if already initialized to apply GPU change immediately
+    if (state.isMobileEngineInitialized) {
+      initializeMobileEngine();
+    }
   }
 
   Future<void> pickMobileGenModel() async {
@@ -784,7 +793,7 @@ class SettingsController extends StateNotifier<SettingsState> {
   Future<void> initializeMobileEngine() async {
     if (state.mobileGenModelPath.isEmpty) return;
     
-    state = state.copyWith(mobileEngineError: null);
+    state = state.copyWith(mobileEngineError: null, isInitializingMobileEngine: true);
     final success = await _modelPlatform.initializeModel(
       state.mobileGenModelPath,
       useGpu: state.mobileUseGpu,
@@ -792,6 +801,7 @@ class SettingsController extends StateNotifier<SettingsState> {
     
     state = state.copyWith(
       isMobileEngineInitialized: success,
+      isInitializingMobileEngine: false,
       mobileEngineError: success ? null : 'Failed to initialize LiteRT generation engine',
     );
   }
@@ -803,7 +813,7 @@ class SettingsController extends StateNotifier<SettingsState> {
     final success = await _embeddingPlatform.initializeEmbeddingModel(
       state.mobileEmbedModelPath,
       tokenizerPath: state.mobileTokenizerPath.isEmpty ? null : state.mobileTokenizerPath,
-      useGpu: state.mobileUseGpu,
+      useGpu: false, // Force CPU for embedding model as requested
     );
     
     state = state.copyWith(

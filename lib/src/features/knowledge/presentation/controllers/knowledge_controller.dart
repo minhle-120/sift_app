@@ -62,18 +62,27 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
 
   KnowledgeController(this._ref) : super(const KnowledgeState());
 
+  bool _isPickingFile = false;
+
   Future<void> pickAndUploadDocument() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-      allowMultiple: true,
-    );
+    if (_isPickingFile) return;
+    _isPickingFile = true;
+    
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: true,
+      );
 
-    if (result == null || result.files.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
 
-    final paths = result.files.map((f) => f.path).whereType<String>().toList();
-    if (paths.isEmpty) return;
+      final paths = result.files.map((f) => f.path).whereType<String>().toList();
+      if (paths.isEmpty) return;
 
-    uploadFiles(paths);
+      uploadFiles(paths);
+    } finally {
+      _isPickingFile = false;
+    }
   }
 
   Future<void> uploadFiles(List<String> paths) async {
