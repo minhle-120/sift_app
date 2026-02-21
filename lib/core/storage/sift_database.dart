@@ -184,6 +184,10 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  Future<int> deleteDocumentChunks(int documentId) {
+    return (delete(documentChunks)..where((t) => t.documentId.equals(documentId))).go();
+  }
+
   Future<void> insertDocumentChunks(List<DocumentChunksCompanion> chunks) async {
     await batch((batch) {
       batch.insertAll(documentChunks, chunks);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/settings_controller.dart';
+import '../../../knowledge/presentation/controllers/knowledge_controller.dart';
 import 'local_engine_settings_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -169,90 +170,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             },
             icon: Icons.numbers,
           ),
+          
+          if (settings.embeddingModel.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const SizedBox(width: 12),
+                const Icon(Icons.info_outline, size: 14, color: Colors.grey),
+                const SizedBox(width: 8),
+                Text(
+                  settings.detectedEmbeddingDimension != null 
+                      ? 'Auto-detected Dimension: ${settings.detectedEmbeddingDimension}'
+                      : 'Detecting dimension...',
+                  style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, color: theme.hintColor),
+                ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 16),
           
-          // Embedding Configuration Row
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Configuration',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.secondary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Chunk Size (Words)',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        controller: TextEditingController(text: settings.chunkSize.toString())
-                          ..selection = TextSelection.fromPosition(
-                              TextPosition(offset: settings.chunkSize.toString().length)),
-                        onChanged: (val) {
-                          final size = int.tryParse(val);
-                          if (size != null) {
-                            ref.read(settingsProvider.notifier).updateChunkSize(size);
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Overlap (Words)',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        controller: TextEditingController(text: settings.chunkOverlap.toString())
-                          ..selection = TextSelection.fromPosition(
-                              TextPosition(offset: settings.chunkOverlap.toString().length)),
-                        onChanged: (val) {
-                          final overlap = int.tryParse(val);
-                          if (overlap != null) {
-                            ref.read(settingsProvider.notifier).updateChunkOverlap(overlap);
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                if (settings.embeddingModel.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.info_outline, size: 16, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Text(
-                        settings.detectedEmbeddingDimension != null 
-                            ? 'Auto-detected Dimension: ${settings.detectedEmbeddingDimension}'
-                            : 'Detecting dimension...',
-                        style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, color: theme.hintColor),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
           _buildModelDropdown(
             theme,
             label: 'Rerank Model',
@@ -262,6 +199,157 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               if (val != null) ref.read(settingsProvider.notifier).updateRerankModel(val);
             },
             icon: Icons.sort,
+          ),
+
+          const SizedBox(height: 32),
+
+          // Document Processing & RAG
+          Text(
+            'Document Processing & RAG',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: theme.colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.splitscreen, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Chunking Configuration',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Chunk Size (Words)',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          controller: TextEditingController(text: settings.chunkSize.toString())
+                            ..selection = TextSelection.fromPosition(
+                                TextPosition(offset: settings.chunkSize.toString().length)),
+                          onChanged: (val) {
+                            final size = int.tryParse(val);
+                            if (size != null) {
+                              ref.read(settingsProvider.notifier).updateChunkSize(size);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Overlap (Words)',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          controller: TextEditingController(text: settings.chunkOverlap.toString())
+                            ..selection = TextSelection.fromPosition(
+                                TextPosition(offset: settings.chunkOverlap.toString().length)),
+                          onChanged: (val) {
+                            final overlap = int.tryParse(val);
+                            if (overlap != null) {
+                              ref.read(settingsProvider.notifier).updateChunkOverlap(overlap);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Icon(Icons.refresh_rounded, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Index Maintenance', style: theme.textTheme.titleSmall),
+                            Text(
+                              'Re-chunk and re-embed all documents if you changed the embedding model or chunk size.',
+                              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final knowledgeState = ref.watch(knowledgeControllerProvider);
+                      final isReprocessing = knowledgeState.isReprocessing;
+                      final progress = knowledgeState.reprocessingProgress;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (isReprocessing) ...[
+                             Row(
+                               children: [
+                                 Expanded(
+                                   child: LinearProgressIndicator(
+                                     value: progress,
+                                     borderRadius: BorderRadius.circular(4),
+                                   ),
+                                 ),
+                                 const SizedBox(width: 12),
+                                 Text(
+                                   '${(progress * 100).toStringAsFixed(0)}%',
+                                   style: theme.textTheme.labelMedium?.copyWith(
+                                     fontWeight: FontWeight.bold,
+                                     color: theme.colorScheme.primary,
+                                   ),
+                                 ),
+                               ],
+                             ),
+                             const SizedBox(height: 12),
+                          ],
+                          FilledButton.icon(
+                            onPressed: isReprocessing || settings.embeddingModel.isEmpty
+                                ? null
+                                : () => ref.read(knowledgeControllerProvider.notifier).reprocessAllDocuments(),
+                            icon: isReprocessing 
+                                ? Container(
+                                    width: 16, 
+                                    height: 16, 
+                                    padding: const EdgeInsets.all(2),
+                                    child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.auto_awesome),
+                            label: Text(isReprocessing ? 'Reprocessing...' : 'Reprocess All Documents'),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
 
           const SizedBox(height: 32),

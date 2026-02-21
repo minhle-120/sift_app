@@ -3,7 +3,6 @@ import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 
-import '../../../orchestrator/domain/chat_orchestrator.dart';
 import '../../../../../core/services/embedding_service.dart';
 import '../../../../../core/services/portable_settings.dart';
 import '../../../../../core/models/ai_models.dart';

@@ -11,7 +11,31 @@ import 'package:sift_app/src/features/chat/presentation/controllers/collection_c
 import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart';
 
-final knowledgeControllerProvider = StateNotifierProvider<KnowledgeController, AsyncValue<void>>((ref) {
+class KnowledgeState {
+  final AsyncValue<void> status;
+  final double reprocessingProgress; // 0.0 to 1.0
+  final bool isReprocessing;
+
+  const KnowledgeState({
+    this.status = const AsyncValue.data(null),
+    this.reprocessingProgress = 0.0,
+    this.isReprocessing = false,
+  });
+
+  KnowledgeState copyWith({
+    AsyncValue<void>? status,
+    double? reprocessingProgress,
+    bool? isReprocessing,
+  }) {
+    return KnowledgeState(
+      status: status ?? this.status,
+      reprocessingProgress: reprocessingProgress ?? this.reprocessingProgress,
+      isReprocessing: isReprocessing ?? this.isReprocessing,
+    );
+  }
+}
+
+final knowledgeControllerProvider = StateNotifierProvider<KnowledgeController, KnowledgeState>((ref) {
   return KnowledgeController(ref);
 });
 
@@ -32,11 +56,11 @@ final filteredDocumentsProvider = StreamProvider<List<Document>>((ref) {
   return db.watchCollectionDocuments(activeCollection.id);
 });
 
-class KnowledgeController extends StateNotifier<AsyncValue<void>> {
+class KnowledgeController extends StateNotifier<KnowledgeState> {
   final Ref _ref;
   final DocumentProcessor _processor = DocumentProcessor();
 
-  KnowledgeController(this._ref) : super(const AsyncValue.data(null));
+  KnowledgeController(this._ref) : super(const KnowledgeState());
 
   Future<void> pickAndUploadDocument() async {
     final result = await FilePicker.platform.pickFiles(
@@ -136,6 +160,38 @@ class KnowledgeController extends StateNotifier<AsyncValue<void>> {
     } catch (e) {
       // print('Error processing document ${doc.id}: $e');
       await db.updateDocumentStatus(doc.id, 'failed', error: e.toString());
+    }
+  }
+
+  Future<void> reprocessAllDocuments() async {
+    if (state.isReprocessing) return;
+
+    final db = _ref.read(databaseProvider);
+    state = state.copyWith(isReprocessing: true, reprocessingProgress: 0.0);
+
+    try {
+      final allDocs = await db.select(db.documents).get();
+      if (allDocs.isEmpty) {
+        state = state.copyWith(isReprocessing: false);
+        return;
+      }
+
+      for (var i = 0; i < allDocs.length; i++) {
+        final doc = allDocs[i];
+        
+        // Clear old chunks for this document
+        await db.deleteDocumentChunks(doc.id);
+        
+        // Re-process
+        await _processDocument(doc);
+
+        // Update progress
+        state = state.copyWith(reprocessingProgress: (i + 1) / allDocs.length);
+      }
+    } catch (e) {
+      state = state.copyWith(status: AsyncValue.error(e, StackTrace.current));
+    } finally {
+      state = state.copyWith(isReprocessing: false, reprocessingProgress: 0.0);
     }
   }
 
