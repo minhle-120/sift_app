@@ -11,20 +11,17 @@ class ExternalConfigScreen extends ConsumerStatefulWidget {
 
 class _ExternalConfigScreenState extends ConsumerState<ExternalConfigScreen> {
   late TextEditingController _urlController;
-  late TextEditingController _dimController;
 
   @override
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
     _urlController = TextEditingController(text: settings.llamaServerUrl);
-    _dimController = TextEditingController(text: settings.embeddingDimensions.toString());
   }
 
   @override
   void dispose() {
     _urlController.dispose();
-    _dimController.dispose();
     super.dispose();
   }
 
@@ -118,24 +115,6 @@ class _ExternalConfigScreenState extends ConsumerState<ExternalConfigScreen> {
                   items: settings.availableModels,
                   onChanged: (val) => ref.read(settingsProvider.notifier).updateEmbeddingModel(val!),
                   icon: Icons.psychology_outlined,
-                ),
-                const SizedBox(height: 16),
-
-                TextField(
-                  controller: _dimController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Embedding Dimensions',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.architecture),
-                    helperText: 'Common values: 1024, 768, 512',
-                  ),
-                  onChanged: (val) {
-                    final dim = int.tryParse(val);
-                    if (dim != null) {
-                      ref.read(settingsProvider.notifier).updateEmbeddingDimensions(dim);
-                    }
-                  },
                 ),
                 const SizedBox(height: 16),
 

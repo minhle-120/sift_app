@@ -1,10 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../../core/services/portable_settings.dart';
-import '../../../../../core/models/ai_models.dart';
-import '../../../../../core/services/backend_downloader.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
+
+import '../../../orchestrator/domain/chat_orchestrator.dart';
+import '../../../../../core/services/embedding_service.dart';
+import '../../../../../core/services/portable_settings.dart';
+import '../../../../../core/models/ai_models.dart';
+import '../../../../../core/services/backend_downloader.dart';
 
 enum BackendType { external, internal }
 
@@ -13,7 +16,9 @@ class SettingsState {
   final String chatModel;
   final String embeddingModel;
   final String rerankModel;
-  final int embeddingDimensions;
+
+  // Auto-detected embedding dimension
+  final int? detectedEmbeddingDimension;
   final int chunkSize;
   final int chunkOverlap;
   final bool isSyncEnabled;
@@ -60,7 +65,7 @@ class SettingsState {
     this.chatModel = '',
     this.embeddingModel = '',
     this.rerankModel = '',
-    this.embeddingDimensions = 1024,
+    this.detectedEmbeddingDimension,
     this.chunkSize = 100,
     this.chunkOverlap = 50,
     this.isSyncEnabled = true,
@@ -103,7 +108,7 @@ class SettingsState {
     String? chatModel,
     String? embeddingModel,
     String? rerankModel,
-    int? embeddingDimensions,
+    int? detectedEmbeddingDimension,
     int? chunkSize,
     int? chunkOverlap,
     bool? isSyncEnabled,
@@ -145,7 +150,7 @@ class SettingsState {
       chatModel: chatModel ?? this.chatModel,
       embeddingModel: embeddingModel ?? this.embeddingModel,
       rerankModel: rerankModel ?? this.rerankModel,
-      embeddingDimensions: embeddingDimensions ?? this.embeddingDimensions,
+      detectedEmbeddingDimension: detectedEmbeddingDimension ?? this.detectedEmbeddingDimension,
       chunkSize: chunkSize ?? this.chunkSize,
       chunkOverlap: chunkOverlap ?? this.chunkOverlap,
       isSyncEnabled: isSyncEnabled ?? this.isSyncEnabled,
@@ -186,11 +191,12 @@ class SettingsState {
 }
 
 class SettingsController extends StateNotifier<SettingsState> {
+  final Ref _ref;
   final Dio _dio = Dio();
   final BackendDownloader _downloader = BackendDownloader();
   BackendDownloader get downloader => _downloader;
 
-  SettingsController() : super(const SettingsState()) {
+  SettingsController(this._ref) : super(const SettingsState()) {
     _loadSettings();
   }
 
@@ -203,7 +209,6 @@ class SettingsController extends StateNotifier<SettingsState> {
       chatModel: prefs.getString('chatModel') ?? '',
       embeddingModel: prefs.getString('embeddingModel') ?? '',
       rerankModel: prefs.getString('rerankModel') ?? '',
-      embeddingDimensions: prefs.getInt('embeddingDimensions') ?? 1024,
       chunkSize: prefs.getInt('chunkSize') ?? 100,
       chunkOverlap: prefs.getInt('chunkOverlap') ?? 50,
       isSyncEnabled: prefs.getBool('isSyncEnabled') ?? true,
@@ -517,6 +522,9 @@ class SettingsController extends StateNotifier<SettingsState> {
             if (embedding.isNotEmpty) await updateEmbeddingModel(embedding);
             if (reranker.isNotEmpty) await updateRerankModel(reranker);
           }
+          
+          // Trigger dimension detection after fetching models if one is selected
+          _detectEmbeddingDimension();
         }
       } else {
          state = state.copyWith(
@@ -551,19 +559,37 @@ class SettingsController extends StateNotifier<SettingsState> {
   Future<void> updateEmbeddingModel(String model) async {
     final prefs = await PortableSettings.getInstance();
     await prefs.setString('embeddingModel', model);
-    state = state.copyWith(embeddingModel: model);
+    state = state.copyWith(embeddingModel: model, detectedEmbeddingDimension: null); // Reset dimension on model change
+    _detectEmbeddingDimension();
+  }
+
+  Future<void> _detectEmbeddingDimension() async {
+    if (state.embeddingModel.isEmpty) return;
+    
+    // Only attempt if it's external mode or if the internal server is running
+    final isRunning = state.backendType == BackendType.external || state.isServerRunning;
+    if (!isRunning) return;
+
+    try {
+      // Small delay to ensure the server has time to switch models if needed
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      final embeddingService = _ref.read(embeddingServiceProvider);
+      // Run a quick fetch of a single token to determine dimension size
+      final embeddings = await embeddingService.getEmbeddings(['test']);
+      if (embeddings.isNotEmpty && embeddings.first.isNotEmpty) {
+        state = state.copyWith(detectedEmbeddingDimension: embeddings.first.length);
+      }
+    } catch (e) {
+      // Ignore errors here, dimension is just a decorative hint for the user
+      print('Could not detect embedding dimension: $e');
+    }
   }
 
   Future<void> updateRerankModel(String model) async {
     final prefs = await PortableSettings.getInstance();
     await prefs.setString('rerankModel', model);
     state = state.copyWith(rerankModel: model);
-  }
-
-  Future<void> updateEmbeddingDimensions(int dim) async {
-    final prefs = await PortableSettings.getInstance();
-    await prefs.setInt('embeddingDimensions', dim);
-    state = state.copyWith(embeddingDimensions: dim);
   }
 
   Future<void> updateChunkSize(int size) async {
@@ -642,5 +668,5 @@ class SettingsController extends StateNotifier<SettingsState> {
 }
 
 final settingsProvider = StateNotifierProvider<SettingsController, SettingsState>((ref) {
-  return SettingsController();
+  return SettingsController(ref);
 });

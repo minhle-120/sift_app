@@ -195,26 +195,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       child: TextField(
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Dimensions',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        controller: TextEditingController(text: settings.embeddingDimensions.toString())
-                          ..selection = TextSelection.fromPosition(
-                              TextPosition(offset: settings.embeddingDimensions.toString().length)),
-                        onChanged: (val) {
-                          final dim = int.tryParse(val);
-                          if (dim != null) {
-                            ref.read(settingsProvider.notifier).updateEmbeddingDimensions(dim);
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
                           labelText: 'Chunk Size (Words)',
                           border: OutlineInputBorder(),
                           isDense: true,
@@ -252,6 +232,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
+                if (settings.embeddingModel.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 16, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Text(
+                        settings.detectedEmbeddingDimension != null 
+                            ? 'Auto-detected Dimension: ${settings.detectedEmbeddingDimension}'
+                            : 'Detecting dimension...',
+                        style: theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic, color: theme.hintColor),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
