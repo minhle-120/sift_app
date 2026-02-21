@@ -144,8 +144,6 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 ],
               ),
             ),
-            if (isSelected)
-              Icon(Icons.check_circle, color: theme.colorScheme.primary),
           ],
         ),
       ),
@@ -181,12 +179,6 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     return Column(
       key: const ValueKey('internal'),
       children: [
-        Text(
-          'Set up your local AI engine in the next screen.',
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
         SizedBox(
           width: double.infinity,
           height: 48,
