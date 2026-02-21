@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'dart:math' as math;
 import 'package:uuid/uuid.dart';
 import 'tables.dart';
@@ -320,8 +321,16 @@ const _uuid = Uuid();
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
-    final dataDir = Directory(p.join(exeDir, 'data'));
+    String dataDirPath;
+    if (Platform.isAndroid || Platform.isIOS) {
+      final appDir = await getApplicationDocumentsDirectory();
+      dataDirPath = p.join(appDir.path, 'data');
+    } else {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      dataDirPath = p.join(exeDir, 'data');
+    }
+
+    final dataDir = Directory(dataDirPath);
     if (!await dataDir.exists()) {
       await dataDir.create(recursive: true);
     }

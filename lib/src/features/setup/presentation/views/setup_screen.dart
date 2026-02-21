@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../chat/presentation/controllers/settings_controller.dart';
+import '../../../chat/presentation/views/mobile_engine_settings_screen.dart';
 import 'external_config_screen.dart';
 import 'internal_config_screen.dart';
 
@@ -62,8 +64,10 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 _buildOptionCard(
                   theme: theme,
                   icon: Icons.memory,
-                  title: 'Internal (Bundled)',
-                  description: 'Download and run llama.cpp locally. Everything stays on your device.',
+                  title: (Platform.isAndroid || Platform.isIOS) ? 'Native Mobile AI' : 'Internal (Bundled)',
+                  description: (Platform.isAndroid || Platform.isIOS) 
+                    ? 'Run AI locally using LiteRT and MediaPipe. High performance, zero data leaving device.'
+                    : 'Download and run llama.cpp locally. Everything stays on your device.',
                   type: BackendType.internal,
                 ),
 
@@ -186,16 +190,20 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             onPressed: () async {
               final notifier = ref.read(settingsProvider.notifier);
               await notifier.updateBackendType(BackendType.internal);
-              // In internal mode, we push the settings screen directly
-              // so they can download the engine/models.
               if (mounted) {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const InternalConfigScreen()),
-                );
+                if (Platform.isAndroid || Platform.isIOS) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const MobileEngineSettingsScreen()),
+                  );
+                } else {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const InternalConfigScreen()),
+                  );
+                }
               }
             },
             icon: const Icon(Icons.arrow_forward_rounded),
-            label: const Text('Set Up Local Engine'),
+            label: Text((Platform.isAndroid || Platform.isIOS) ? 'Configure Mobile AI' : 'Set Up Local Engine'),
           ),
         ),
       ],

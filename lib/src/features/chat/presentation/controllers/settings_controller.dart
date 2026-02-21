@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
@@ -7,6 +8,8 @@ import '../../../../../core/services/embedding_service.dart';
 import '../../../../../core/services/portable_settings.dart';
 import '../../../../../core/models/ai_models.dart';
 import '../../../../../core/services/backend_downloader.dart';
+import '../../../../../core/services/model_platform_service.dart';
+import '../../../../../core/services/embedding_platform_service.dart';
 
 enum BackendType { external, internal }
 
@@ -59,6 +62,15 @@ class SettingsState {
   // Preferences
   final bool autoStartServer;
   final String? engineFetchError;
+  // Mobile AI Engine
+  final String mobileGenModelPath;
+  final String mobileEmbedModelPath;
+  final String mobileTokenizerPath;
+  final bool mobileUseGpu;
+  final bool isMobileEngineInitialized;
+  final bool isMobileEmbedderInitialized;
+  final double mobileImportProgress;
+  final String? mobileEngineError;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -102,6 +114,14 @@ class SettingsState {
     this.isSettingsLoaded = false,
     this.autoStartServer = true,
     this.engineFetchError,
+    this.mobileGenModelPath = '',
+    this.mobileEmbedModelPath = '',
+    this.mobileTokenizerPath = '',
+    this.mobileUseGpu = false,
+    this.isMobileEngineInitialized = false,
+    this.isMobileEmbedderInitialized = false,
+    this.mobileImportProgress = 0.0,
+    this.mobileEngineError,
   });
 
   SettingsState copyWith({
@@ -146,6 +166,14 @@ class SettingsState {
     bool? isSettingsLoaded,
     bool? autoStartServer,
     String? engineFetchError,
+    String? mobileGenModelPath,
+    String? mobileEmbedModelPath,
+    String? mobileTokenizerPath,
+    bool? mobileUseGpu,
+    bool? isMobileEngineInitialized,
+    bool? isMobileEmbedderInitialized,
+    double? mobileImportProgress,
+    String? mobileEngineError,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -189,6 +217,14 @@ class SettingsState {
       isSettingsLoaded: isSettingsLoaded ?? this.isSettingsLoaded,
       autoStartServer: autoStartServer ?? this.autoStartServer,
       engineFetchError: engineFetchError ?? this.engineFetchError,
+      mobileGenModelPath: mobileGenModelPath ?? this.mobileGenModelPath,
+      mobileEmbedModelPath: mobileEmbedModelPath ?? this.mobileEmbedModelPath,
+      mobileTokenizerPath: mobileTokenizerPath ?? this.mobileTokenizerPath,
+      mobileUseGpu: mobileUseGpu ?? this.mobileUseGpu,
+      isMobileEngineInitialized: isMobileEngineInitialized ?? this.isMobileEngineInitialized,
+      isMobileEmbedderInitialized: isMobileEmbedderInitialized ?? this.isMobileEmbedderInitialized,
+      mobileImportProgress: mobileImportProgress ?? this.mobileImportProgress,
+      mobileEngineError: mobileEngineError ?? this.mobileEngineError,
     );
   }
 }
@@ -199,8 +235,18 @@ class SettingsController extends StateNotifier<SettingsState> {
   final BackendDownloader _downloader = BackendDownloader();
   BackendDownloader get downloader => _downloader;
 
+  final ModelPlatformService _modelPlatform = ModelPlatformService();
+  final EmbeddingPlatformService _embeddingPlatform = EmbeddingPlatformService();
+
   SettingsController(this._ref) : super(const SettingsState()) {
     _loadSettings();
+    _setupProgressHandlers();
+  }
+
+  void _setupProgressHandlers() {
+    _modelPlatform.progressStream.listen((progress) {
+      state = state.copyWith(mobileImportProgress: progress);
+    });
   }
 
   Future<void> _loadSettings() async {
@@ -228,29 +274,40 @@ class SettingsController extends StateNotifier<SettingsState> {
       isSetupComplete: prefs.getBool('isSetupComplete') ?? false,
       autoStartServer: prefs.getBool('autoStartServer') ?? true,
       isSettingsLoaded: true,
+      mobileGenModelPath: prefs.getString('mobileGenModelPath') ?? '',
+      mobileEmbedModelPath: prefs.getString('mobileEmbedModelPath') ?? '',
+      mobileTokenizerPath: prefs.getString('mobileTokenizerPath') ?? '',
+      mobileUseGpu: prefs.getBool('mobileUseGpu') ?? false,
     );
     
-    // Verify engine + config integrity on disk BEFORE auto-start check
-    await verifyEngineIntegrity();
-    await verifyConfig();
+    // Verify engine + config integrity on disk (Desktop only)
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      await verifyEngineIntegrity();
+      await verifyConfig();
+    }
 
     // Only auto-fetch models if server is expected to be reachable
     if (state.backendType == BackendType.external) {
       fetchModels();
     }
-    // Auto-start server if enabled and conditions are met
+    
+    // Auto-start server (Desktop only)
     if (state.autoStartServer && 
         state.backendType == BackendType.internal && 
+        (Platform.isLinux || Platform.isWindows || Platform.isMacOS) &&
         state.isEngineVerified && 
         state.isConfigReady && 
         state.isInstructInstalled && 
         state.selectedDeviceId != null) {
       startServer(delaySeconds: 5);
     }
-    fetchEngines();
 
-    if (state.selectedEngine != null && state.isEngineVerified) {
-      fetchDevices();
+    // Fetch available engines and devices (Desktop only)
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      fetchEngines();
+      if (state.selectedEngine != null && state.isEngineVerified) {
+        fetchDevices();
+      }
     }
   }
 
@@ -290,6 +347,8 @@ class SettingsController extends StateNotifier<SettingsState> {
   // ─── Server Lifecycle ──────────────────────────────────────────
 
   Future<void> startServer({int delaySeconds = 2}) async {
+    if (Platform.isAndroid || Platform.isIOS) return; // LiteRT handles its own lifecycle on mobile
+
     if (state.selectedEngine == null || !state.isEngineVerified) {
       appendLog('Cannot start: No verified engine found.');
       return;
@@ -406,6 +465,8 @@ class SettingsController extends StateNotifier<SettingsState> {
   // ─── Engine Download ───────────────────────────────────────────
 
   Future<void> fetchEngines({bool forceRefresh = false}) async {
+    if (Platform.isAndroid || Platform.isIOS) return; // Engines (llama-server) are not for mobile
+
     state = state.copyWith(isFetchingEngines: true, engineFetchError: null);
     try {
       final engines = await _downloader.fetchAvailableEngines(forceRefresh: forceRefresh);
@@ -593,7 +654,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       }
     } catch (e) {
       // Ignore errors here, dimension is just a decorative hint for the user
-      print('Could not detect embedding dimension: $e');
+      debugPrint('Could not detect embedding dimension: $e');
     }
   }
 
@@ -677,6 +738,78 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setBool('autoStartServer', value);
     state = state.copyWith(autoStartServer: value);
+  }
+
+  // ─── Mobile AI Engine ──────────────────────────────────────────
+
+  Future<void> updateMobileUseGpu(bool useGpu) async {
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setBool('mobileUseGpu', useGpu);
+    state = state.copyWith(mobileUseGpu: useGpu);
+  }
+
+  Future<void> pickMobileGenModel() async {
+    final path = await _modelPlatform.pickModel();
+    if (path != null) {
+      final prefs = await PortableSettings.getInstance();
+      await prefs.setString('mobileGenModelPath', path);
+      state = state.copyWith(mobileGenModelPath: path, isMobileEngineInitialized: false);
+    }
+  }
+
+  Future<void> pickMobileEmbedModel() async {
+    final path = await _modelPlatform.pickModel();
+    if (path != null) {
+      final prefs = await PortableSettings.getInstance();
+      await prefs.setString('mobileEmbedModelPath', path);
+      state = state.copyWith(mobileEmbedModelPath: path, isMobileEmbedderInitialized: false);
+    }
+  }
+
+  Future<void> pickMobileTokenizer() async {
+    final path = await _modelPlatform.pickModel();
+    if (path != null) {
+      final prefs = await PortableSettings.getInstance();
+      await prefs.setString('mobileTokenizerPath', path);
+      state = state.copyWith(mobileTokenizerPath: path, isMobileEmbedderInitialized: false);
+    }
+  }
+
+  Future<void> clearMobileTokenizer() async {
+    final prefs = await PortableSettings.getInstance();
+    await prefs.remove('mobileTokenizerPath');
+    state = state.copyWith(mobileTokenizerPath: '', isMobileEmbedderInitialized: false);
+  }
+
+  Future<void> initializeMobileEngine() async {
+    if (state.mobileGenModelPath.isEmpty) return;
+    
+    state = state.copyWith(mobileEngineError: null);
+    final success = await _modelPlatform.initializeModel(
+      state.mobileGenModelPath,
+      useGpu: state.mobileUseGpu,
+    );
+    
+    state = state.copyWith(
+      isMobileEngineInitialized: success,
+      mobileEngineError: success ? null : 'Failed to initialize LiteRT generation engine',
+    );
+  }
+
+  Future<void> initializeMobileEmbedder() async {
+    if (state.mobileEmbedModelPath.isEmpty) return;
+    
+    state = state.copyWith(mobileEngineError: null);
+    final success = await _embeddingPlatform.initializeEmbeddingModel(
+      state.mobileEmbedModelPath,
+      tokenizerPath: state.mobileTokenizerPath.isEmpty ? null : state.mobileTokenizerPath,
+      useGpu: state.mobileUseGpu,
+    );
+    
+    state = state.copyWith(
+      isMobileEmbedderInitialized: success,
+      mobileEngineError: success ? null : 'Failed to initialize MediaPipe embedding engine',
+    );
   }
 }
 

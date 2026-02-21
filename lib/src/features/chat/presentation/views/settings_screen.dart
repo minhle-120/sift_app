@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/settings_controller.dart';
 import '../../../knowledge/presentation/controllers/knowledge_controller.dart';
 import 'local_engine_settings_screen.dart';
+import 'mobile_engine_settings_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -104,25 +106,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ] else ...[
-          // Local AI Executive Navigation
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              side: BorderSide(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(12),
+          if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) ...[
+            // Local AI Executive Navigation
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                side: BorderSide(color: theme.colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.terminal_rounded),
+                title: const Text('Configure Local AI Engine'),
+                subtitle: const Text('Manage hardware, models, and engine status'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LocalEngineSettingsScreen()),
+                  );
+                },
+              ),
             ),
-            child: ListTile(
-              leading: const Icon(Icons.terminal_rounded),
-              title: const Text('Configure Local AI Engine'),
-              subtitle: const Text('Manage hardware, models, and engine status'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const LocalEngineSettingsScreen()),
-                );
-              },
+          ] else if (Platform.isAndroid || Platform.isIOS) ...[
+            // Mobile AI Engine Placeholder
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                side: BorderSide(color: theme.colorScheme.primaryContainer),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ListTile(
+                leading: Icon(Icons.phone_android, color: theme.colorScheme.primary),
+                title: const Text('Mobile AI Engine'),
+                subtitle: const Text('Integrated LiteRT & MediaPipe backend'),
+                trailing: const Icon(Icons.check_circle, color: Colors.green),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const MobileEngineSettingsScreen()),
+                  );
+                },
+              ),
             ),
-          ),
+          ],
         ],
           
           const SizedBox(height: 32),

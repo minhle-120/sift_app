@@ -17,7 +17,7 @@ void main() {
 
   // ── OS signal handlers (Ctrl-C, kill, systemctl stop, etc.) ──
   // These fire BEFORE the process exits, giving us a chance to clean up.
-  if (!Platform.isWindows) {
+  if (!Platform.isWindows && !Platform.isAndroid && !Platform.isIOS) {
     ProcessSignal.sigint.watch().listen((_) => _cleanup());
     ProcessSignal.sigterm.watch().listen((_) => _cleanup());
   }

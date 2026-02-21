@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive_io.dart';
+import 'package:path_provider/path_provider.dart';
 
 class GitHubAsset {
   final String name;
@@ -68,30 +69,49 @@ class BackendDownloader {
   // ─── Directory Management ──────────────────────────────────────
 
   Future<String> getEngineDirectory() async {
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
-    final engineDir = p.join(exeDir, 'engines');
-    final dir = Directory(engineDir);
+    String engineDirPath;
+    if (Platform.isAndroid || Platform.isIOS) {
+      final appDir = await getApplicationDocumentsDirectory();
+      engineDirPath = p.join(appDir.path, 'engines');
+    } else {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      engineDirPath = p.join(exeDir, 'engines');
+    }
+
+    final dir = Directory(engineDirPath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
-    return engineDir;
+    return engineDirPath;
   }
 
   Future<String> getModelsDirectory() async {
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
-    final modelsDir = p.join(exeDir, 'models');
-    final dir = Directory(modelsDir);
+    String modelsDirPath;
+    if (Platform.isAndroid || Platform.isIOS) {
+      final appDir = await getApplicationDocumentsDirectory();
+      modelsDirPath = p.join(appDir.path, 'models');
+    } else {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      modelsDirPath = p.join(exeDir, 'models');
+    }
+
+    final dir = Directory(modelsDirPath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
-    return modelsDir;
+    return modelsDirPath;
   }
 
   // ─── Config File Management ────────────────────────────────────
 
   Future<String> getConfigPath() async {
-    final exeDir = File(Platform.resolvedExecutable).parent.path;
-    return p.join(exeDir, 'sift_config.ini');
+    if (Platform.isAndroid || Platform.isIOS) {
+      final appDir = await getApplicationDocumentsDirectory();
+      return p.join(appDir.path, 'sift_config.ini');
+    } else {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      return p.join(exeDir, 'sift_config.ini');
+    }
   }
 
   Future<bool> configExists() async {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Service that handles communication with the native Android embedding layer.
@@ -17,10 +18,10 @@ class EmbeddingPlatformService {
         'tokenizerPath': tokenizerPath,
         'useGpu': useGpu,
       });
-      print("[Native] Embedding model initialized from $path (GPU: $useGpu)");
+      debugPrint("[Native] Embedding model initialized from $path (GPU: $useGpu)");
       return result;
     } on PlatformException catch (e) {
-      print("[Native Error] Failed to initialize embedding model: '${e.message}'.");
+      debugPrint("[Native Error] Failed to initialize embedding model: '${e.message}'.");
       return false;
     }
   }
@@ -34,7 +35,7 @@ class EmbeddingPlatformService {
       final dynamic result = await _channel.invokeMethod('getEmbeddings', {'input': input});
       return result;
     } on PlatformException catch (e) {
-      print("[Native Error] Failed to generate embeddings: '${e.message}'.");
+      debugPrint("[Native Error] Failed to generate embeddings: '${e.message}'.");
       rethrow;
     }
   }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 
@@ -34,7 +35,7 @@ class ModelPlatformService {
       final String? path = await _commandChannel.invokeMethod('pickModel');
       return path;
     } on PlatformException catch (e) {
-      print("[Native Error] Failed to pick model: '${e.message}'.");
+      debugPrint("[Native Error] Failed to pick model: '${e.message}'.");
       return null;
     }
   }
@@ -50,7 +51,7 @@ class ModelPlatformService {
       });
       return result;
     } on PlatformException catch (e) {
-      print("[Native Error] Failed to initialize model: '${e.message}'.");
+      debugPrint("[Native Error] Failed to initialize model: '${e.message}'.");
       return false;
     }
   }
@@ -60,7 +61,7 @@ class ModelPlatformService {
     try {
       await _commandChannel.invokeMethod('reset');
     } on PlatformException catch (e) {
-      print("[Native Error] Failed to reset conversation: '${e.message}'.");
+      debugPrint("[Native Error] Failed to reset conversation: '${e.message}'.");
     }
   }
 
@@ -76,7 +77,7 @@ class ModelPlatformService {
         'systemInstruction': systemInstruction,
       });
     } on PlatformException catch (e) {
-      print("[Native Error] Failed to generate response: '${e.message}'.");
+      debugPrint("[Native Error] Failed to generate response: '${e.message}'.");
     }
   }
 }
