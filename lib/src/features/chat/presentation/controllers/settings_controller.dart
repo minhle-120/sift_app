@@ -12,6 +12,7 @@ enum BackendType { external, internal }
 
 class SettingsState {
   final String llamaServerUrl;
+  final String externalLlamaServerUrl;
   final String chatModel;
   final String embeddingModel;
   final String rerankModel;
@@ -61,6 +62,7 @@ class SettingsState {
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
+    this.externalLlamaServerUrl = 'http://localhost:8080',
     this.chatModel = '',
     this.embeddingModel = '',
     this.rerankModel = '',
@@ -104,6 +106,7 @@ class SettingsState {
 
   SettingsState copyWith({
     String? llamaServerUrl,
+    String? externalLlamaServerUrl,
     String? chatModel,
     String? embeddingModel,
     String? rerankModel,
@@ -146,6 +149,7 @@ class SettingsState {
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
+      externalLlamaServerUrl: externalLlamaServerUrl ?? this.externalLlamaServerUrl,
       chatModel: chatModel ?? this.chatModel,
       embeddingModel: embeddingModel ?? this.embeddingModel,
       rerankModel: rerankModel ?? this.rerankModel,
@@ -202,9 +206,11 @@ class SettingsController extends StateNotifier<SettingsState> {
   Future<void> _loadSettings() async {
     final prefs = await PortableSettings.getInstance();
     final url = prefs.getString('llamaServerUrl') ?? 'http://localhost:8080';
+    final externalUrl = prefs.getString('externalLlamaServerUrl') ?? url;
     
     state = state.copyWith(
       llamaServerUrl: url,
+      externalLlamaServerUrl: externalUrl,
       chatModel: prefs.getString('chatModel') ?? '',
       embeddingModel: prefs.getString('embeddingModel') ?? '',
       rerankModel: prefs.getString('rerankModel') ?? '',
@@ -546,7 +552,13 @@ class SettingsController extends StateNotifier<SettingsState> {
   Future<void> updateLlamaServerUrl(String url) async {
     final prefs = await PortableSettings.getInstance();
     await prefs.setString('llamaServerUrl', url);
-    state = state.copyWith(llamaServerUrl: url, error: null);
+    
+    if (state.backendType == BackendType.external) {
+      await prefs.setString('externalLlamaServerUrl', url);
+      state = state.copyWith(llamaServerUrl: url, externalLlamaServerUrl: url, error: null);
+    } else {
+      state = state.copyWith(llamaServerUrl: url, error: null);
+    }
   }
 
   Future<void> updateChatModel(String model) async {
@@ -626,6 +638,8 @@ class SettingsController extends StateNotifier<SettingsState> {
     if (type == BackendType.internal) {
       await updateLlamaServerUrl('http://localhost:8080');
     } else {
+      // Restore user's preferred external URL
+      await updateLlamaServerUrl(state.externalLlamaServerUrl);
       // External mode: try to reach the server right away
       fetchModels();
     }

@@ -82,14 +82,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               controller: _urlController,
               onChanged: (val) => ref.read(settingsProvider.notifier).updateLlamaServerUrl(val),
               onSubmitted: (_) => ref.read(settingsProvider.notifier).fetchModels(),
-              decoration: const InputDecoration(
-              labelText: 'Llama.cpp Server URL',
-              border: OutlineInputBorder(),
-              helperText: 'e.g. http://localhost:8080  (press Enter to connect)',
-              prefixIcon: Icon(Icons.link),
+              decoration: InputDecoration(
+                labelText: 'Llama.cpp Server URL',
+                border: const OutlineInputBorder(),
+                helperText: 'e.g. http://localhost:8080',
+                prefixIcon: const Icon(Icons.link),
+                suffixIcon: settings.isLoadingModels 
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: () => ref.read(settingsProvider.notifier).fetchModels(),
+                      tooltip: 'Connect',
+                    ),
+              ),
             ),
-          ),
-        ] else ...[
+          ] else ...[
           // Local AI Executive Navigation
           Card(
             elevation: 0,
