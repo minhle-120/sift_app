@@ -125,6 +125,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
       );
     } else {
+      // Mobile Layout
+      if (!workbench.isCollapsed) {
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop) return;
+            ref.read(workbenchProvider.notifier).toggleCollapsed();
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('Workbench'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => ref.read(workbenchProvider.notifier).toggleCollapsed(),
+              ),
+            ),
+            body: const WorkbenchPanel(),
+          ),
+        );
+      }
+
       return Scaffold(
         drawer: const ConversationDrawer(),
         body: chatView,
