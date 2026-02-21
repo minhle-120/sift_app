@@ -42,3 +42,11 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.9.0-alpha04")
+    implementation("com.google.ai.edge.localagents:localagents-rag:0.3.0")
+    implementation("com.google.mediapipe:tasks-text:0.10.14")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.8.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+}
