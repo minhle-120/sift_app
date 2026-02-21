@@ -131,21 +131,53 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
               ),
 
             // Input Pill
-            Container(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: _focusNode.hasFocus 
-                      ? theme.colorScheme.primary.withAlpha(127)
-                      : theme.colorScheme.outlineVariant,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 3),
+            CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.enter): () {
+                  if (!chatState.isLoading && _hasText && collectionState.hasDocuments) {
+                    _sendMessage();
+                  }
+                },
+                const SingleActivator(LogicalKeyboardKey.enter, shift: true): () {
+                  // Standard behavior for Shift+Enter is newline, 
+                  // but we need to ensure the event isn't swallowed by the parent shortcut
+                  final text = _controller.text;
+                  final selection = _controller.selection;
+                  final newText = text.replaceRange(selection.start, selection.end, '\n');
+                  _controller.value = TextEditingValue(
+                    text: newText,
+                    selection: TextSelection.collapsed(offset: selection.start + 1),
+                  );
+                },
+              },
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                enabled: !chatState.isLoading && collectionState.hasDocuments,
+                maxLines: 5,
+                minLines: 1,
+                textInputAction: TextInputAction.newline,
+                decoration: InputDecoration(
+                  hintText: chatState.isLoading 
+                      ? 'Thinking...' 
+                      : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...'),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHigh,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(28),
+                    borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(28),
+                    borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(28),
+                    borderSide: BorderSide(color: theme.colorScheme.primary.withAlpha(127)),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.only(left: 4),
                     child: IconButton(
                       icon: const Icon(Icons.add_circle_outline),
                       tooltip: 'Upload Documents',
@@ -156,37 +188,8 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                       },
                     ),
                   ),
-                  Expanded(
-                    child: CallbackShortcuts(
-                      bindings: {
-                        const SingleActivator(LogicalKeyboardKey.enter): () {
-                          if (!chatState.isLoading && _hasText && collectionState.hasDocuments) {
-                            _sendMessage();
-                          }
-                        },
-                      },
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        enabled: !chatState.isLoading && collectionState.hasDocuments,
-                        maxLines: 5,
-                        minLines: 1,
-                        textInputAction: TextInputAction.newline,
-                        decoration: InputDecoration(
-                          hintText: chatState.isLoading 
-                              ? 'Thinking...' 
-                              : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...'),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                        ),
-                        onSubmitted: (_) {
-                          if (collectionState.hasDocuments) _sendMessage();
-                        },
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6, bottom: 6),
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.only(right: 4),
                     child: chatState.isLoading 
                       ? IconButton(
                           icon: Icon(Icons.stop_circle, color: theme.colorScheme.error),
@@ -195,13 +198,21 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                       : IconButton(
                           icon: const Icon(Icons.arrow_upward_rounded),
                           style: IconButton.styleFrom(
-                            backgroundColor: (_hasText && collectionState.hasDocuments) ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHigh,
-                            foregroundColor: (_hasText && collectionState.hasDocuments) ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant.withAlpha(100),
+                            backgroundColor: (_hasText && collectionState.hasDocuments) 
+                                ? theme.colorScheme.primary 
+                                : Colors.transparent,
+                            foregroundColor: (_hasText && collectionState.hasDocuments) 
+                                ? theme.colorScheme.onPrimary 
+                                : theme.colorScheme.onSurfaceVariant.withAlpha(100),
                           ),
                           onPressed: (_hasText && collectionState.hasDocuments) ? _sendMessage : null,
                         ),
                   ),
-                ],
+                ),
+                onSubmitted: (_) {
+                  // onSubmitted is still useful for mobile "Done" button
+                  if (collectionState.hasDocuments) _sendMessage();
+                },
               ),
             ),
           ],
