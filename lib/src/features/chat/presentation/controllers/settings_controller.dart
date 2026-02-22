@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 
@@ -72,6 +73,11 @@ class SettingsState {
   final double mobileImportProgress;
   final bool isInitializingMobileEngine;
   final String? mobileEngineError;
+  final bool autoInitMobileEngine;
+  final bool isDownloadingMobileBundle;
+  final double mobileBundleProgress;
+  final String mobileBundleStatus;
+  final bool isMobileBundleInstalled;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -124,7 +130,23 @@ class SettingsState {
     this.mobileImportProgress = 0.0,
     this.isInitializingMobileEngine = false,
     this.mobileEngineError,
+    this.autoInitMobileEngine = true,
+    this.isDownloadingMobileBundle = false,
+    this.mobileBundleProgress = 0.0,
+    this.mobileBundleStatus = '',
+    this.isMobileBundleInstalled = false,
   });
+
+  bool get isMobileInternal => (Platform.isAndroid || Platform.isIOS) && backendType == BackendType.internal;
+
+  String get chatModelDisplay {
+    if (isMobileInternal) {
+      if (mobileGenModelPath.isEmpty) return 'No Model Selected';
+      final fileName = p.basename(mobileGenModelPath);
+      return fileName.replaceAll('.task', '').replaceAll('.litertlm', '');
+    }
+    return chatModel.isEmpty ? 'Select Model' : chatModel;
+  }
 
   SettingsState copyWith({
     String? llamaServerUrl,
@@ -177,6 +199,11 @@ class SettingsState {
     double? mobileImportProgress,
     bool? isInitializingMobileEngine,
     String? mobileEngineError,
+    bool? autoInitMobileEngine,
+    bool? isDownloadingMobileBundle,
+    double? mobileBundleProgress,
+    String? mobileBundleStatus,
+    bool? isMobileBundleInstalled,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -229,6 +256,11 @@ class SettingsState {
       mobileImportProgress: mobileImportProgress ?? this.mobileImportProgress,
       isInitializingMobileEngine: isInitializingMobileEngine ?? this.isInitializingMobileEngine,
       mobileEngineError: mobileEngineError ?? this.mobileEngineError,
+      autoInitMobileEngine: autoInitMobileEngine ?? this.autoInitMobileEngine,
+      isDownloadingMobileBundle: isDownloadingMobileBundle ?? this.isDownloadingMobileBundle,
+      mobileBundleProgress: mobileBundleProgress ?? this.mobileBundleProgress,
+      mobileBundleStatus: mobileBundleStatus ?? this.mobileBundleStatus,
+      isMobileBundleInstalled: isMobileBundleInstalled ?? this.isMobileBundleInstalled,
     );
   }
 }
@@ -248,6 +280,8 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   void _setupProgressHandlers() {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    
     _modelPlatform.progressStream.listen((progress) {
       state = state.copyWith(mobileImportProgress: progress);
     });
@@ -282,12 +316,28 @@ class SettingsController extends StateNotifier<SettingsState> {
       mobileEmbedModelPath: prefs.getString('mobileEmbedModelPath') ?? '',
       mobileTokenizerPath: prefs.getString('mobileTokenizerPath') ?? '',
       mobileUseGpu: prefs.getBool('mobileUseGpu') ?? false,
+      autoInitMobileEngine: prefs.getBool('autoInitMobileEngine') ?? true,
     );
+    
+    // Auto-init mobile engine if preferred and running on internal backend
+    if ((Platform.isAndroid || Platform.isIOS) && 
+        state.backendType == BackendType.internal && 
+        state.autoInitMobileEngine) {
+      if (!state.isMobileEngineInitialized) {
+        initializeMobileEngine();
+      }
+      if (!state.isMobileEmbedderInitialized) {
+        initializeMobileEmbedder();
+      }
+    }
     
     // Verify engine + config integrity on disk (Desktop only)
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       await verifyEngineIntegrity();
       await verifyConfig();
+    } else if (Platform.isAndroid || Platform.isIOS) {
+      // Auto-detect mobile bundle on startup
+      await verifyMobileBundle();
     }
 
     // Only auto-fetch models if server is expected to be reachable
@@ -346,6 +396,48 @@ class SettingsController extends StateNotifier<SettingsState> {
   Future<void> verifyConfig() async {
     final exists = await _downloader.configExists();
     state = state.copyWith(isConfigReady: exists);
+  }
+
+  Future<void> verifyMobileBundle() async {
+    final modelsDir = await _downloader.getModelsDirectory();
+    final genPath = p.join(modelsDir, 'gemma3-1b-it-int4.litertlm');
+    final embedPath = p.join(modelsDir, 'embeddinggemma-300M_seq512_mixed-precision.tflite');
+    final tokenizerPath = p.join(modelsDir, 'sentencepiece.model');
+
+    final bool genExists = await File(genPath).exists();
+    final bool embedExists = await File(embedPath).exists();
+    final bool tokenizerExists = await File(tokenizerPath).exists();
+
+    final bool allInstalled = genExists && embedExists && tokenizerExists;
+
+    state = state.copyWith(isMobileBundleInstalled: allInstalled);
+
+    if (allInstalled) {
+      // Auto-configure paths if they are empty
+      final prefs = await PortableSettings.getInstance();
+      bool changed = false;
+
+      if (state.mobileGenModelPath.isEmpty) {
+        await prefs.setString('mobileGenModelPath', genPath);
+        state = state.copyWith(mobileGenModelPath: genPath);
+        changed = true;
+      }
+      if (state.mobileEmbedModelPath.isEmpty) {
+        await prefs.setString('mobileEmbedModelPath', embedPath);
+        state = state.copyWith(mobileEmbedModelPath: embedPath);
+        changed = true;
+      }
+      if (state.mobileTokenizerPath.isEmpty) {
+        await prefs.setString('mobileTokenizerPath', tokenizerPath);
+        state = state.copyWith(mobileTokenizerPath: tokenizerPath);
+        changed = true;
+      }
+
+      if (changed && state.autoInitMobileEngine && state.backendType == BackendType.internal) {
+        initializeMobileEngine();
+        initializeMobileEmbedder();
+      }
+    }
   }
 
   // ─── Server Lifecycle ──────────────────────────────────────────
@@ -766,6 +858,82 @@ class SettingsController extends StateNotifier<SettingsState> {
     }
   }
 
+  Future<void> updateAutoInitMobileEngine(bool autoInit) async {
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setBool('autoInitMobileEngine', autoInit);
+    state = state.copyWith(autoInitMobileEngine: autoInit);
+    
+    if (autoInit && state.backendType == BackendType.internal && (Platform.isAndroid || Platform.isIOS)) {
+      if (!state.isMobileEngineInitialized) initializeMobileEngine();
+      if (!state.isMobileEmbedderInitialized) initializeMobileEmbedder();
+    }
+  }
+
+  Future<void> downloadMobileModelBundle() async {
+    if (state.isDownloadingMobileBundle) return;
+    
+    state = state.copyWith(
+      isDownloadingMobileBundle: true,
+      mobileBundleProgress: 0,
+      mobileBundleStatus: 'Initializing download...',
+    );
+
+    try {
+      // Keep device awake during download
+      WakelockPlus.enable();
+      
+      await _downloader.downloadMobileModelBundle(
+        onProgress: (progress) {
+          state = state.copyWith(mobileBundleProgress: progress);
+        },
+        onStatus: (status) {
+          state = state.copyWith(mobileBundleStatus: status);
+        },
+      );
+      
+      // Auto-configure paths
+      final modelsDir = await _downloader.getModelsDirectory();
+      final prefs = await PortableSettings.getInstance();
+      
+      final genPath = p.join(modelsDir, 'gemma3-1b-it-int4.litertlm');
+      final embedPath = p.join(modelsDir, 'embeddinggemma-300M_seq512_mixed-precision.tflite');
+      final tokenizerPath = p.join(modelsDir, 'sentencepiece.model');
+      
+      await prefs.setString('mobileGenModelPath', genPath);
+      await prefs.setString('mobileEmbedModelPath', embedPath);
+      await prefs.setString('mobileTokenizerPath', tokenizerPath);
+      
+      state = state.copyWith(
+        mobileGenModelPath: genPath,
+        mobileEmbedModelPath: embedPath,
+        mobileTokenizerPath: tokenizerPath,
+        isDownloadingMobileBundle: false,
+        mobileBundleStatus: 'Download complete! Auto-configuring...',
+      );
+      
+      // Refresh bundle status
+      await verifyMobileBundle();
+      
+      // Auto-initialize immediately after download complete
+      initializeMobileEngine();
+      initializeMobileEmbedder();
+      
+      // Clear status after delay so the progress bar disappears
+      Future.delayed(const Duration(seconds: 3), () {
+        state = state.copyWith(mobileBundleStatus: '');
+      });
+      
+    } catch (e) {
+      state = state.copyWith(
+        isDownloadingMobileBundle: false,
+        mobileBundleStatus: 'Download failed: $e',
+      );
+    } finally {
+      // Re-enable sleep
+      WakelockPlus.disable();
+    }
+  }
+
   Future<void> pickMobileEmbedModel() async {
     final path = await _modelPlatform.pickModel();
     if (path != null) {
@@ -788,6 +956,31 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.remove('mobileTokenizerPath');
     state = state.copyWith(mobileTokenizerPath: '', isMobileEmbedderInitialized: false);
+  }
+
+  Future<void> resetMobileSettings() async {
+    final modelsDir = await _downloader.getModelsDirectory();
+    final genPath = p.join(modelsDir, 'gemma3-1b-it-int4.litertlm');
+    final embedPath = p.join(modelsDir, 'embeddinggemma-300M_seq512_mixed-precision.tflite');
+    final tokenizerPath = p.join(modelsDir, 'sentencepiece.model');
+
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setString('mobileGenModelPath', genPath);
+    await prefs.setString('mobileEmbedModelPath', embedPath);
+    await prefs.setString('mobileTokenizerPath', tokenizerPath);
+
+    state = state.copyWith(
+      mobileGenModelPath: genPath,
+      mobileEmbedModelPath: embedPath,
+      mobileTokenizerPath: tokenizerPath,
+      isMobileEngineInitialized: false,
+      isMobileEmbedderInitialized: false,
+    );
+    
+    if (state.autoInitMobileEngine && state.backendType == BackendType.internal && (Platform.isAndroid || Platform.isIOS)) {
+      initializeMobileEngine();
+      initializeMobileEmbedder();
+    }
   }
 
   Future<void> initializeMobileEngine() async {

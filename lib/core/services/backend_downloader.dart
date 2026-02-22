@@ -665,4 +665,67 @@ n-gpu-layers = 99
     }
     onStatus('Model bundle downloaded successfully!');
   }
+
+  Future<void> downloadMobileModelBundle({
+    required Function(double) onProgress,
+    required Function(String) onStatus,
+  }) async {
+    final modelsDir = await getModelsDirectory();
+    final models = [
+      {
+        'name': 'gemma3-1b-it-int4.litertlm',
+        'url': 'https://huggingface.co/TheGhostPixel/sift-models/resolve/main/gemma3-1b-it-int4.litertlm?download=true'
+      },
+      {
+        'name': 'embeddinggemma-300M_seq512_mixed-precision.tflite',
+        'url': 'https://huggingface.co/TheGhostPixel/sift-models/resolve/main/embeddinggemma-300M_seq512_mixed-precision.tflite?download=true'
+      },
+      {
+        'name': 'sentencepiece.model',
+        'url': 'https://huggingface.co/TheGhostPixel/sift-models/resolve/main/sentencepiece.model?download=true'
+      },
+    ];
+
+    onStatus('Calculating bundle size...');
+    int totalBundleSize = 0;
+    final List<int> fileSizes = [];
+
+    for (final model in models) {
+      try {
+        final response = await _dio.head(model['url']!);
+        final size = int.tryParse(response.headers.value('content-length') ?? '0') ?? 0;
+        fileSizes.add(size);
+        totalBundleSize += size;
+      } catch (e) {
+        // Fallback size, it's roughly 2.5GB for gemma3-1b-it-int4, others are smaller
+        fileSizes.add(0); 
+      }
+    }
+
+    int bytesDownloadedBeforeCurrentFile = 0;
+
+    for (int i = 0; i < models.length; i++) {
+      final model = models[i];
+      final modelPath = p.join(modelsDir, model['name']!);
+      final currentFileSize = fileSizes[i];
+      
+      onStatus('Downloading ${model['name']} (${i + 1}/${models.length})...');
+      
+      await _dio.download(
+        model['url']!,
+        modelPath,
+        onReceiveProgress: (received, total) {
+          if (totalBundleSize > 0) {
+            double aggregateProgress = (bytesDownloadedBeforeCurrentFile + received) / totalBundleSize;
+            onProgress(aggregateProgress * 100); // UI expects percentage
+          } else if (total > 0 && currentFileSize > 0) {
+             // Fallback to per-file progress if total size is unknown
+             onProgress((received / currentFileSize) * 100);
+          }
+        },
+      );
+      bytesDownloadedBeforeCurrentFile += currentFileSize;
+    }
+    onStatus('Mobile model bundle downloaded successfully!');
+  }
 }

@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../chat/presentation/controllers/settings_controller.dart';
-import '../../../chat/presentation/views/mobile_engine_settings_screen.dart';
 import 'external_config_screen.dart';
 import 'internal_config_screen.dart';
+import 'mobile_setup_screen.dart';
 
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
@@ -195,7 +195,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               if (mounted) {
                 if (Platform.isAndroid || Platform.isIOS) {
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const MobileEngineSettingsScreen()),
+                    MaterialPageRoute(builder: (_) => const MobileSetupScreen()),
                   );
                 } else {
                   Navigator.of(context).push(

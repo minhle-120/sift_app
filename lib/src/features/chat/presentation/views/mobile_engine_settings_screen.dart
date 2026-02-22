@@ -15,6 +15,14 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Mobile AI Engine'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_backup_restore_rounded),
+            tooltip: 'Reset to Default',
+            onPressed: () => _showResetConfirmation(context, ref),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
@@ -23,7 +31,38 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
             _buildImportProgressBar(theme, settings.mobileImportProgress),
             const SizedBox(height: 16),
           ],
+          if (settings.isDownloadingMobileBundle || settings.mobileBundleStatus.isNotEmpty) ...[
+            _buildBundleDownloadBar(theme, settings),
+            const SizedBox(height: 16),
+          ],
           _buildStatusOverview(context, theme, settings),
+          const SizedBox(height: 24),
+          _buildSectionHeader(theme, 'Model Bundle'),
+          _buildModelBundleCard(context, theme, settings, ref),
+          const SizedBox(height: 24),
+          _buildSectionHeader(theme, 'Hardware Settings'),
+          SwitchListTile(
+            title: const Text('Use GPU Acceleration'),
+            subtitle: const Text('Enable mobile GPU for faster inference'),
+            value: settings.mobileUseGpu,
+            onChanged: settings.isInitializingMobileEngine 
+              ? null 
+              : (val) => ref.read(settingsProvider.notifier).updateMobileUseGpu(val),
+            secondary: Icon(
+              Icons.bolt_rounded, 
+              color: settings.isInitializingMobileEngine ? theme.disabledColor : Colors.orange,
+            ),
+          ),
+          SwitchListTile(
+            title: const Text('Auto-Initialize on Startup'),
+            subtitle: const Text('Spin up the Mobile RAG engine automatically when opening the app.'),
+            value: settings.autoInitMobileEngine,
+            onChanged: (val) => ref.read(settingsProvider.notifier).updateAutoInitMobileEngine(val),
+            secondary: Icon(
+              Icons.rocket_launch, 
+              color: theme.colorScheme.primary,
+            ),
+          ),
           const SizedBox(height: 24),
           _buildSectionHeader(theme, 'Generation Model (LiteRT)'),
           _buildModelPicker(
@@ -82,20 +121,6 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          _buildSectionHeader(theme, 'Hardware Settings'),
-          SwitchListTile(
-            title: const Text('Use GPU Acceleration'),
-            subtitle: const Text('Enable mobile GPU for faster inference'),
-            value: settings.mobileUseGpu,
-            onChanged: settings.isInitializingMobileEngine 
-              ? null 
-              : (val) => ref.read(settingsProvider.notifier).updateMobileUseGpu(val),
-            secondary: Icon(
-              Icons.bolt_rounded, 
-              color: settings.isInitializingMobileEngine ? theme.disabledColor : Colors.orange,
             ),
           ),
           if (settings.mobileEngineError != null) ...[
@@ -164,6 +189,59 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
                 backgroundColor: theme.colorScheme.surfaceContainerHighest,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBundleDownloadBar(ThemeData theme, SettingsState settings) {
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.3),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.colorScheme.tertiary.withValues(alpha: 0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Sift Mobile Bundle (${(settings.mobileBundleProgress).toStringAsFixed(1)}%)',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.tertiary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (settings.isDownloadingMobileBundle)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: settings.isDownloadingMobileBundle ? (settings.mobileBundleProgress / 100).clamp(0.0, 1.0) : 1.0,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                color: theme.colorScheme.tertiary,
+              ),
+            ),
+            if (settings.mobileBundleStatus.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                settings.mobileBundleStatus,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
           ],
         ),
       ),
@@ -320,6 +398,87 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelBundleCard(BuildContext context, ThemeData theme, SettingsState settings, WidgetRef ref) {
+    final bool isDownloading = settings.isDownloadingMobileBundle;
+    
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+             Row(
+              children: [
+                Icon(Icons.download, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Sift Mobile Bundle',
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              settings.isMobileBundleInstalled 
+                ? 'The Mobile AI bundle is installed and ready to use.'
+                : 'For the easiest setup, download the pre-configured bundle containing the best lightweight Generation Model, Embedding Model, and Tokenizer.',
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: isDownloading || settings.isMobileBundleInstalled ? null : () => ref.read(settingsProvider.notifier).downloadMobileModelBundle(),
+              icon: isDownloading 
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : Icon(settings.isMobileBundleInstalled ? Icons.check_circle : Icons.cloud_download),
+              label: Text(isDownloading 
+                ? 'Downloading...' 
+                : (settings.isMobileBundleInstalled ? 'Bundle Installed' : 'Download Bundle')),
+              style: settings.isMobileBundleInstalled 
+                ? FilledButton.styleFrom(
+                    backgroundColor: Colors.green.shade600,
+                    foregroundColor: Colors.white,
+                  )
+                : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showResetConfirmation(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Settings?'),
+        content: const Text('This will revert your Mobile AI model paths back to the default Sift bundle locations.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              ref.read(settingsProvider.notifier).resetMobileSettings();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Settings reset to default bundle')),
+              );
+            },
+            child: const Text('Reset'),
+          ),
         ],
       ),
     );

@@ -78,7 +78,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                   _buildTrayAction(
                     context,
                     icon: Icons.smart_toy_outlined,
-                    label: settings.chatModel.isEmpty ? 'Select Model' : settings.chatModel,
+                    label: settings.chatModelDisplay,
                     onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const SettingsScreen()),
@@ -87,14 +87,27 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                 ),
                   const SizedBox(width: 8),
                   
-                  // Visualizer Toggle
-                  _buildTrayAction(
-                    context,
-                    icon: _getVisualizerIcon(settings.visualizerMode),
-                    label: 'Visualizer: ${_getVisualizerLabel(settings.visualizerMode)}',
-                    isHighlight: settings.visualizerMode != VisualizerMode.off,
-                    onPressed: () => _cycleVisualizerMode(settings, settingsNotifier),
-                  ),
+                  // Visualizer Toggle (Hidden in Lite Mode)
+                  if (!settings.isMobileInternal) ...[
+                    _buildTrayAction(
+                      context,
+                      icon: _getVisualizerIcon(settings.visualizerMode),
+                      label: 'Visualizer: ${_getVisualizerLabel(settings.visualizerMode)}',
+                      isHighlight: settings.visualizerMode != VisualizerMode.off,
+                      onPressed: () => _cycleVisualizerMode(settings, settingsNotifier),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+
+                  // Lite Mode Indicator
+                  if (settings.isMobileInternal)
+                    _buildTrayAction(
+                      context,
+                      icon: Icons.bolt_rounded,
+                      label: 'Lite Mode Enabled',
+                      isHighlight: true,
+                      onPressed: () {}, // Decorative for now
+                    ),
                   
                   // Future toggles go here
                   const SizedBox(width: 12),
@@ -259,8 +272,6 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                 fontWeight: isHighlight ? FontWeight.bold : null,
               ),
             ),
-            const SizedBox(width: 4),
-            Icon(Icons.expand_more, size: 14, color: color.withAlpha(127)),
           ],
         ),
       ),
