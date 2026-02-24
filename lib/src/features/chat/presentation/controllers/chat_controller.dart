@@ -304,6 +304,22 @@ class ChatController extends StateNotifier<ChatState> {
       );
     }
 
+    if (researchResult.codeSnippet != null) {
+      // Auto-open the code tab
+      _ref.read(workbenchProvider.notifier).addTab(
+        WorkbenchTab(
+          id: 'code_${placeholderMessage.uuid}',
+          title: 'Generated Code',
+          icon: Icons.code_rounded,
+          type: WorkbenchTabType.code,
+          metadata: {
+            'code': researchResult.codeSnippet,
+            'language': 'dart', // Default, detected in viewer if needed
+          },
+        ),
+      );
+    }
+
       String finalContent = '';
 
       if (researchResult.package != null) {
@@ -334,6 +350,7 @@ class ChatController extends StateNotifier<ChatState> {
           package: researchResult.package!,
           registry: researchOrchestrator.registry,
           visualSchema: researchResult.visualSchema,
+          codeSnippet: researchResult.codeSnippet,
         );
 
         await for (final chunk in stream) {
@@ -366,6 +383,7 @@ class ChatController extends StateNotifier<ChatState> {
         final metadata = <String, dynamic>{
           'research_steps': completeSteps.map((s) => s.toJson()).toList(),
           if (researchResult.visualSchema != null) 'visual_schema': researchResult.visualSchema,
+          if (researchResult.codeSnippet != null) 'code_snippet': researchResult.codeSnippet,
         };
 
         await _db.updateMessageMetadata(

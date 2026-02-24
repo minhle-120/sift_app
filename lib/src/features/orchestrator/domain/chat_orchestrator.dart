@@ -20,6 +20,7 @@ class ChatOrchestrator {
     required ResearchPackage package,
     required ChunkRegistry registry,
     String? visualSchema,
+    String? codeSnippet,
   }) async {
     // 1. Resolve and Sort Chunks
     final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
@@ -29,6 +30,7 @@ class ChatOrchestrator {
       resolvedChunks,
       originalQuery,
       visualSchema: visualSchema,
+      codeSnippet: codeSnippet,
     );
 
     final messages = [
@@ -47,6 +49,7 @@ class ChatOrchestrator {
     required ResearchPackage package,
     required ChunkRegistry registry,
     String? visualSchema,
+    String? codeSnippet,
   }) async* {
     // 1. Resolve and Sort Chunks
     final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
@@ -56,6 +59,7 @@ class ChatOrchestrator {
       resolvedChunks,
       originalQuery,
       visualSchema: visualSchema,
+      codeSnippet: codeSnippet,
     );
 
     final messages = [
@@ -109,8 +113,10 @@ class ChatOrchestrator {
 
 ### Instructions:
 - Answer the user's latest query accurately using the provided context.
-- **Explain Visuals**: If a [VISUAL_CHART_CONTEXT] is provided, it means a interactive chart has ALREADY been rendered in the UI workbench. You MUST provide a textual explanation of what is shown in that chart and how it relates to the research findings. 
-- **NO Redundancy**: Do NOT attempt to redraw the chart as ASCII, markdown lists, or tables if they would just repeat the visual chart. Focus on providing high-level synthesis and answering questions.
+- **Explain Visuals & Code**: 
+  - If a [RENDERED_VISUAL_CHART_CONTEXT] is provided, provide a textual explanation of the chart.
+  - If a [RENDERED_CODE_CONTEXT] is provided, it means a technical implementation has ALREADY been generated and displayed in the workspace. You MUST provide a clear, technical explanation of how the code works, the design choices made, and how to use it.
+- **NO Redundancy**: Do NOT attempt to redraw the chart or rewrite the entire code block in your response. Focus on synthesis and explanation.
 - Be honest: If the context doesn't contain the answer, state that "The provided documents do not contain information about [topic]."
 - Maintain a professional, objective, and helpful tone.
 ''';
@@ -127,12 +133,18 @@ class ChatOrchestrator {
 ''';
   }
 
-  String buildCombinedMessage(List<String> chunks, String query, {String? visualSchema, List<ChatMessage>? history}) {
+  String buildCombinedMessage(
+    List<String> chunks, 
+    String query, {
+    String? visualSchema, 
+    String? codeSnippet,
+    List<ChatMessage>? history,
+  }) {
     final historySection = (history != null && history.isNotEmpty)
         ? '### Background History (Last Turn):\n${history.map((m) => '${m.role == ChatRole.user ? 'User' : 'Assistant'}: ${m.content}').join('\n')}\n\n'
         : '';
 
-    return '''$historySection${visualSchema != null ? '[RENDERED_VISUAL_CHART_CONTEXT]\n$visualSchema\n(Note: The chart above has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}### Knowledge Chunks:
+    return '''$historySection${visualSchema != null ? '[RENDERED_VISUAL_CHART_CONTEXT]\n$visualSchema\n(Note: The chart above has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '[RENDERED_CODE_CONTEXT]\n$codeSnippet\n(Note: The code implementation above has already been displayed to the user in the workspace. Do NOT rewrite the whole block, just explain it.)\n\n' : ''}### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
 ### User Query:

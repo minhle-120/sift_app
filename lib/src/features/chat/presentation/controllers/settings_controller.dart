@@ -27,6 +27,7 @@ class SettingsState {
   final int chunkOverlap;
   final bool isSyncEnabled;
   final VisualizerMode visualizerMode;
+  final CoderMode coderMode;
   final List<String> availableModels;
   final bool isLoadingModels;
   final String? error;
@@ -90,6 +91,7 @@ class SettingsState {
     this.chunkOverlap = 50,
     this.isSyncEnabled = true,
     this.visualizerMode = VisualizerMode.auto,
+    this.coderMode = CoderMode.auto,
     this.availableModels = const [],
     this.isLoadingModels = false,
     this.error,
@@ -159,6 +161,7 @@ class SettingsState {
     int? chunkOverlap,
     bool? isSyncEnabled,
     VisualizerMode? visualizerMode,
+    CoderMode? coderMode,
     List<String>? availableModels,
     bool? isLoadingModels,
     String? error,
@@ -216,6 +219,7 @@ class SettingsState {
       chunkOverlap: chunkOverlap ?? this.chunkOverlap,
       isSyncEnabled: isSyncEnabled ?? this.isSyncEnabled,
       visualizerMode: visualizerMode ?? this.visualizerMode,
+      coderMode: coderMode ?? this.coderMode,
       availableModels: availableModels ?? this.availableModels,
       isLoadingModels: isLoadingModels ?? this.isLoadingModels,
       error: error ?? this.error,
@@ -302,6 +306,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       chunkOverlap: prefs.getInt('chunkOverlap') ?? 50,
       isSyncEnabled: prefs.getBool('isSyncEnabled') ?? true,
       visualizerMode: VisualizerMode.values[prefs.getInt('visualizerMode') ?? 0],
+      coderMode: CoderMode.values[prefs.getInt('coderMode') ?? 0],
       backendType: BackendType.values[prefs.getInt('backendType') ?? 0],
       gpuDeviceIndex: prefs.getInt('gpuDeviceIndex') ?? 0,
       modelsPath: prefs.getString('modelsPath') ?? await _downloader.getModelsDirectory(),
@@ -782,6 +787,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setInt('visualizerMode', mode.index);
     state = state.copyWith(visualizerMode: mode);
+  }
+
+  Future<void> updateCoderMode(CoderMode mode) async {
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setInt('coderMode', mode.index);
+    state = state.copyWith(coderMode: mode);
   }
 
   Future<void> updateBackendType(BackendType type) async {

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/services/portable_settings.dart';
 
-enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization }
+enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization, code }
 
 class WorkbenchTab {
   final String id;

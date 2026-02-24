@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/workbench_controller.dart';
 import '../../../knowledge/presentation/widgets/document_viewer.dart';
 import 'visualization_viewer.dart';
+import 'code_viewer.dart';
 import 'dart:convert';
 
 class WorkbenchPanel extends ConsumerWidget {
@@ -139,6 +140,18 @@ class WorkbenchPanel extends ConsumerWidget {
         } catch (e) {
           return Center(child: Text('Invalid visualization data: $e'));
         }
+      }
+    } else if (tab.type == WorkbenchTabType.code) {
+      final meta = tab.metadata as Map<String, dynamic>?;
+      final code = meta?['code'] as String?;
+      final language = meta?['language'] as String? ?? 'dart';
+      
+      if (code != null) {
+        return CodeViewer(
+          key: ValueKey(tab.id),
+          code: code,
+          language: language,
+        );
       }
     }
     

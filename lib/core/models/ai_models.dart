@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum VisualizerMode { auto, off, on }
+enum CoderMode { auto, off, on }
 
 class ResearchPackage {
   final List<int> indices;
@@ -17,6 +18,8 @@ class ResearchResult {
   final ResearchPackage? package;
   final VisualPackage? visualPackage;
   final String? visualSchema;
+  final CodePackage? codePackage;
+  final String? codeSnippet;
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
@@ -26,6 +29,8 @@ class ResearchResult {
     this.package,
     this.visualPackage,
     this.visualSchema,
+    this.codePackage,
+    this.codeSnippet,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
@@ -42,12 +47,30 @@ class VisualPackage {
   String toString() => 'VisualPackage(indices: $indices, goal: $visualizationGoal)';
 }
 
+class CodePackage {
+  final List<int> indices;
+  final String codingGoal;
+
+  CodePackage({required this.indices, required this.codingGoal});
+
+  @override
+  String toString() => 'CodePackage(indices: $indices, goal: $codingGoal)';
+}
+
 class VisualResult {
   final VisualPackage package;
   final String schema;
   final List<ChatMessage> steps;
 
   VisualResult({required this.package, required this.schema, required this.steps});
+}
+
+class CodeResult {
+  final CodePackage package;
+  final String codeSnippet;
+  final List<ChatMessage> steps;
+
+  CodeResult({required this.package, required this.codeSnippet, required this.steps});
 }
 
 enum ChatRole {

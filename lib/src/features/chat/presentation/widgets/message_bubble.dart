@@ -6,7 +6,6 @@ import 'package:markdown/markdown.dart' as md;
 import 'dart:convert';
 import '../../domain/entities/message.dart';
 import '../controllers/workbench_controller.dart';
-import 'code_element_builder.dart';
 
 class MessageBubble extends ConsumerWidget {
   final Message message;
@@ -58,8 +57,6 @@ class MessageBubble extends ConsumerWidget {
                   ),
                   builders: {
                     'latex': LatexElementBuilder(),
-                    'pre': CodeElementBuilder(context),
-                    'code': CodeElementBuilder(context),
                     'citation': CitationBuilder(
                       context: context,
                       citations: message.citations,
@@ -83,19 +80,15 @@ class MessageBubble extends ConsumerWidget {
                   },
                   styleSheet: MarkdownStyleSheet(
                     p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
-                    code: theme.textTheme.bodyMedium?.copyWith(
-                      fontFamily: 'monospace',
-                      color: theme.colorScheme.onSurface,
-                      backgroundColor: Colors.transparent,
-                    ),
-                    codeblockDecoration: const BoxDecoration(
-                      color: Colors.transparent, // Handled by CodeElementBuilder
-                    ),
                   ),
                 ),
                 if (message.metadata?['visual_schema'] != null) ...[
                   const SizedBox(height: 12),
                   _buildVisualTrigger(context, ref, theme),
+                ],
+                if (message.metadata?['code_snippet'] != null) ...[
+                  const SizedBox(height: 12),
+                  _buildCodeTrigger(context, ref, theme),
                 ],
               ],
             ),
@@ -149,6 +142,53 @@ class MessageBubble extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildCodeTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
+    final code = message.metadata?['code_snippet'] as String?;
+    
+    return ElevatedButton.icon(
+      onPressed: () {
+        if (code == null) return;
+        
+        ref.read(workbenchProvider.notifier).addTab(
+          WorkbenchTab(
+            id: 'code_${message.id}',
+            title: 'Generated Code',
+            icon: Icons.code_rounded,
+            type: WorkbenchTabType.code,
+            metadata: {
+              'code': code,
+              'language': _detectLanguage(code),
+            },
+          ),
+        );
+      },
+      icon: const Icon(Icons.terminal_rounded, size: 18),
+      label: const Text('View Implementation'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: theme.colorScheme.primaryContainer,
+        foregroundColor: theme.colorScheme.onPrimaryContainer,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: theme.textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  String _detectLanguage(String code) {
+    // Simple detection based on common markers or first lines
+    final lowerCode = code.toLowerCase();
+    if (lowerCode.contains('import') && lowerCode.contains('package:')) return 'dart';
+    if (lowerCode.contains('def ') || lowerCode.contains('import os')) return 'python';
+    if (lowerCode.contains('function') || lowerCode.contains('const ')) return 'javascript';
+    if (lowerCode.contains('<html>')) return 'html';
+    if (lowerCode.contains('select ') && lowerCode.contains('from')) return 'sql';
+    return 'plaintext';
   }
 
   Widget _buildAvatar(ThemeData theme, bool isUser) {

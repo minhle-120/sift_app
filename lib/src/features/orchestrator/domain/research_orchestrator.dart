@@ -11,12 +11,15 @@ import 'package:sift_app/src/features/chat/domain/entities/message.dart' as doma
 import '../../../../core/tools/delegate_to_synthesizer_tool.dart';
 import '../../../../core/tools/no_info_found_tool.dart';
 import '../../../../core/tools/delegate_to_visualizer_tool.dart';
+import '../../../../core/tools/delegate_to_coder_tool.dart';
 import 'visual_orchestrator.dart';
+import 'code_orchestrator.dart';
 import '../../chat/presentation/controllers/settings_controller.dart';
 
 final researchOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
   final visualOrchestrator = ref.watch(visualOrchestratorProvider);
+  final codeOrchestrator = ref.watch(codeOrchestratorProvider);
   final database = AppDatabase.instance;
   final embeddingService = ref.watch(embeddingServiceProvider);
   final rerankService = ref.watch(rerankServiceProvider);
@@ -31,37 +34,45 @@ final researchOrchestratorProvider = Provider((ref) {
   final delegateTool = DelegateToSynthesizerTool();
   final noInfoTool = NoInfoFoundTool();
   final visualTool = DelegateToVisualizerTool();
+  final codeTool = DelegateToCoderTool();
   
   return ResearchOrchestrator(
     aiService: aiService,
     visualOrchestrator: visualOrchestrator,
+    codeOrchestrator: codeOrchestrator,
     ragTool: ragTool,
     delegateTool: delegateTool,
     noInfoTool: noInfoTool,
     visualTool: visualTool,
+    codeTool: codeTool,
   );
 });
 
 
 class ResearchOrchestrator {
   static const String visualMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `delegate_to_visualizer` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.';
+  static const String codeMandate = '**CRITICAL MANDATE**: The user has requested to write or modify code. You MUST call `delegate_to_coder` if the user wants code generation, script writing, or technical implementation. Do NOT write the code yourself; delegate it to the code specialist.';
 
   final IAiService aiService;
   final VisualOrchestrator visualOrchestrator;
+  final CodeOrchestrator codeOrchestrator;
   final RAGTool ragTool;
   final DelegateToSynthesizerTool delegateTool;
   final NoInfoFoundTool noInfoTool;
   final DelegateToVisualizerTool visualTool;
+  final DelegateToCoderTool codeTool;
 
   ChunkRegistry get registry => ragTool.registry;
 
   ResearchOrchestrator({
     required this.aiService,
     required this.visualOrchestrator,
+    required this.codeOrchestrator,
     required this.ragTool,
     required this.delegateTool,
     required this.noInfoTool,
     required this.visualTool,
+    required this.codeTool,
   });
 
   /// Starts a research session for a given query and context.
@@ -80,7 +91,6 @@ class ResearchOrchestrator {
     onStatusUpdate?.call('Starting research...');
 
     final settings = registry.ref.read(settingsProvider);
-    final mode = settings.visualizerMode;
 
     String systemPrompt = _buildSystemPrompt();
     
@@ -88,16 +98,18 @@ class ResearchOrchestrator {
       ragTool.definition,
       delegateTool.definition,
       noInfoTool.definition,
-      if (mode != VisualizerMode.off) visualTool.definition,
+      if (settings.visualizerMode != VisualizerMode.off) visualTool.definition,
+      if (settings.coderMode != CoderMode.off) codeTool.definition,
     ];
 
     String finalUserQuery = userQuery;
-    if (mode == VisualizerMode.on) {
+    if (settings.visualizerMode == VisualizerMode.on) {
       finalUserQuery = '$visualMandate\n\nUser Query: $userQuery';
     }
+    if (settings.coderMode == CoderMode.on) {
+      finalUserQuery = '$codeMandate\n\nUser Query: $finalUserQuery';
+    }
 
-    // 1. Prepare Unified Context Message
-    // This bundles all previous turns and the current query into one user message.
     final contextPrompt = historicalContext.isEmpty 
         ? finalUserQuery 
         : '$historicalContext\n\nCurrent query: $finalUserQuery';
@@ -113,8 +125,9 @@ class ResearchOrchestrator {
       ),
     ];
 
-    final int newStepsStartIndex = messages.length; // Start capturing steps AFTER the context message
+    final int newStepsStartIndex = messages.length;
     String? capturedVisualSchema;
+    String? capturedCodeSnippet;
 
     // 2. ReAct Loop
     int iterations = 0;
@@ -160,6 +173,7 @@ class ResearchOrchestrator {
           return ResearchResult(
             package: package, 
             visualSchema: capturedVisualSchema,
+            codeSnippet: capturedCodeSnippet,
             steps: messages.sublist(newStepsStartIndex),
           );
         } else if (toolCall.function.name == DelegateToVisualizerTool.name) {
@@ -192,6 +206,36 @@ class ResearchOrchestrator {
                      'what the user is seeing in the chart and answer any remaining parts of their query.',
             toolCallId: toolCall.id,
             name: DelegateToVisualizerTool.name,
+          ));
+        } else if (toolCall.function.name == DelegateToCoderTool.name) {
+          final args = _parseArgs(toolCall.function.arguments);
+          onStatusUpdate?.call('Generating code for "${args['codingGoal'] ?? 'task'}..."');
+          
+          final package = codeTool.execute(args);
+          
+          final cleanContext = contextPrompt
+              .replaceAll(visualMandate, '')
+              .replaceAll(codeMandate, '')
+              .replaceAll('\n\nUser Query: ', '\n')
+              .replaceAll('Current query: \n', 'Current query: ')
+              .trim();
+
+          final codeResult = await codeOrchestrator.generateCode(
+            package: package, 
+            registry: registry,
+            fullContext: cleanContext,
+          );
+
+          capturedCodeSnippet = codeResult.codeSnippet;
+
+          messages.add(ChatMessage(
+            role: ChatRole.tool,
+            content: 'CODE_GENERATED:\n${codeResult.codeSnippet}\n\n'
+                     'Assistant Note: The code has been generated and will be displayed in the workspace. '
+                     'You should now call delegate_to_synthesizer to explain the implementation and '
+                     'provide any additional context or instructions to the user.',
+            toolCallId: toolCall.id,
+            name: DelegateToCoderTool.name,
           ));
         } else if (toolCall.function.name == NoInfoFoundTool.name) {
           // AI specifically said no info found
@@ -235,13 +279,14 @@ You have access to the conversation history. Use this context to resolve pronoun
 4. **No Information Found**: If you have searched and found no relevant information to answer the user query accurately, call `no_info_found`. **CRITICAL**: You MUST attempt at least one `query_knowledge_base` call before concluding that no information exists.
 5. **Synthesis**: If you have enough info to answer as text, call `delegate_to_synthesizer`.
 6. **Visualization**: If the data is inherently visual (comparisons, trends, hierarchies, complex relationships), call `delegate_to_visualizer` with the relevant chunks. After calling this, you will receive confirmation and the generated JSON schema. You MUST then use that context to provide a final textual response via `delegate_to_synthesizer`.
+7. **Code Generation**: If the user asks to write, generate, or modify code, call `delegate_to_coder` with the relevant chunks. After calling this, you will receive confirmation and the generated code. You MUST then use that context to provide a final textual response via `delegate_to_synthesizer` to explain the code.
  
  ### Rules:
  - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
  - Use the conversation history to ensure your searches are targeted and context-aware.
  - **Search First**: Do NOT call `no_info_found` unless you have already received search results that were irrelevant or insufficient.
  - If you call `no_info_found`, the research session will terminate immediately.
-- **Visual-Text Synergy**: When you call `delegate_to_visualizer`, the system generates the chart. You should follow up by calling `delegate_to_synthesizer` so the user gets both a visual chart and a helpful textual explanation/summary.
+- **Visual/Code-Text Synergy**: When you call `delegate_to_visualizer` or `delegate_to_coder`, the system prepares the result. You should follow up by calling `delegate_to_synthesizer` so the user gets both the interactive result in the workspace and a helpful textual explanation/summary.
  - Your mission is complete when you have delegated the work via `delegate_to_synthesizer` or called `no_info_found`.
 
  ### Math Formatting:
@@ -273,8 +318,12 @@ You have access to the conversation history. Use this context to resolve pronoun
 
       if (m.role == domain.MessageRole.user) {
         if (buffer.isNotEmpty) buffer.write('\n\n');
-        // Strip the visual mandate from historical user queries to keep context clean
-        final cleanQuery = m.text.replaceAll(visualMandate, '').replaceAll('\n\nUser Query: ', '').trim();
+        // Strip mandates from historical user queries to keep context clean
+        final cleanQuery = m.text
+            .replaceAll(visualMandate, '')
+            .replaceAll(codeMandate, '')
+            .replaceAll('\n\nUser Query: ', '')
+            .trim();
         buffer.write('Query: $cleanQuery');
       } else if (m.role == domain.MessageRole.assistant) {
         if (buffer.isNotEmpty) buffer.write('\n');

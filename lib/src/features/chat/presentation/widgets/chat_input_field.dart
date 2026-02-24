@@ -97,6 +97,14 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                       onPressed: () => _cycleVisualizerMode(settings, settingsNotifier),
                     ),
                     const SizedBox(width: 8),
+                    _buildTrayAction(
+                      context,
+                      icon: _getCoderIcon(settings.coderMode),
+                      label: 'Coder: ${_getCoderLabel(settings.coderMode)}',
+                      isHighlight: settings.coderMode != CoderMode.off,
+                      onPressed: () => _cycleCoderMode(settings, settingsNotifier),
+                    ),
+                    const SizedBox(width: 8),
                   ],
 
                   // Lite Mode Indicator
@@ -298,5 +306,26 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
   void _cycleVisualizerMode(SettingsState settings, SettingsController notifier) {
     final nextIndex = (settings.visualizerMode.index + 1) % VisualizerMode.values.length;
     notifier.updateVisualizerMode(VisualizerMode.values[nextIndex]);
+  }
+
+  IconData _getCoderIcon(CoderMode mode) {
+    switch (mode) {
+      case CoderMode.auto: return Icons.code_rounded;
+      case CoderMode.off: return Icons.code_off_rounded;
+      case CoderMode.on: return Icons.terminal_rounded;
+    }
+  }
+
+  String _getCoderLabel(CoderMode mode) {
+    switch (mode) {
+      case CoderMode.auto: return 'Auto';
+      case CoderMode.off: return 'Off';
+      case CoderMode.on: return 'Always On';
+    }
+  }
+
+  void _cycleCoderMode(SettingsState settings, SettingsController notifier) {
+    final nextIndex = (settings.coderMode.index + 1) % CoderMode.values.length;
+    notifier.updateCoderMode(CoderMode.values[nextIndex]);
   }
 }
