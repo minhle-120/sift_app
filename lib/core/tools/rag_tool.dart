@@ -23,7 +23,7 @@ class RAGTool {
   ToolDefinition get definition => ToolDefinition(
         function: FunctionDefinition(
           name: name,
-          description: 'Search the local knowledge base for relevant information using keywords for retrieval and a query for reranking.',
+          description: 'Search the local knowledge base for relevant information using keywords for retrieval and a query for reranking. Always start by calling this tool first!',
           parameters: {
             'type': 'object',
             'properties': {

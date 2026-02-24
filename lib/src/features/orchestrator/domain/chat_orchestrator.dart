@@ -114,8 +114,8 @@ class ChatOrchestrator {
 ### Instructions:
 - Answer the user's latest query accurately using the provided context.
 - **Explain Visuals & Code**: 
-  - If a [RENDERED_VISUAL_CHART_CONTEXT] is provided, provide a textual explanation of the chart.
-  - If a [RENDERED_CODE_CONTEXT] is provided, it means a technical implementation has ALREADY been generated and displayed in the workspace. You MUST provide a clear, technical explanation of how the code works, the design choices made, and how to use it.
+  - If a [RENDERED_CHART] is provided, provide a textual explanation of the chart.
+  - If a [WRITTEN_CODE] is provided, provide a textual explanation of the code.
 - **NO Redundancy**: Do NOT attempt to redraw the chart or rewrite the entire code block in your response. Focus on synthesis and explanation.
 - Be honest: If the context doesn't contain the answer, state that "The provided documents do not contain information about [topic]."
 - Maintain a professional, objective, and helpful tone.
@@ -144,10 +144,10 @@ class ChatOrchestrator {
         ? '### Background History (Last Turn):\n${history.map((m) => '${m.role == ChatRole.user ? 'User' : 'Assistant'}: ${m.content}').join('\n')}\n\n'
         : '';
 
-    return '''$historySection${visualSchema != null ? '[RENDERED_VISUAL_CHART_CONTEXT]\n$visualSchema\n(Note: The chart above has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '[RENDERED_CODE_CONTEXT]\n$codeSnippet\n(Note: The code implementation above has already been displayed to the user in the workspace. Do NOT rewrite the whole block, just explain it.)\n\n' : ''}### Knowledge Chunks:
+    return '''$historySection### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
-### User Query:
+${visualSchema != null ? '[RENDERED_CHART]\n$visualSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '[WRITTEN_CODE]\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "This code does the following...")\n\n' : ''}### User Query:
 $query
 ''';
   }

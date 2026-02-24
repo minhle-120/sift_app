@@ -44,7 +44,7 @@ final researchOrchestratorProvider = Provider((ref) {
     delegateTool: delegateTool,
     noInfoTool: noInfoTool,
     visualTool: visualTool,
-    codeTool: codeTool,ew
+    codeTool: codeTool,
   );
 });
 
@@ -313,22 +313,20 @@ You have access to the conversation history. Use this context to resolve pronoun
 2. **Search**: Use `query_knowledge_base` to find relevant document chunks.
 3. **Evaluate**: Review the returned chunks. If more information is needed, search again with different keywords or queries.
 4. **No Information Found**: If you have searched and found no relevant information to answer the user query accurately, call `no_info_found`. **CRITICAL**: You MUST attempt at least one `query_knowledge_base` call before concluding that no information exists.
-5. **Synthesis**: If you have enough info to answer as text, call `delegate_to_synthesizer`.
-6. **Visualization**: If the data is inherently visual (comparisons, trends, hierarchies, complex relationships), call `delegate_to_visualizer` with the relevant chunks. After calling this, you will receive confirmation and the generated JSON schema. You MUST then use that context to provide a final textual response via `delegate_to_synthesizer`.
-7. **Code Generation**: If the user asks to write, generate, or modify code, call `delegate_to_coder` with the relevant chunks. After calling this, you will receive confirmation and the generated code. You MUST then use that context to provide a final textual response via `delegate_to_synthesizer` to explain the code.
+5. **Synthesis**: If you have enough info to answer as text, call `finalize_research_response`. **CRITICAL**: Do NOT use this tool if the user's request involves showing, writing, or modifying code.
+6. **Visualization**: If the data is inherently visual (comparisons, trends, hierarchies, complex relationships), call `delegate_to_visualizer` with the relevant chunks. After calling this, you will receive confirmation and the generated JSON schema. You MUST then use that context to provide a final textual response via `finalize_research_response`.
+7. **Code Generation**: If the user asks to show, write, generate, or modify code, you MUST call `delegate_to_coder` with the relevant chunks. This is the ONLY tool for handling code. After calling this, you will receive confirmation and the generated code. You MUST then use that context to provide a final textual response via `finalize_research_response` to explain the results.
  
  ### Rules:
  - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
+ - **No Code in Final Response**: `finalize_research_response` is for textual summaries and analysis only. NEVER use it to output code blocks, scripts, or implementation details; use `delegate_to_coder` for that.
  - Use the conversation history to ensure your searches are targeted and context-aware.
  - **Search First**: Do NOT call `no_info_found` unless you have already received search results that were irrelevant or insufficient.
  - If you call `no_info_found`, the research session will terminate immediately.
-- **Visual/Code-Text Synergy**: When you call `delegate_to_visualizer` or `delegate_to_coder`, the system prepares the result. You should follow up by calling `delegate_to_synthesizer` so the user gets both the interactive result in the workspace and a helpful textual explanation/summary.
- - Your mission is complete when you have delegated the work via `delegate_to_synthesizer` or called `no_info_found`.
+ - **Visual/Code-Text Synergy**: When you call `delegate_to_visualizer` or `delegate_to_coder`, the system prepares the result in the workspace. You MUST follow up by calling `finalize_research_response` so the user gets both the interactive result and your textual explanation.
+ - Do not take shortcuts or skip any of the user's request.
+ - Your mission is complete when you have delegated the work via `finalize_research_response` or called `no_info_found`.
 
- ### Math Formatting:
-- **ALWAYS use LaTeX** for any mathematical expressions, formulas, variables, or equations.
-- **Inline Math**: Use single dollar signs ($ ... $).
-- **Block Math**: Use double dollar signs for equations on their own line ($$ ... $$).
 ''';
   }
 

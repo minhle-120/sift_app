@@ -6,7 +6,7 @@ class DelegateToVisualizerTool {
   ToolDefinition get definition => ToolDefinition(
         function: FunctionDefinition(
           name: name,
-          description: 'Delegate to a visualization specialist when you find complex relationships, hierarchies, or comparative data that should be graphed. Only call this after you have gathered sufficient evidence chunks.',
+          description: 'Delegate to a visualization specialist when you find complex relationships, hierarchies, or comparative data that should be graphed.',
           parameters: {
             'type': 'object',
             'properties': {

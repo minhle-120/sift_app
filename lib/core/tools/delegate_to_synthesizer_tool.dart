@@ -1,13 +1,13 @@
 import '../../core/models/ai_models.dart';
 
 class DelegateToSynthesizerTool {
-  static const String name = 'delegate_to_synthesizer';
+  static const String name = 'finalize_research_response';
 
   ToolDefinition get definition => ToolDefinition(
     type: 'function',
     function: FunctionDefinition(
       name: name,
-      description: 'Call this when you have finished your research and want to delegate the final answer synthesis to the Chat AI model, using the most relevant knowledge chunks found.',
+      description: 'Call this when you have finished your research and want to provide the final textual answer. Use this ONLY for summaries and analysis. NEVER use this for code generation; use delegate_to_coder for implementations.',
       parameters: {
         'type': 'object',
         'properties': {

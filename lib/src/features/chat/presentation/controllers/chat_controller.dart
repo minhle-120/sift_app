@@ -365,18 +365,18 @@ class ChatController extends StateNotifier<ChatState> {
         // Add final tool outcome for history tracking
         try {
           final lastAssistantWithCalls = completeSteps.lastWhere(
-            (s) => s.role == ai.ChatRole.assistant && s.toolCalls != null && s.toolCalls!.any((tc) => tc.function.name == 'delegate_to_synthesizer'),
+            (s) => s.role == ai.ChatRole.assistant && s.toolCalls != null && s.toolCalls!.any((tc) => tc.function.name == 'finalize_research_response'),
           );
           
           final delegateCall = lastAssistantWithCalls.toolCalls!.firstWhere(
-            (tc) => tc.function.name == 'delegate_to_synthesizer',
+            (tc) => tc.function.name == 'finalize_research_response',
           );
           
           completeSteps.add(ai.ChatMessage(
             role: ai.ChatRole.tool,
             content: finalContent,
             toolCallId: delegateCall.id,
-            name: 'delegate_to_synthesizer',
+            name: 'finalize_research_response',
           ));
         } catch (e) { /* skip */ }
 

@@ -6,7 +6,7 @@ class DelegateToCoderTool {
   ToolDefinition get definition => ToolDefinition(
         function: FunctionDefinition(
           name: name,
-          description: 'Delegate to a specialist coder when the user asks to write, generate, or modify code. Only call this after you have gathered sufficient evidence chunks or context.',
+          description: 'Delegate to a specialist coder when the user asks to show, write, generate, or modify code.',
           parameters: {
             'type': 'object',
             'properties': {
