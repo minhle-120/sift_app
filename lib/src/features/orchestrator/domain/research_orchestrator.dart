@@ -44,14 +44,14 @@ final researchOrchestratorProvider = Provider((ref) {
     delegateTool: delegateTool,
     noInfoTool: noInfoTool,
     visualTool: visualTool,
-    codeTool: codeTool,
+    codeTool: codeTool,ew
   );
 });
 
 
 class ResearchOrchestrator {
-  static const String visualMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `delegate_to_visualizer` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.';
-  static const String codeMandate = '**CRITICAL MANDATE**: The user has requested to write or modify code. You MUST call `delegate_to_coder` if the user wants code generation, script writing, or technical implementation. Do NOT write the code yourself; delegate it to the code specialist.';
+  static const String visualMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_visualizer` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.';
+  static const String codeMandate = '**CRITICAL MANDATE**: The user has requested to write or modify code. You MUST call `query_knowledge_base` first to gather context. After searching, you MUST call `delegate_to_coder` if the user wants code generation, script writing, or technical implementation. Do NOT write the code yourself; delegate it to the code specialist.';
 
   final IAiService aiService;
   final VisualOrchestrator visualOrchestrator;
@@ -132,6 +132,10 @@ class ResearchOrchestrator {
     // 2. ReAct Loop
     int iterations = 0;
     const maxIterations = 5;
+    
+    int queryRetries = 0;
+    const maxQueryRetries = 3;
+    bool hasQueried = false;
 
     while (iterations < maxIterations) {
       iterations++;
@@ -143,6 +147,38 @@ class ResearchOrchestrator {
         tools: tools, // Use the conditionally built tools list
         toolChoice: 'required',
       );
+
+      // --- NEW: Enforce query_knowledge_base on the first step ---
+      if (!hasQueried) {
+        bool calledQuery = false;
+        if (response.toolCalls != null) {
+          for (final toolCall in response.toolCalls!) {
+            if (toolCall.function.name == RAGTool.name) {
+              calledQuery = true;
+              break;
+            }
+          }
+        }
+        
+        if (!calledQuery) {
+          queryRetries++;
+          if (queryRetries >= maxQueryRetries) {
+            return ResearchResult(
+              noInfoFound: true,
+              noInfoReason: 'Failed to search knowledge base after multiple attempts.',
+              steps: messages.sublist(newStepsStartIndex),
+            );
+          } else {
+            onStatusUpdate?.call('Enforcing knowledge search (Attempt $queryRetries)...');
+            // The user requested to wipe the attempt from history and retry.
+            // The model will have no idea it has ever tried this.
+            continue; // Skip the rest of the loop and try again
+          }
+        } else {
+          hasQueried = true;
+        }
+      }
+      // -----------------------------------------------------------
 
       messages.add(response);
 
