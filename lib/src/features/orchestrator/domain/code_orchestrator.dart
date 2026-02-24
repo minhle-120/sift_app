@@ -52,12 +52,13 @@ class CodeOrchestrator {
 
     // 3. Generate Code
     final response = await aiService.chat(messages);
-    final cleanCode = _extractCode(response.content);
+    final (cleanCode, lang) = _extractCodeAndLanguage(response.content);
 
     // 4. Return result
     return CodeResult(
       package: package,
       codeSnippet: cleanCode,
+      language: lang,
       steps: [
         ChatMessage(
           role: response.role,
@@ -68,17 +69,23 @@ class CodeOrchestrator {
     );
   }
 
-  String _extractCode(String text) {
+  (String, String) _extractCodeAndLanguage(String text) {
     if (text.contains('```')) {
       final lines = text.split('\n');
       final startIndex = lines.indexWhere((l) => l.startsWith('```'));
       final endIndex = lines.lastIndexWhere((l) => l.startsWith('```'));
       
       if (startIndex != -1 && endIndex != -1 && startIndex < endIndex) {
-        return lines.sublist(startIndex + 1, endIndex).join('\n').trim();
+        final startLine = lines[startIndex];
+        // Extract language from ```lang (e.g. ```python extra_info -> python)
+        final langPart = startLine.replaceFirst('```', '').trim();
+        final language = langPart.split(RegExp(r'\s+')).first;
+        
+        final code = lines.sublist(startIndex + 1, endIndex).join('\n').trim();
+        return (code, language.isEmpty ? 'plaintext' : language);
       }
     }
-    return text.trim();
+    return (text.trim(), 'plaintext');
   }
 
   String _buildSystemPrompt() {

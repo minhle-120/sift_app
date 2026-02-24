@@ -20,6 +20,7 @@ class ResearchResult {
   final String? visualSchema;
   final CodePackage? codePackage;
   final String? codeSnippet;
+  final String? codeLanguage;
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
@@ -31,6 +32,7 @@ class ResearchResult {
     this.visualSchema,
     this.codePackage,
     this.codeSnippet,
+    this.codeLanguage,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
@@ -68,9 +70,15 @@ class VisualResult {
 class CodeResult {
   final CodePackage package;
   final String codeSnippet;
+  final String language;
   final List<ChatMessage> steps;
 
-  CodeResult({required this.package, required this.codeSnippet, required this.steps});
+  CodeResult({
+    required this.package,
+    required this.codeSnippet,
+    this.language = 'plaintext',
+    required this.steps,
+  });
 }
 
 enum ChatRole {

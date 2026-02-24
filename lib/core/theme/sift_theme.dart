@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:syntax_highlight/syntax_highlight.dart';
 
 class SiftTheme {
+  /// Global highlighter themes for VSCode-like code display.
+  static late final HighlighterTheme lightCodeTheme;
+  static late final HighlighterTheme darkCodeTheme;
+
   // Cognition Specific Colors (Audit Result)
   static const Color background = Color(0xFF131314);
   static const Color surface = Color(0xFF1E1E20);

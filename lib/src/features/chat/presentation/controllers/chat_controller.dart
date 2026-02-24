@@ -314,7 +314,7 @@ class ChatController extends StateNotifier<ChatState> {
           type: WorkbenchTabType.code,
           metadata: {
             'code': researchResult.codeSnippet,
-            'language': 'dart', // Default, detected in viewer if needed
+            'language': researchResult.codeLanguage ?? 'plaintext',
           },
         ),
       );

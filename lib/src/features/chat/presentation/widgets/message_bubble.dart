@@ -41,45 +41,47 @@ class MessageBubble extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 if (message.reasoning != null) _buildReasoning(theme, message.reasoning!),
-                MarkdownBody(
-                  data: message.text,
-                  selectable: false,
-                  extensionSet: md.ExtensionSet(
-                    [
-                      ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
-                      LatexBlockSyntax(),
-                    ],
-                    [
-                      ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
-                      LatexInlineSyntax(),
-                      CitationSyntax(),
-                    ],
-                  ),
-                  builders: {
-                    'latex': LatexElementBuilder(),
-                    'citation': CitationBuilder(
-                      context: context,
-                      citations: message.citations,
-                      onCitationClick: (index, metadata) {
-                        final docId = metadata?['documentId'] as int?;
-                        final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Document';
-                        
-                        if (docId != null) {
-                          ref.read(workbenchProvider.notifier).addTab(
-                            WorkbenchTab(
-                              id: 'doc_$docId',
-                              title: sourceTitle,
-                              icon: Icons.description_outlined,
-                              type: WorkbenchTabType.document,
-                              metadata: metadata,
-                            ),
-                          );
-                        }
-                      },
+                SelectionArea(
+                  child: MarkdownBody(
+                    data: message.text,
+                    selectable: false,
+                    extensionSet: md.ExtensionSet(
+                      [
+                        ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+                        LatexBlockSyntax(),
+                      ],
+                      [
+                        ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+                        LatexInlineSyntax(),
+                        CitationSyntax(),
+                      ],
                     ),
-                  },
-                  styleSheet: MarkdownStyleSheet(
-                    p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                    builders: {
+                      'latex': LatexElementBuilder(),
+                      'citation': CitationBuilder(
+                        context: context,
+                        citations: message.citations,
+                        onCitationClick: (index, metadata) {
+                          final docId = metadata?['documentId'] as int?;
+                          final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Document';
+                          
+                          if (docId != null) {
+                            ref.read(workbenchProvider.notifier).addTab(
+                              WorkbenchTab(
+                                id: 'doc_$docId',
+                                title: sourceTitle,
+                                icon: Icons.description_outlined,
+                                type: WorkbenchTabType.document,
+                                metadata: metadata,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    },
+                    styleSheet: MarkdownStyleSheet(
+                      p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                    ),
                   ),
                 ),
                 if (message.metadata?['visual_schema'] != null) ...[

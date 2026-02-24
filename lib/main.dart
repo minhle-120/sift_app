@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:syntax_highlight/syntax_highlight.dart';
 import 'core/theme/sift_theme.dart';
 import 'src/features/chat/presentation/views/chat_screen.dart';
 import 'src/features/chat/presentation/controllers/settings_controller.dart';
@@ -10,8 +11,16 @@ import 'src/features/setup/presentation/views/setup_screen.dart';
 /// Global container reference so signal handlers can reach providers.
 late ProviderContainer _container;
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize the highlighter with common languages.
+  await Highlighter.initialize([
+    'dart', 'yaml', 'sql', 'json', 'python', 'javascript', 'typescript', 'html', 'css', 'go', 'java', 'kotlin', 'rust', 'swift'
+  ]);
+  
+  SiftTheme.lightCodeTheme = await HighlighterTheme.loadLightTheme();
+  SiftTheme.darkCodeTheme = await HighlighterTheme.loadDarkTheme();
 
   _container = ProviderContainer();
 

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_highlighter/flutter_highlighter.dart';
-import 'package:flutter_highlighter/themes/atom-one-dark.dart';
-import 'package:flutter_highlighter/themes/atom-one-light.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:syntax_highlight/syntax_highlight.dart';
+import 'package:sift_app/core/theme/sift_theme.dart';
 
 class CodeViewer extends StatelessWidget {
   final String code;
@@ -19,23 +19,29 @@ class CodeViewer extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    final String normalizedLanguage = _mapLanguage(language);
+
+    final highlighter = Highlighter(
+      language: normalizedLanguage,
+      theme: isDark ? SiftTheme.darkCodeTheme : SiftTheme.lightCodeTheme,
+    );
+
     return Column(
       children: [
         _buildToolbar(context, theme, isDark),
         Expanded(
           child: Container(
             width: double.infinity,
-            color: isDark ? const Color(0xFF282C34) : const Color(0xFFF0F0F0),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: HighlightView(
-                code,
-                language: language.isEmpty ? 'plaintext' : language,
-                theme: isDark ? atomOneDarkTheme : atomOneLightTheme,
-                textStyle: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 14,
-                  height: 1.5,
+            color: isDark ? Colors.black : Colors.white,
+            child: SelectionArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text.rich(
+                  highlighter.highlight(code),
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 14,
+                    height: 1.3,
+                  ),
                 ),
               ),
             ),
@@ -45,29 +51,42 @@ class CodeViewer extends StatelessWidget {
     );
   }
 
+  String _mapLanguage(String lang) {
+    final l = lang.toLowerCase().trim();
+    if (l == 'py' || l == 'python3') return 'python';
+    if (l == 'js' || l == 'node') return 'javascript';
+    if (l == 'ts' || l == 'tsx') return 'typescript';
+    if (l == 'md') return 'markdown';
+    if (l == 'yml') return 'yaml';
+    if (l == 'rb') return 'ruby';
+    if (l == 'sh' || l == 'bash') return 'plaintext';
+    return l.isEmpty ? 'plaintext' : l;
+  }
+
   Widget _buildToolbar(BuildContext context, ThemeData theme, bool isDark) {
     return Container(
-      height: 40,
+      height: 32, // More subtle toolbar
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHigh,
+        color: isDark ? const Color(0xFF121212) : const Color(0xFFFAFAFA),
         border: Border(
           bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-            width: 1,
+            color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1),
+            width: 0.5,
           ),
         ),
       ),
       child: Row(
         children: [
-          Icon(Icons.terminal_rounded, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          Icon(Icons.terminal_rounded, size: 12, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
           const SizedBox(width: 8),
           Text(
             language.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              fontSize: 10,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
               fontWeight: FontWeight.bold,
-              letterSpacing: 1.0,
+              letterSpacing: 1.2,
             ),
           ),
           const Spacer(),

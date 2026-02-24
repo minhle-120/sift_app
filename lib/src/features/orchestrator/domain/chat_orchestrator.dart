@@ -147,7 +147,7 @@ class ChatOrchestrator {
     return '''$historySection### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
-${visualSchema != null ? '[RENDERED_CHART]\n$visualSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '[WRITTEN_CODE]\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "This code does the following...")\n\n' : ''}### User Query:
+${visualSchema != null ? '[RENDERED_CHART]\n$visualSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '[WRITTEN_CODE]\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}### User Query:
 $query
 ''';
   }

@@ -128,13 +128,11 @@ class ResearchOrchestrator {
     final int newStepsStartIndex = messages.length;
     String? capturedVisualSchema;
     String? capturedCodeSnippet;
+    String? capturedCodeLanguage;
 
     // 2. ReAct Loop
     int iterations = 0;
     const maxIterations = 5;
-    
-    int queryRetries = 0;
-    const maxQueryRetries = 3;
     bool hasQueried = false;
 
     while (iterations < maxIterations) {
@@ -148,38 +146,6 @@ class ResearchOrchestrator {
         toolChoice: 'required',
       );
 
-      // --- NEW: Enforce query_knowledge_base on the first step ---
-      if (!hasQueried) {
-        bool calledQuery = false;
-        if (response.toolCalls != null) {
-          for (final toolCall in response.toolCalls!) {
-            if (toolCall.function.name == RAGTool.name) {
-              calledQuery = true;
-              break;
-            }
-          }
-        }
-        
-        if (!calledQuery) {
-          queryRetries++;
-          if (queryRetries >= maxQueryRetries) {
-            return ResearchResult(
-              noInfoFound: true,
-              noInfoReason: 'Failed to search knowledge base after multiple attempts.',
-              steps: messages.sublist(newStepsStartIndex),
-            );
-          } else {
-            onStatusUpdate?.call('Enforcing knowledge search (Attempt $queryRetries)...');
-            // The user requested to wipe the attempt from history and retry.
-            // The model will have no idea it has ever tried this.
-            continue; // Skip the rest of the loop and try again
-          }
-        } else {
-          hasQueried = true;
-        }
-      }
-      // -----------------------------------------------------------
-
       messages.add(response);
 
       if (response.toolCalls == null || response.toolCalls!.isEmpty) {
@@ -192,7 +158,21 @@ class ResearchOrchestrator {
 
       // Handle Tool Calls
       for (final toolCall in response.toolCalls!) {
-        if (toolCall.function.name == RAGTool.name) {
+        final isQuery = toolCall.function.name == RAGTool.name;
+        
+        if (!hasQueried && !isQuery) {
+          // Enforcement error
+          messages.add(ChatMessage(
+            role: ChatRole.tool,
+            content: 'ERROR: You must call `query_knowledge_base` first to gather information from the library before using other tools. Please call `query_knowledge_base` now.',
+            toolCallId: toolCall.id,
+            name: toolCall.function.name,
+          ));
+          continue;
+        }
+
+        if (isQuery) {
+          hasQueried = true;
           final args = _parseArgs(toolCall.function.arguments);
           onStatusUpdate?.call('Searching library for "${args['keywords'] ?? 'relevant info'}"...');
           final result = await ragTool.execute(collectionId, args, userQuery);
@@ -210,6 +190,7 @@ class ResearchOrchestrator {
             package: package, 
             visualSchema: capturedVisualSchema,
             codeSnippet: capturedCodeSnippet,
+            codeLanguage: capturedCodeLanguage,
             steps: messages.sublist(newStepsStartIndex),
           );
         } else if (toolCall.function.name == DelegateToVisualizerTool.name) {
@@ -263,6 +244,7 @@ class ResearchOrchestrator {
           );
 
           capturedCodeSnippet = codeResult.codeSnippet;
+          capturedCodeLanguage = codeResult.language;
 
           messages.add(ChatMessage(
             role: ChatRole.tool,
@@ -317,16 +299,24 @@ You have access to the conversation history. Use this context to resolve pronoun
 6. **Visualization**: If the data is inherently visual (comparisons, trends, hierarchies, complex relationships), call `delegate_to_visualizer` with the relevant chunks. After calling this, you will receive confirmation and the generated JSON schema. You MUST then use that context to provide a final textual response via `finalize_research_response`.
 7. **Code Generation**: If the user asks to show, write, generate, or modify code, you MUST call `delegate_to_coder` with the relevant chunks. This is the ONLY tool for handling code. After calling this, you will receive confirmation and the generated code. You MUST then use that context to provide a final textual response via `finalize_research_response` to explain the results.
  
- ### Rules:
- - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
- - **No Code in Final Response**: `finalize_research_response` is for textual summaries and analysis only. NEVER use it to output code blocks, scripts, or implementation details; use `delegate_to_coder` for that.
- - Use the conversation history to ensure your searches are targeted and context-aware.
- - **Search First**: Do NOT call `no_info_found` unless you have already received search results that were irrelevant or insufficient.
- - If you call `no_info_found`, the research session will terminate immediately.
- - **Visual/Code-Text Synergy**: When you call `delegate_to_visualizer` or `delegate_to_coder`, the system prepares the result in the workspace. You MUST follow up by calling `finalize_research_response` so the user gets both the interactive result and your textual explanation.
- - Do not take shortcuts or skip any of the user's request.
- - Your mission is complete when you have delegated the work via `finalize_research_response` or called `no_info_found`.
+### Rules:
+  - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
+  - **No Code in Final Response**: `finalize_research_response` is for textual summaries and analysis only. NEVER use it to output code blocks, scripts, or implementation details; use `delegate_to_coder` for that.
+  - Use the conversation history to ensure your searches are targeted and context-aware.
+  - **Search First**: Do NOT call `no_info_found` unless you have already received search results that were irrelevant or insufficient.
+  - If you call `no_info_found`, the research session will terminate immediately.
+  - **Visual/Code-Text Synergy**: When you call `delegate_to_visualizer` or `delegate_to_coder`, the system prepares the result in the workspace. You MUST follow up by calling `finalize_research_response` so the user gets both the interactive result and your textual explanation.
+  - Do not take shortcuts or skip any of the user's request.
+  - Always use the `query_knowledge_base` tool to search for information, no mater how simple the query may seem.
+  - Your mission is complete when you have delegated the work via `finalize_research_response` or called `no_info_found`.
 
+### Flow:
+1. Call `query_knowledge_base` tool to search for information.
+2. Analyze the search results.
+3. If more information is needed, call `query_knowledge_base` again with different keywords or queries.
+4. If the data is inherently visual, call `delegate_to_visualizer`.
+5. If the request involves code, call `delegate_to_coder`.
+6. Once findings are gathered and artifacts are generated, call `finalize_research_response` to provide the final synthesis.
 ''';
   }
 

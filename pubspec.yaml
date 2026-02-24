@@ -31,7 +31,7 @@ dependencies:
   wakelock_plus: ^1.2.11
   docx_to_text: ^1.0.1
   html: ^0.15.5
-  flutter_highlighter: ^0.1.1
+  syntax_highlight: ^0.5.0
 
 dev_dependencies:
   flutter_test:
