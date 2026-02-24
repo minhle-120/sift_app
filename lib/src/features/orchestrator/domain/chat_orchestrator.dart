@@ -114,8 +114,8 @@ class ChatOrchestrator {
 ### Instructions:
 - Answer the user's latest query accurately using the provided context.
 - **Explain Visuals & Code**: 
-  - If a [RENDERED_CHART] is provided, provide a textual explanation of the chart.
-  - If a [WRITTEN_CODE] is provided, provide a textual explanation of the code.
+  - If a RENDERED_CHART is provided, provide a textual explanation of the chart.
+  - If a WRITTEN_CODE is provided, provide a textual explanation of the code.
 - **NO Redundancy**: Do NOT attempt to redraw the chart or rewrite the entire code block in your response. Focus on synthesis and explanation.
 - Be honest: If the context doesn't contain the answer, state that "The provided documents do not contain information about [topic]."
 - Maintain a professional, objective, and helpful tone.
@@ -147,7 +147,7 @@ class ChatOrchestrator {
     return '''$historySection### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
-${visualSchema != null ? '[RENDERED_CHART]\n$visualSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '[WRITTEN_CODE]\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}### User Query:
+${visualSchema != null ? '### RENDERED_CHART\n$visualSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '### WRITTEN_CODE\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}### User Query:
 $query
 ''';
   }
