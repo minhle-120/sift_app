@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:path/path.dart' as p;
+import 'package:docx_to_text/docx_to_text.dart';
 
 class DocumentProcessor {
   /// Extracts plain text from the given file based on its extension.
@@ -12,6 +13,8 @@ class DocumentProcessor {
     try {
       if (ext == '.pdf') {
         text = await _extractFromPdf(file);
+      } else if (ext == '.docx') {
+        text = _extractFromDocx(file);
       } else {
         // Basic text file handling with fallback for encoding issues
         try {
@@ -100,6 +103,12 @@ class DocumentProcessor {
       // CRITICAL: Always dispose documents to prevent memory leaks
       document.dispose();
     }
+  }
+
+  /// Extracts plain text from a Word document (.docx).
+  String _extractFromDocx(File file) {
+    final bytes = file.readAsBytesSync();
+    return docxToText(bytes);
   }
 
   /// Splits text into units of word count, respecting semantic boundaries.

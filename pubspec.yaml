@@ -29,6 +29,7 @@ dependencies:
   graphview: ^1.5.1
   archive: ^3.6.1
   wakelock_plus: ^1.2.11
+  docx_to_text: ^1.0.1
 
 dev_dependencies:
   flutter_test:
