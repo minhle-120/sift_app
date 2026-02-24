@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:path/path.dart' as p;
 import 'package:docx_to_text/docx_to_text.dart';
+import 'package:html/parser.dart' as html_parser;
+import 'package:html/dom.dart' as dom;
 
 class DocumentProcessor {
   /// Extracts plain text from the given file based on its extension.
@@ -111,7 +113,75 @@ class DocumentProcessor {
     return docxToText(bytes);
   }
 
-  /// Splits text into units of word count, respecting semantic boundaries.
+  /// Extracts clean content from a raw HTML string.
+  /// Identifies main content areas and strips irrelevant tags.
+  String extractTextFromHtml(String htmlContent) {
+    if (htmlContent.isEmpty) return '';
+
+    final document = html_parser.parse(htmlContent);
+    _cleanDom(document.body);
+
+    // Try to find the most relevant container
+    final mainContent = document.querySelector('article') ?? 
+                        document.querySelector('main') ?? 
+                        document.querySelector('[role="main"]') ??
+                        document.body;
+
+    if (mainContent == null) return '';
+
+    final StringBuffer buffer = StringBuffer();
+    _processNode(mainContent, buffer);
+
+    final result = normalizeText(buffer.toString());
+    print('DEBUG: extractTextFromHtml result length: ${result.length}');
+    return result;
+  }
+
+  void _cleanDom(dom.Element? element) {
+    if (element == null) return;
+
+    // Tags to remove entirely
+    final tagsToRemove = [
+      'script', 'style', 'nav', 'header', 'footer', 
+      'aside', 'iframe', 'noscript', 'svg', 'form',
+    ];
+
+    for (final tag in tagsToRemove) {
+      element.querySelectorAll(tag).forEach((e) => e.remove());
+    }
+  }
+
+  void _processNode(dom.Node node, StringBuffer buffer) {
+    if (node is dom.Text) {
+      final text = node.text.trim();
+      if (text.isNotEmpty) {
+        buffer.write('$text ');
+      }
+      return;
+    }
+
+    if (node is dom.Element) {
+      // Add line breaks for block elements
+      final blockTags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'div', 'br', 'blockquote'];
+      if (blockTags.contains(node.localName)) {
+        buffer.write('\n');
+      }
+
+      if (node.localName == 'li') {
+        buffer.write('- ');
+      }
+
+      for (final child in node.nodes) {
+        _processNode(child, buffer);
+      }
+
+      if (blockTags.contains(node.localName)) {
+        buffer.write('\n');
+      }
+    }
+  }
+
+  /// Normalizes text to be clean for AI consumption while preserving semantic structure.
   /// [chunkSizeWords] is the target number of words per chunk.
   /// [overlapWords] is the number of words to carry over for context continuity.
   List<String> chunkText(String text, int chunkSizeWords, int overlapWords) {

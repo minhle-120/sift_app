@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sift_app/core/storage/database_provider.dart';
 import 'package:sift_app/core/storage/sift_database.dart';
@@ -108,43 +109,52 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
     }
   }
 
-  Future<void> _processDocument(Document doc) async {
+  Future<void> _processDocument(Document doc, {String? extractedText}) async {
     final db = _ref.read(databaseProvider);
     
     try {
+      print('DEBUG: Starting _processDocument for ${doc.id} (type: ${doc.type})');
       await db.updateDocumentStatus(doc.id, 'processing');
       
-      final file = File(doc.filePath);
-      if (!await file.exists()) {
-        throw Exception('File not found at ${doc.filePath}');
+      String text;
+      if (extractedText != null) {
+        print('DEBUG: Using pre-extracted text (${extractedText.length} chars)');
+        text = extractedText;
+      } else {
+        final file = File(doc.filePath);
+        if (!await file.exists()) {
+          throw Exception('Local file not found at ${doc.filePath}');
+        }
+        print('DEBUG: Extracting text from file: ${doc.filePath}');
+        text = await _processor.extractText(file);
       }
-
-      // 1. Extract Text
-      final text = await _processor.extractText(file);
       
-      // Update DB with full text? 
-      // Current table schema has content column.
+      // Update DB with full text
       await (db.update(db.documents)..where((t) => t.id.equals(doc.id)))
         .write(DocumentsCompanion(content: Value(text)));
 
       // 2. Chunk Text
+      print('DEBUG: Chunking text...');
       final settings = _ref.read(settingsProvider);
       final chunks = _processor.chunkText(
         text, 
         settings.chunkSize,
         settings.chunkOverlap,
       );
+      print('DEBUG: Produced ${chunks.length} chunks');
 
       if (chunks.isEmpty) {
+        print('DEBUG: No chunks produced, marking completed');
         await db.updateDocumentStatus(doc.id, 'completed');
         return;
       }
 
       // 3. Generate Embeddings
+      print('DEBUG: Generating embeddings for ${chunks.length} chunks...');
       final embeddingService = _ref.read(embeddingServiceProvider);
       
-      // Infinite batch size: process all chunks at once
       final vectors = await embeddingService.getEmbeddings(chunks);
+      print('DEBUG: Successfully generated ${vectors.length} vectors');
       
       final List<DocumentChunksCompanion> companions = [];
       for (var i = 0; i < chunks.length; i++) {
@@ -161,13 +171,15 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
       }
 
       // 4. Save Chunks
+      print('DEBUG: Saving chunks to database...');
       await db.insertDocumentChunks(companions);
 
       // 5. Complete
+      print('DEBUG: Document processing completed successfully');
       await db.updateDocumentStatus(doc.id, 'completed');
 
     } catch (e) {
-      // print('Error processing document ${doc.id}: $e');
+      print('DEBUG: Error in _processDocument: $e');
       await db.updateDocumentStatus(doc.id, 'failed', error: e.toString());
     }
   }
@@ -207,5 +219,58 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
   Future<void> deleteDocument(int id) async {
     final db = _ref.read(databaseProvider);
     await db.deleteDocument(id);
+  }
+
+  Future<void> processWebLink(String url) async {
+    final db = _ref.read(databaseProvider);
+    final activeCollection = _ref.read(collectionProvider).activeCollection;
+    final collectionId = activeCollection?.id;
+
+    try {
+      state = state.copyWith(status: const AsyncValue.loading());
+      
+      print('DEBUG: Fetching URL: $url');
+      final dio = Dio();
+      // Set a common browser User-Agent to avoid being blocked by some websites
+      dio.options.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+      
+      final response = await dio.get(url);
+      print('DEBUG: Response status code: ${response.statusCode}');
+      
+      if (response.statusCode != 200) {
+        throw Exception('Failed to load website: ${response.statusCode}');
+      }
+
+      final html = response.data.toString();
+      print('DEBUG: Received HTML length: ${html.length}');
+      
+      final cleanText = _processor.extractTextFromHtml(html);
+      print('DEBUG: Extracted clean text length: ${cleanText.length}');
+
+      if (cleanText.isEmpty) {
+        throw Exception('Could not extract any content from the provided link.');
+      }
+
+      // Create a "virtual" document for the web link
+      // We'll use the URL as the title if we can't find a title in the HTML
+      String title = url;
+      final titleMatch = RegExp(r'<title>(.*?)</title>', caseSensitive: false).firstMatch(html);
+      if (titleMatch != null && titleMatch.group(1) != null) {
+        title = titleMatch.group(1)!.trim();
+      }
+
+      final doc = await db.createDocument(
+        collectionId: collectionId,
+        title: title,
+        filePath: url, // Store the URL as filePath for web docs
+        type: 'web',
+      );
+
+      await _processDocument(doc, extractedText: cleanText);
+      state = state.copyWith(status: const AsyncValue.data(null));
+    } catch (e) {
+      state = state.copyWith(status: AsyncValue.error(e, StackTrace.current));
+      rethrow;
+    }
   }
 }

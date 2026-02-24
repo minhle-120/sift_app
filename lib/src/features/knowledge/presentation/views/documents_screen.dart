@@ -23,6 +23,20 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     final activeCollection = ref.watch(collectionProvider).activeCollection;
     final AsyncValue<List<Document>> documentsAsync = ref.watch(filteredDocumentsProvider);
 
+    // Listen for errors from the knowledge controller
+    ref.listen<KnowledgeState>(knowledgeControllerProvider, (previous, next) {
+      next.status.whenOrNull(
+        error: (error, stack) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: $error'),
+              backgroundColor: theme.colorScheme.error,
+            ),
+          );
+        },
+      );
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: Text(activeCollection?.name ?? 'All Documents'),
@@ -87,12 +101,82 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
         ),
       ),
       floatingActionButton: activeCollection != null ? FloatingActionButton.extended(
-        onPressed: () {
-          ref.read(knowledgeControllerProvider.notifier).pickAndUploadDocument();
-        },
-        icon: const Icon(Icons.upload_file),
-        label: const Text('Upload Document'),
+        onPressed: () => _showAddMenu(context, ref),
+        icon: const Icon(Icons.add),
+        label: const Text('Add Content'),
       ) : null,
+    );
+  }
+
+  void _showAddMenu(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Upload Files'),
+              subtitle: const Text('PDF, DOCX, Markdown, or Text'),
+              onTap: () {
+                Navigator.pop(context);
+                ref.read(knowledgeControllerProvider.notifier).pickAndUploadDocument();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Add Web Link'),
+              subtitle: const Text('Import content from a website'),
+              onTap: () {
+                Navigator.pop(context);
+                _showUrlInputDialog(context, ref);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showUrlInputDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Web Link'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'https://example.com',
+            labelText: 'Website URL',
+          ),
+          keyboardType: TextInputType.url,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final url = controller.text.trim();
+              if (url.isNotEmpty && (url.startsWith('http://') || url.startsWith('https://'))) {
+                ref.read(knowledgeControllerProvider.notifier).processWebLink(url);
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid URL starting with http:// or https://')),
+                );
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -241,6 +325,10 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       case 'image':
         icon = Icons.image;
         color = Colors.purpleAccent;
+        break;
+      case 'web':
+        icon = Icons.public;
+        color = Colors.blue;
         break;
       default:
         icon = Icons.insert_drive_file;

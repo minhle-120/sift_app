@@ -30,6 +30,7 @@ dependencies:
   archive: ^3.6.1
   wakelock_plus: ^1.2.11
   docx_to_text: ^1.0.1
+  html: ^0.15.5
 
 dev_dependencies:
   flutter_test:
