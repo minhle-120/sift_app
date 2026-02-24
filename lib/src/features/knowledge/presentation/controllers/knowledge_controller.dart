@@ -113,19 +113,14 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
     final db = _ref.read(databaseProvider);
     
     try {
-      print('DEBUG: Starting _processDocument for ${doc.id} (type: ${doc.type})');
-      await db.updateDocumentStatus(doc.id, 'processing');
-      
       String text;
       if (extractedText != null) {
-        print('DEBUG: Using pre-extracted text (${extractedText.length} chars)');
         text = extractedText;
       } else {
         final file = File(doc.filePath);
         if (!await file.exists()) {
           throw Exception('Local file not found at ${doc.filePath}');
         }
-        print('DEBUG: Extracting text from file: ${doc.filePath}');
         text = await _processor.extractText(file);
       }
       
@@ -134,27 +129,23 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
         .write(DocumentsCompanion(content: Value(text)));
 
       // 2. Chunk Text
-      print('DEBUG: Chunking text...');
+      // 2. Chunk Text
       final settings = _ref.read(settingsProvider);
       final chunks = _processor.chunkText(
         text, 
         settings.chunkSize,
         settings.chunkOverlap,
       );
-      print('DEBUG: Produced ${chunks.length} chunks');
 
       if (chunks.isEmpty) {
-        print('DEBUG: No chunks produced, marking completed');
         await db.updateDocumentStatus(doc.id, 'completed');
         return;
       }
 
       // 3. Generate Embeddings
-      print('DEBUG: Generating embeddings for ${chunks.length} chunks...');
       final embeddingService = _ref.read(embeddingServiceProvider);
       
       final vectors = await embeddingService.getEmbeddings(chunks);
-      print('DEBUG: Successfully generated ${vectors.length} vectors');
       
       final List<DocumentChunksCompanion> companions = [];
       for (var i = 0; i < chunks.length; i++) {
@@ -171,15 +162,12 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
       }
 
       // 4. Save Chunks
-      print('DEBUG: Saving chunks to database...');
       await db.insertDocumentChunks(companions);
 
       // 5. Complete
-      print('DEBUG: Document processing completed successfully');
       await db.updateDocumentStatus(doc.id, 'completed');
 
     } catch (e) {
-      print('DEBUG: Error in _processDocument: $e');
       await db.updateDocumentStatus(doc.id, 'failed', error: e.toString());
     }
   }
@@ -229,23 +217,19 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
     try {
       state = state.copyWith(status: const AsyncValue.loading());
       
-      print('DEBUG: Fetching URL: $url');
       final dio = Dio();
       // Set a common browser User-Agent to avoid being blocked by some websites
       dio.options.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
       
       final response = await dio.get(url);
-      print('DEBUG: Response status code: ${response.statusCode}');
       
       if (response.statusCode != 200) {
         throw Exception('Failed to load website: ${response.statusCode}');
       }
 
       final html = response.data.toString();
-      print('DEBUG: Received HTML length: ${html.length}');
       
       final cleanText = _processor.extractTextFromHtml(html);
-      print('DEBUG: Extracted clean text length: ${cleanText.length}');
 
       if (cleanText.isEmpty) {
         throw Exception('Could not extract any content from the provided link.');

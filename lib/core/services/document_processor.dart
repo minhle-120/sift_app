@@ -133,7 +133,6 @@ class DocumentProcessor {
     _processNode(mainContent, buffer);
 
     final result = normalizeText(buffer.toString());
-    print('DEBUG: extractTextFromHtml result length: ${result.length}');
     return result;
   }
 

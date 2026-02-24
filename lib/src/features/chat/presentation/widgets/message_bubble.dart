@@ -6,6 +6,7 @@ import 'package:markdown/markdown.dart' as md;
 import 'dart:convert';
 import '../../domain/entities/message.dart';
 import '../controllers/workbench_controller.dart';
+import 'code_element_builder.dart';
 
 class MessageBubble extends ConsumerWidget {
   final Message message;
@@ -57,6 +58,8 @@ class MessageBubble extends ConsumerWidget {
                   ),
                   builders: {
                     'latex': LatexElementBuilder(),
+                    'pre': CodeElementBuilder(context),
+                    'code': CodeElementBuilder(context),
                     'citation': CitationBuilder(
                       context: context,
                       citations: message.citations,
@@ -80,6 +83,14 @@ class MessageBubble extends ConsumerWidget {
                   },
                   styleSheet: MarkdownStyleSheet(
                     p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                    code: theme.textTheme.bodyMedium?.copyWith(
+                      fontFamily: 'monospace',
+                      color: theme.colorScheme.onSurface,
+                      backgroundColor: Colors.transparent,
+                    ),
+                    codeblockDecoration: const BoxDecoration(
+                      color: Colors.transparent, // Handled by CodeElementBuilder
+                    ),
                   ),
                 ),
                 if (message.metadata?['visual_schema'] != null) ...[
