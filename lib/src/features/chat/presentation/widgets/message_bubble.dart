@@ -146,6 +146,7 @@ class MessageBubble extends ConsumerWidget {
 
   Widget _buildCodeTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
     final code = message.metadata?['code_snippet'] as String?;
+    final title = message.metadata?['code_title'] as String?;
     
     return ElevatedButton.icon(
       onPressed: () {
@@ -154,7 +155,7 @@ class MessageBubble extends ConsumerWidget {
         ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
             id: 'code_${message.id}',
-            title: 'Generated Code',
+            title: title ?? 'Generated Code',
             icon: Icons.code_rounded,
             type: WorkbenchTabType.code,
             metadata: {
@@ -165,7 +166,7 @@ class MessageBubble extends ConsumerWidget {
         );
       },
       icon: const Icon(Icons.terminal_rounded, size: 18),
-      label: const Text('View Implementation'),
+      label: Text(title != null ? 'View $title' : 'View Implementation'),
       style: ElevatedButton.styleFrom(
         backgroundColor: theme.colorScheme.primaryContainer,
         foregroundColor: theme.colorScheme.onPrimaryContainer,

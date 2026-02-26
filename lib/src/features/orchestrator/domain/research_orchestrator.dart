@@ -85,6 +85,8 @@ class ResearchOrchestrator {
     required String historicalContext,
     required String userQuery,
     String? currentSchema,
+    String? currentCode,
+    String? currentCodeTitle,
     void Function(String status)? onStatusUpdate,
   }) async {
     registry.reset();
@@ -129,6 +131,7 @@ class ResearchOrchestrator {
     String? capturedVisualSchema;
     String? capturedCodeSnippet;
     String? capturedCodeLanguage;
+    String? capturedCodeTitle;
 
     // 2. ReAct Loop
     int iterations = 0;
@@ -191,6 +194,7 @@ class ResearchOrchestrator {
             visualSchema: capturedVisualSchema,
             codeSnippet: capturedCodeSnippet,
             codeLanguage: capturedCodeLanguage,
+            codeTitle: capturedCodeTitle,
             steps: messages.sublist(newStepsStartIndex),
           );
         } else if (toolCall.function.name == DelegateToVisualizerTool.name) {
@@ -241,10 +245,13 @@ class ResearchOrchestrator {
             package: package, 
             registry: registry,
             fullContext: cleanContext,
+            currentCode: currentCode,
+            currentCodeTitle: currentCodeTitle,
           );
 
           capturedCodeSnippet = codeResult.codeSnippet;
           capturedCodeLanguage = codeResult.language;
+          capturedCodeTitle = codeResult.title;
 
           messages.add(ChatMessage(
             role: ChatRole.tool,

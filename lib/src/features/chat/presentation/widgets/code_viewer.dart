@@ -21,10 +21,29 @@ class CodeViewer extends StatelessWidget {
 
     final String normalizedLanguage = _mapLanguage(language);
 
-    final highlighter = Highlighter(
-      language: normalizedLanguage,
-      theme: isDark ? SiftTheme.darkCodeTheme : SiftTheme.lightCodeTheme,
-    );
+    Widget codeContent;
+    try {
+      final highlighter = Highlighter(
+        language: normalizedLanguage,
+        theme: isDark ? SiftTheme.darkCodeTheme : SiftTheme.lightCodeTheme,
+      );
+      codeContent = Text.rich(
+        highlighter.highlight(code),
+        style: GoogleFonts.jetBrainsMono(
+          fontSize: 14,
+          height: 1.3,
+        ),
+      );
+    } catch (e) {
+      codeContent = Text(
+        code,
+        style: GoogleFonts.jetBrainsMono(
+          fontSize: 14,
+          height: 1.3,
+          color: isDark ? Colors.grey[300] : Colors.grey[800],
+        ),
+      );
+    }
 
     return Column(
       children: [
@@ -36,13 +55,7 @@ class CodeViewer extends StatelessWidget {
             child: SelectionArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text.rich(
-                  highlighter.highlight(code),
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 14,
-                    height: 1.3,
-                  ),
-                ),
+                child: codeContent,
               ),
             ),
           ),

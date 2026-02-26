@@ -241,12 +241,20 @@ class ChatController extends StateNotifier<ChatState> {
         return;
       }
 
-      // --- NEW: Extract Active Schema from Workbench ---
+      // --- NEW: Extract Active Contexts from Workbench ---
       final workbench = _ref.read(workbenchProvider);
       final activeTab = workbench.activeTab;
       String? currentVisualSchema;
-      if (activeTab != null && activeTab.type == WorkbenchTabType.visualization) {
-        currentVisualSchema = activeTab.metadata?['schema'];
+      String? currentCodeContext;
+      String? currentCodeTitle;
+      
+      if (activeTab != null) {
+        if (activeTab.type == WorkbenchTabType.visualization) {
+          currentVisualSchema = activeTab.metadata?['schema'];
+        } else if (activeTab.type == WorkbenchTabType.code) {
+          currentCodeContext = activeTab.metadata?['code'];
+          currentCodeTitle = activeTab.title;
+        }
       }
 
       // 5. Research AI Step
@@ -255,6 +263,8 @@ class ChatController extends StateNotifier<ChatState> {
         historicalContext: researchHistory,
         userQuery: text,
         currentSchema: currentVisualSchema,
+        currentCode: currentCodeContext,
+        currentCodeTitle: currentCodeTitle,
         onStatusUpdate: (status) {
           state = state.copyWith(researchStatus: status);
           _db.updateMessageContent(placeholderMessage.id, status);
@@ -309,7 +319,7 @@ class ChatController extends StateNotifier<ChatState> {
       _ref.read(workbenchProvider.notifier).addTab(
         WorkbenchTab(
           id: 'code_${placeholderMessage.uuid}',
-          title: 'Generated Code',
+          title: researchResult.codeTitle ?? 'Generated Code',
           icon: Icons.code_rounded,
           type: WorkbenchTabType.code,
           metadata: {
@@ -384,6 +394,7 @@ class ChatController extends StateNotifier<ChatState> {
           'research_steps': completeSteps.map((s) => s.toJson()).toList(),
           if (researchResult.visualSchema != null) 'visual_schema': researchResult.visualSchema,
           if (researchResult.codeSnippet != null) 'code_snippet': researchResult.codeSnippet,
+          if (researchResult.codeTitle != null) 'code_title': researchResult.codeTitle,
         };
 
         await _db.updateMessageMetadata(

@@ -109,32 +109,120 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   }
 
   void _showAddMenu(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
+    final theme = Theme.of(context);
+    
+    showDialog(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      builder: (context) => Dialog(
+        backgroundColor: theme.colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Add Context',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Upload files or links to train your library',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(height: 32),
+              _buildAddAction(
+                context,
+                icon: Icons.upload_file_rounded,
+                title: 'Upload Files',
+                subtitle: 'PDF, DOCX, Markdown, or Text',
+                color: theme.colorScheme.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  ref.read(knowledgeControllerProvider.notifier).pickAndUploadDocument();
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildAddAction(
+                context,
+                icon: Icons.link_rounded,
+                title: 'Add Web Link',
+                subtitle: 'Import content from a website',
+                color: theme.colorScheme.secondary,
+                onTap: () {
+                  Navigator.pop(context);
+                  _showUrlInputDialog(context, ref);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddAction(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    
+    return InkWell(
+      onPressed: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
           children: [
-            ListTile(
-              leading: const Icon(Icons.upload_file),
-              title: const Text('Upload Files'),
-              subtitle: const Text('PDF, DOCX, Markdown, or Text'),
-              onTap: () {
-                Navigator.pop(context);
-                ref.read(knowledgeControllerProvider.notifier).pickAndUploadDocument();
-              },
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
             ),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('Add Web Link'),
-              subtitle: const Text('Import content from a website'),
-              onTap: () {
-                Navigator.pop(context);
-                _showUrlInputDialog(context, ref);
-              },
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+            ),
           ],
         ),
       ),

@@ -21,6 +21,7 @@ class ResearchResult {
   final CodePackage? codePackage;
   final String? codeSnippet;
   final String? codeLanguage;
+  final String? codeTitle;
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
@@ -33,6 +34,7 @@ class ResearchResult {
     this.codePackage,
     this.codeSnippet,
     this.codeLanguage,
+    this.codeTitle,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
@@ -71,12 +73,14 @@ class CodeResult {
   final CodePackage package;
   final String codeSnippet;
   final String language;
+  final String? title;
   final List<ChatMessage> steps;
 
   CodeResult({
     required this.package,
     required this.codeSnippet,
     this.language = 'plaintext',
+    this.title,
     required this.steps,
   });
 }
