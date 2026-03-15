@@ -370,7 +370,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const DocumentsScreen()),
+                  MaterialPageRoute(builder: (_) => const DocumentsScreen(autoOpenAddMenu: true)),
                 );
               },
               icon: const Icon(Icons.upload_file),

@@ -8,7 +8,12 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:intl/intl.dart';
 
 class DocumentsScreen extends ConsumerStatefulWidget {
-  const DocumentsScreen({super.key});
+  final bool autoOpenAddMenu;
+
+  const DocumentsScreen({
+    super.key,
+    this.autoOpenAddMenu = false,
+  });
 
   @override
   ConsumerState<DocumentsScreen> createState() => _DocumentsScreenState();
@@ -16,6 +21,18 @@ class DocumentsScreen extends ConsumerStatefulWidget {
 
 class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
   bool _isDragging = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoOpenAddMenu) {
+      Future.microtask(() {
+        if (mounted) {
+          _showAddMenu(context, ref);
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,20 +141,13 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Add Context',
+                'Add Documents',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Upload files or links to train your library',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                ),
-              ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               _buildAddAction(
                 context,
                 icon: Icons.upload_file_rounded,
@@ -179,7 +189,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     final theme = Theme.of(context);
     
     return InkWell(
-      onPressed: onTap,
+      onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -218,10 +228,6 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                   ),
                 ],
               ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
             ),
           ],
         ),
