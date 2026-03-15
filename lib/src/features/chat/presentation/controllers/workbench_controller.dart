@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/services/portable_settings.dart';
 
-enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization, code }
+enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization, code, controlPanel }
 
 class WorkbenchTab {
   final String id;
   final String title;
   final IconData icon;
   final WorkbenchTabType type;
+  final bool isPermanent;
   final dynamic metadata;
 
   const WorkbenchTab({
@@ -16,6 +17,7 @@ class WorkbenchTab {
     required this.title,
     required this.icon,
     required this.type,
+    this.isPermanent = false,
     this.metadata,
   });
 }
@@ -29,8 +31,16 @@ class WorkbenchState {
   const WorkbenchState({
     this.panelRatio = 0.4,
     this.isCollapsed = true,
-    this.tabs = const [],
-    this.activeTabId,
+    this.tabs = const [
+      WorkbenchTab(
+        id: 'control_panel',
+        title: 'Control Panel',
+        icon: Icons.tune_rounded,
+        type: WorkbenchTabType.controlPanel,
+        isPermanent: true,
+      ),
+    ],
+    this.activeTabId = 'control_panel',
   });
 
   WorkbenchTab? get activeTab {
@@ -213,6 +223,9 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
   }
 
   void removeTab(String id) {
+    final tabToRemove = state.tabs.firstWhere((t) => t.id == id, orElse: () => const WorkbenchTab(id: '', title: '', icon: Icons.error, type: WorkbenchTabType.controlPanel));
+    if (tabToRemove.isPermanent) return; // Cannot remove permanent tabs
+
     final newTabs = state.tabs.where((t) => t.id != id).toList();
     String? newActiveId = state.activeTabId;
     

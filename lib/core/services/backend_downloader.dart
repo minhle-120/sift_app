@@ -123,33 +123,44 @@ class BackendDownloader {
     final modelsDir = await getModelsDirectory();
     final configPath = await getConfigPath();
 
-    final instructPath = p.join(modelsDir, 'Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf');
+    final model4BPath = p.join(modelsDir, 'Qwen3.5-4B-Q4_K_M.gguf');
+    final model2BPath = p.join(modelsDir, 'Qwen3.5-2B-Q4_K_M.gguf');
+    
+    final bool has4B = await File(model4BPath).exists();
+    final bool has2B = await File(model2BPath).exists();
+    
+    final instructPath = has4B ? model4BPath : (has2B ? model2BPath : model4BPath);
+    final modelTitle = instructPath.contains('2B') ? 'Qwen3.5-2B-Instruct' : 'Qwen3.5-4B-Instruct';
+
     final embeddingPath = p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf');
     final rerankerPath = p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf');
 
     final config = '''[*]
-flash-attn = on
+flash-attn = auto
 no-warmup = true
 parallel = 1
-mlock = true
-no-mmap = true
+mlock = false
+no-mmap = false
+cache-ram = 1024
+fit = on
 
-[Qwen3-4B-Instruct-2507]
+[$modelTitle]
 model = $instructPath
-ctx-size = 8192
+fit-ctx = 8192
+chat-template-kwargs = {"enable_thinking": false}
 cache-type-k = q8_0
 cache-type-v = q8_0
-n-gpu-layers = 99
 temp = 0.7
-min-p = 0.00
-top-p = 0.80
+top-p = 0.8
 top-k = 20
-presence-penalty = 1.0
+min-p = 0.0
+presence-penalty = 1.5
+repeat-penalty = 1.0
 
 [Qwen3-Embedding-0.6B]
 model = $embeddingPath
 embedding = true
-ctx-size = 2048
+fit-ctx = 2048
 ubatch-size = 2048
 batch-size = 2048
 n-gpu-layers = 99
@@ -157,7 +168,7 @@ n-gpu-layers = 99
 [Qwen3-Reranker-0.6B]
 model = $rerankerPath
 reranking = true
-ctx-size = 2048
+fit-ctx = 2048
 ubatch-size = 2048
 batch-size = 2048
 n-gpu-layers = 99
@@ -607,15 +618,24 @@ n-gpu-layers = 99
   }
 
   Future<void> downloadModelBundle({
+    bool isFast = false,
     required Function(double) onProgress,
     required Function(String) onStatus,
   }) async {
     final modelsDir = await getModelsDirectory();
+    
+    final mainModel = isFast 
+      ? {
+          'name': 'Qwen3.5-2B-Q4_K_M.gguf',
+          'url': 'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf?download=true'
+        }
+      : {
+          'name': 'Qwen3.5-4B-Q4_K_M.gguf',
+          'url': 'https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf?download=true'
+        };
+
     final models = [
-      {
-        'name': 'Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf',
-        'url': 'https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf?download=true'
-      },
+      mainModel,
       {
         'name': 'Qwen3-Embedding-0.6B-Q8_0.gguf',
         'url': 'https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf?download=true'

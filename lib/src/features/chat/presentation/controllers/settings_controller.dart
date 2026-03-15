@@ -13,6 +13,7 @@ import '../../../../../core/services/model_platform_service.dart';
 import '../../../../../core/services/embedding_platform_service.dart';
 
 enum BackendType { external, internal }
+enum ModelBundleSize { standard4B, fast2B }
 
 class SettingsState {
   final String llamaServerUrl;
@@ -79,6 +80,7 @@ class SettingsState {
   final double mobileBundleProgress;
   final String mobileBundleStatus;
   final bool isMobileBundleInstalled;
+  final ModelBundleSize selectedBundleSize;
 
   const SettingsState({
     this.llamaServerUrl = 'http://localhost:8080',
@@ -137,6 +139,7 @@ class SettingsState {
     this.mobileBundleProgress = 0.0,
     this.mobileBundleStatus = '',
     this.isMobileBundleInstalled = false,
+    this.selectedBundleSize = ModelBundleSize.standard4B,
   });
 
   bool get isMobileInternal => (Platform.isAndroid || Platform.isIOS) && backendType == BackendType.internal;
@@ -207,6 +210,7 @@ class SettingsState {
     double? mobileBundleProgress,
     String? mobileBundleStatus,
     bool? isMobileBundleInstalled,
+    ModelBundleSize? selectedBundleSize,
   }) {
     return SettingsState(
       llamaServerUrl: llamaServerUrl ?? this.llamaServerUrl,
@@ -265,6 +269,7 @@ class SettingsState {
       mobileBundleProgress: mobileBundleProgress ?? this.mobileBundleProgress,
       mobileBundleStatus: mobileBundleStatus ?? this.mobileBundleStatus,
       isMobileBundleInstalled: isMobileBundleInstalled ?? this.isMobileBundleInstalled,
+      selectedBundleSize: selectedBundleSize ?? this.selectedBundleSize,
     );
   }
 }
@@ -322,6 +327,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       mobileTokenizerPath: prefs.getString('mobileTokenizerPath') ?? '',
       mobileUseGpu: prefs.getBool('mobileUseGpu') ?? false,
       autoInitMobileEngine: prefs.getBool('autoInitMobileEngine') ?? true,
+      selectedBundleSize: ModelBundleSize.values[prefs.getInt('selectedBundleSize') ?? 0],
     );
     
     // Auto-init mobile engine if preferred and running on internal backend
@@ -391,8 +397,11 @@ class SettingsController extends StateNotifier<SettingsState> {
 
     // Verify model files on disk
     final modelsDir = await _downloader.getModelsDirectory();
+    final bool has4B = await File(p.join(modelsDir, 'Qwen3.5-4B-Q4_K_M.gguf')).exists();
+    final bool has2B = await File(p.join(modelsDir, 'Qwen3.5-2B-Q4_K_M.gguf')).exists();
+
     state = state.copyWith(
-      isInstructInstalled: await File(p.join(modelsDir, 'Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf')).exists(),
+      isInstructInstalled: has4B || has2B,
       isEmbeddingInstalled: await File(p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf')).exists(),
       isRerankerInstalled: await File(p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf')).exists(),
     );
@@ -456,7 +465,7 @@ class SettingsController extends StateNotifier<SettingsState> {
     }
 
     if (!state.isInstructInstalled || !state.isEmbeddingInstalled || !state.isRerankerInstalled) {
-      appendLog('Cannot start: One or more models are missing. Please download the Qwen3 bundle.');
+      appendLog('Cannot start: One or more models are missing. Please download the model bundle.');
       return;
     }
 
@@ -619,13 +628,17 @@ class SettingsController extends StateNotifier<SettingsState> {
 
     try {
       await _downloader.downloadModelBundle(
+        isFast: state.selectedBundleSize == ModelBundleSize.fast2B,
         onProgress: (p) => state = state.copyWith(bundleProgress: p),
         onStatus: (s) => state = state.copyWith(bundleStatus: s),
       );
 
       final modelsDir = await _downloader.getModelsDirectory();
+      final modelFile = state.selectedBundleSize == ModelBundleSize.fast2B 
+          ? 'Qwen3.5-2B-Q4_K_M.gguf' 
+          : 'Qwen3.5-4B-Q4_K_M.gguf';
       
-      await updateChatModel(p.join(modelsDir, 'Qwen3-4B-Instruct-2507-UD-Q4_K_XL.gguf'));
+      await updateChatModel(p.join(modelsDir, modelFile));
       await updateEmbeddingModel(p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf'));
       await updateRerankModel(p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf'));
 
@@ -793,6 +806,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setInt('coderMode', mode.index);
     state = state.copyWith(coderMode: mode);
+  }
+
+  Future<void> setSelectedBundleSize(ModelBundleSize size) async {
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setInt('selectedBundleSize', size.index);
+    state = state.copyWith(selectedBundleSize: size);
   }
 
   Future<void> updateBackendType(BackendType type) async {

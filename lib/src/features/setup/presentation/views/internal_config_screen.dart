@@ -78,7 +78,7 @@ class _InternalConfigScreenState extends ConsumerState<InternalConfigScreen> {
           ),
           Step(
             title: const Text('Model Bundle'),
-            subtitle: Text(settings.isInstructInstalled ? 'Qwen3 Ready' : 'Download core model'),
+            subtitle: Text(settings.isInstructInstalled ? 'Ready' : 'Download core model'),
             content: _buildModelStep(settings),
             isActive: _currentStep >= 2,
             state: settings.isInstructInstalled ? StepState.complete : StepState.indexed,
@@ -288,7 +288,42 @@ class _InternalConfigScreenState extends ConsumerState<InternalConfigScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Finally, we need to download the Qwen3 model bundle. This includes the LLM, Embedding, and Reranking models.'),
+        const Text('Finally, we need to download the model bundle. This includes the LLM, Embedding, and Reranking models.'),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _ChoiceCard(
+                title: 'Standard',
+                requirement: 'at least 4G VRAM',
+                models: const [
+                  'Qwen3.5 4B (Instruct)',
+                  'Qwen3 0.6B (Embedding)',
+                  'Qwen3 0.6B (Reranker)',
+                ],
+                isSelected: settings.selectedBundleSize == ModelBundleSize.standard4B,
+                isEnabled: !settings.isDownloadingBundle && !settings.isInstructInstalled,
+                onTap: () => ref.read(settingsProvider.notifier).setSelectedBundleSize(ModelBundleSize.standard4B),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ChoiceCard(
+                title: 'Fast',
+                requirement: 'at least 2G VRAM',
+                models: const [
+                  'Qwen3.5 2B (Instruct)',
+                  'Qwen3 0.6B (Embedding)',
+                  'Qwen3 0.6B (Reranker)',
+                ],
+                isSelected: settings.selectedBundleSize == ModelBundleSize.fast2B,
+                isEnabled: !settings.isDownloadingBundle && !settings.isInstructInstalled,
+                onTap: () => ref.read(settingsProvider.notifier).setSelectedBundleSize(ModelBundleSize.fast2B),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
         if (settings.isDownloadingBundle) ...[
           Text(
@@ -309,17 +344,120 @@ class _InternalConfigScreenState extends ConsumerState<InternalConfigScreen> {
             ],
           ),
         ] else ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton.icon(
               onPressed: () => ref.read(settingsProvider.notifier).downloadModelBundle(),
               icon: const Icon(Icons.download),
-              label: const Text('Download Qwen Bundle'),
+              label: Text(settings.selectedBundleSize == ModelBundleSize.standard4B 
+                ? 'Download Standard Bundle (4B)' 
+                : 'Download Fast Bundle (2B)'),
             ),
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ChoiceCard extends StatelessWidget {
+  final String title;
+  final String requirement;
+  final List<String> models;
+  final bool isSelected;
+  final bool isEnabled;
+  final VoidCallback onTap;
+
+  const _ChoiceCard({
+    required this.title,
+    required this.requirement,
+    required this.models,
+    required this.isSelected,
+    this.isEnabled = true,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final effectiveColor = isSelected 
+        ? (isEnabled ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.3))
+        : (isEnabled ? theme.colorScheme.outlineVariant : theme.colorScheme.outlineVariant.withValues(alpha: 0.2));
+
+    return Opacity(
+      opacity: isEnabled ? 1.0 : 0.5,
+      child: InkWell(
+        onTap: isEnabled ? onTap : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isSelected && isEnabled 
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3) 
+                : Colors.transparent,
+            border: Border.all(
+              color: effectiveColor,
+              width: isSelected ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isSelected && isEnabled ? theme.colorScheme.primary : null,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (isSelected)
+                    Icon(
+                      Icons.check_circle, 
+                      size: 18, 
+                      color: isEnabled ? theme.colorScheme.primary : theme.hintColor,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                requirement,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+              ),
+              const SizedBox(height: 12),
+              ...models.map((model) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      model.contains('Instruct') ? Icons.forum_outlined : 
+                      model.contains('Embedding') ? Icons.hub_outlined : 
+                      Icons.sort_rounded,
+                      size: 12,
+                      color: theme.hintColor.withValues(alpha: 0.7),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        model,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                          color: isEnabled ? null : theme.hintColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

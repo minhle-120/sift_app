@@ -4,6 +4,7 @@ import '../controllers/workbench_controller.dart';
 import '../../../knowledge/presentation/widgets/document_viewer.dart';
 import 'visualization_viewer.dart';
 import 'code_viewer.dart';
+import 'control_panel.dart';
 import 'dart:convert';
 
 class WorkbenchPanel extends ConsumerWidget {
@@ -77,10 +78,11 @@ class WorkbenchPanel extends ConsumerWidget {
                      ),
                    ),
                    const SizedBox(width: 8),
-                   GestureDetector(
-                     onTap: () => ref.read(workbenchProvider.notifier).removeTab(tab.id),
-                     child: Icon(Icons.close, size: 14, color: theme.colorScheme.onSurfaceVariant),
-                   ),
+                   if (!tab.isPermanent)
+                     GestureDetector(
+                       onTap: () => ref.read(workbenchProvider.notifier).removeTab(tab.id),
+                       child: Icon(Icons.close, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                     ),
                 ],
               ),
             ),
@@ -153,6 +155,8 @@ class WorkbenchPanel extends ConsumerWidget {
           language: language,
         );
       }
+    } else if (tab.type == WorkbenchTabType.controlPanel) {
+      return const ControlPanel();
     }
     
     return _buildPlaceholderContent(tab.type, theme);

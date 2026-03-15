@@ -234,18 +234,57 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
                 Icon(Icons.auto_awesome, color: theme.colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Text(
-                  'Qwen3 AI Model Bundle',
+                  'Model Bundle',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              'Install the recommended Qwen3 suite (Instruct + Embedding + Reranker) for a complete local AI experience.',
+              'Install the recommended model suite (LLM + Embedding + Reranker) for a complete local AI experience.',
               style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
             ),
             const SizedBox(height: 16),
-            _buildModelStatusItem(theme, 'Instruct (4B)', settings.isInstructInstalled),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _ChoiceCard(
+                    title: 'Standard',
+                    requirement: 'at least 4G VRAM',
+                    models: const [
+                      'Qwen3.5 4B (Instruct)',
+                      'Qwen3 0.6B (Embedding)',
+                      'Qwen3 0.6B (Reranker)',
+                    ],
+                    isSelected: settings.selectedBundleSize == ModelBundleSize.standard4B,
+                    isEnabled: !settings.isDownloadingBundle && !(settings.isInstructInstalled && settings.isEmbeddingInstalled && settings.isRerankerInstalled),
+                    onTap: () => ref.read(settingsProvider.notifier).setSelectedBundleSize(ModelBundleSize.standard4B),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ChoiceCard(
+                    title: 'Fast',
+                    requirement: 'at least 2G VRAM',
+                    models: const [
+                      'Qwen3.5 2B (Instruct)',
+                      'Qwen3 0.6B (Embedding)',
+                      'Qwen3 0.6B (Reranker)',
+                    ],
+                    isSelected: settings.selectedBundleSize == ModelBundleSize.fast2B,
+                    isEnabled: !settings.isDownloadingBundle && !(settings.isInstructInstalled && settings.isEmbeddingInstalled && settings.isRerankerInstalled),
+                    onTap: () => ref.read(settingsProvider.notifier).setSelectedBundleSize(ModelBundleSize.fast2B),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildModelStatusItem(
+              theme, 
+              settings.selectedBundleSize == ModelBundleSize.standard4B ? 'Instruct (4B)' : 'Instruct (2B)', 
+              settings.isInstructInstalled
+            ),
             const Divider(height: 8, indent: 32),
             _buildModelStatusItem(theme, 'Embedding (0.6B)', settings.isEmbeddingInstalled),
             const Divider(height: 8, indent: 32),
@@ -838,5 +877,105 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
+class _ChoiceCard extends StatelessWidget {
+  final String title;
+  final String requirement;
+  final List<String> models;
+  final bool isSelected;
+  final bool isEnabled;
+  final VoidCallback onTap;
+
+  const _ChoiceCard({
+    required this.title,
+    required this.requirement,
+    required this.models,
+    required this.isSelected,
+    this.isEnabled = true,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final effectiveColor = isSelected 
+        ? (isEnabled ? theme.colorScheme.primary : theme.colorScheme.onSurface.withValues(alpha: 0.3))
+        : (isEnabled ? theme.colorScheme.outlineVariant : theme.colorScheme.outlineVariant.withValues(alpha: 0.2));
+
+    return Opacity(
+      opacity: isEnabled ? 1.0 : 0.5,
+      child: InkWell(
+        onTap: isEnabled ? onTap : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected && isEnabled 
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3) 
+                : Colors.transparent,
+            border: Border.all(
+              color: effectiveColor,
+              width: isSelected ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isSelected && isEnabled ? theme.colorScheme.primary : null,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (isSelected)
+                    Icon(
+                      Icons.check_circle, 
+                      size: 16, 
+                      color: isEnabled ? theme.colorScheme.primary : theme.hintColor,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                requirement,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor, fontSize: 10),
+              ),
+              const SizedBox(height: 12),
+              ...models.map((model) => Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Row(
+                  children: [
+                    Icon(
+                      model.contains('Instruct') ? Icons.forum_outlined : 
+                      model.contains('Embedding') ? Icons.hub_outlined : 
+                      Icons.sort_rounded,
+                      size: 10,
+                      color: theme.hintColor.withValues(alpha: 0.7),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        model,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontSize: 9,
+                          fontFamily: 'monospace',
+                          color: isEnabled ? (isSelected ? null : theme.hintColor) : theme.hintColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
