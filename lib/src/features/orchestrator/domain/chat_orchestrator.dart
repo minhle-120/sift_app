@@ -88,9 +88,15 @@ class ChatOrchestrator {
         continue;
       }
 
+      String content = m.text;
+      if (m.role == domain.MessageRole.assistant) {
+        // Strip historical citations to avoid confusing the LLM with old chunk references
+        content = content.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '').trim();
+      }
+
       history.add(ChatMessage(
         role: m.role == domain.MessageRole.user ? ChatRole.user : ChatRole.assistant,
-        content: m.text,
+        content: content,
       ));
     }
     return history;
@@ -106,7 +112,7 @@ class ChatOrchestrator {
 4. **Multiple Sources**: If multiple chunks support a claim, list them all: [[Chunk 1]][[Chunk 2]].
 
 ### Math Formatting:
-- **ALWAYS use LaTeX** for any mathematical expressions, formulas, variables, or equations.
+- **ALWAYS use LaTeX** for any mathematical expressions, formulas or equations (note: do not apply LaTeX for simple measurements like 1m, 1kg, etc.).
 - **Inline Math**: Use single dollar signs: $ E=mc^2 $.
 - **Block Math**: Use double dollar signs for complex or standalone equations: $$ P(A|B) = \frac{P(A \cap B)}{P(B)} $$.
 - **Consistency**: Do not mix LaTeX with plain text symbols (like using * instead of \times).

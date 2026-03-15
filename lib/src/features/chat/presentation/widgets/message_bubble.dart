@@ -6,100 +6,233 @@ import 'package:markdown/markdown.dart' as md;
 import 'dart:convert';
 import '../../domain/entities/message.dart';
 import '../controllers/workbench_controller.dart';
+import '../controllers/collection_controller.dart';
+import '../controllers/chat_controller.dart';
 
-class MessageBubble extends ConsumerWidget {
+class MessageBubble extends ConsumerStatefulWidget {
   final Message message;
 
   const MessageBubble({super.key, required this.message});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isUser = message.role == MessageRole.user;
+  ConsumerState<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends ConsumerState<MessageBubble> {
+  bool _isEditing = false;
+  late TextEditingController _editController;
+
+  @override
+  void initState() {
+    super.initState();
+    _editController = TextEditingController(text: widget.message.text);
+  }
+
+  @override
+  void dispose() {
+    _editController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = widget.message.role == MessageRole.user;
     final theme = Theme.of(context);
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isUser ? theme.colorScheme.surfaceContainerHigh : Colors.transparent,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildAvatar(theme, isUser),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isUser ? 'You' : 'Sift',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: isUser ? theme.colorScheme.primary : theme.colorScheme.secondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                if (message.reasoning != null) _buildReasoning(theme, message.reasoning!),
-                MarkdownBody(
-                  data: message.text,
-                  selectable: false,
-                  extensionSet: md.ExtensionSet(
-                    [
-                      ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
-                      LatexBlockSyntax(),
-                    ],
-                    [
-                      ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
-                      LatexInlineSyntax(),
-                      CitationSyntax(),
-                    ],
-                  ),
-                  builders: {
-                    'latex': LatexElementBuilder(),
-                    'citation': CitationBuilder(
-                      context: context,
-                      citations: message.citations,
-                      onCitationClick: (index, metadata) {
-                        final docId = metadata?['documentId'] as int?;
-                        final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Document';
-                        
-                        if (docId != null) {
-                          ref.read(workbenchProvider.notifier).addTab(
-                            WorkbenchTab(
-                              id: 'doc_$docId',
-                              title: sourceTitle,
-                              icon: Icons.description_outlined,
-                              type: WorkbenchTabType.document,
-                              metadata: metadata,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isUser ? theme.colorScheme.surfaceContainerHigh : Colors.transparent,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildAvatar(theme, isUser),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            isUser ? 'You' : 'Sift',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: isUser ? theme.colorScheme.primary : theme.colorScheme.secondary,
                             ),
-                          );
-                        }
-                      },
-                    ),
-                  },
-                  styleSheet: MarkdownStyleSheet(
-                    p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                          ),
+                          if (widget.message.isEdited) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '(Edited)',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (!_isEditing) _buildActionMenu(context, ref, isUser),
+                    ],
                   ),
-                ),
-                if (message.metadata?['visual_schema'] != null) ...[
-                  const SizedBox(height: 12),
-                  _buildVisualTrigger(context, ref, theme),
+                  const SizedBox(height: 4),
+                  if (widget.message.reasoning != null) _buildReasoning(theme, widget.message.reasoning!),
+                  if (_isEditing)
+                    _buildEditMode(theme)
+                  else
+                    MarkdownBody(
+                      data: widget.message.text,
+                      selectable: false,
+                      extensionSet: md.ExtensionSet(
+                        [
+                          ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+                          LatexBlockSyntax(),
+                        ],
+                        [
+                          ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+                          LatexInlineSyntax(),
+                          CitationSyntax(),
+                        ],
+                      ),
+                      builders: {
+                        'latex': LatexElementBuilder(),
+                        'citation': CitationBuilder(
+                          context: context,
+                          citations: widget.message.citations,
+                          onCitationClick: (index, metadata) {
+                            final docId = metadata?['documentId'] as int?;
+                            final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Document';
+                            
+                            if (docId != null) {
+                              ref.read(workbenchProvider.notifier).addTab(
+                                WorkbenchTab(
+                                  id: 'doc_$docId',
+                                  title: sourceTitle,
+                                  icon: Icons.description_outlined,
+                                  type: WorkbenchTabType.document,
+                                  metadata: metadata,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      },
+                      styleSheet: MarkdownStyleSheet(
+                        p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                      ),
+                    ),
+                  if (widget.message.metadata?['visual_schema'] != null) ...[
+                    const SizedBox(height: 12),
+                    _buildVisualTrigger(context, ref, theme),
+                  ],
+                  if (widget.message.metadata?['code_snippet'] != null) ...[
+                    const SizedBox(height: 12),
+                    _buildCodeTrigger(context, ref, theme),
+                  ],
                 ],
-                if (message.metadata?['code_snippet'] != null) ...[
-                  const SizedBox(height: 12),
-                  _buildCodeTrigger(context, ref, theme),
-                ],
-              ],
+              ),
             ),
+          ],
+        ),
+      );
+  }
+
+  Widget _buildEditMode(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _editController,
+          maxLines: null,
+          autofocus: true,
+          style: theme.textTheme.bodyLarge,
+          decoration: const InputDecoration(
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(vertical: 8),
+            border: InputBorder.none,
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _isEditing = false;
+                  _editController.text = widget.message.text;
+                });
+              },
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () {
+                final newText = _editController.text.trim();
+                if (newText.isNotEmpty && newText != widget.message.text) {
+                  final collectionId = ref.read(collectionProvider).activeCollection?.id;
+                  ref.read(chatControllerProvider.notifier).editMessage(
+                    widget.message.id,
+                    newText,
+                    collectionId,
+                  );
+                }
+                setState(() => _isEditing = false);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: theme.colorScheme.onPrimary,
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
+  Widget _buildActionMenu(BuildContext context, WidgetRef ref, bool isUser) {
+    final controller = ref.read(chatControllerProvider.notifier);
+
+    return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ActionButton(
+            icon: Icons.copy_rounded,
+            tooltip: 'Copy',
+            onPressed: () => controller.copyToClipboard(widget.message.text),
+          ),
+          if (isUser)
+            _ActionButton(
+              icon: Icons.edit_outlined,
+              tooltip: 'Edit',
+              onPressed: () => setState(() => _isEditing = true),
+            ),
+          if (!isUser)
+            _ActionButton(
+              icon: Icons.refresh_rounded,
+              tooltip: 'Regenerate',
+              onPressed: () {
+                final collectionId = ref.read(collectionProvider).activeCollection?.id;
+                controller.regenerateResponse(widget.message.id, collectionId);
+              },
+            ),
+          _ActionButton(
+            icon: Icons.delete_outline_rounded,
+            tooltip: 'Delete',
+            onPressed: () => controller.deleteMessage(widget.message.id),
+          ),
+        ],
+      );
+  }
+
   Widget _buildVisualTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
-    final schemaStr = message.metadata?['visual_schema'] as String?;
+    final schemaStr = widget.message.metadata?['visual_schema'] as String?;
     String label = 'View Interactive Graph';
     String tabTitle = 'Visualization';
 
@@ -120,7 +253,7 @@ class MessageBubble extends ConsumerWidget {
         
         ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
-            id: 'viz_${message.id}',
+            id: 'viz_${widget.message.id}',
             title: tabTitle,
             icon: Icons.hub_outlined,
             type: WorkbenchTabType.visualization,
@@ -145,8 +278,8 @@ class MessageBubble extends ConsumerWidget {
   }
 
   Widget _buildCodeTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
-    final code = message.metadata?['code_snippet'] as String?;
-    final title = message.metadata?['code_title'] as String?;
+    final code = widget.message.metadata?['code_snippet'] as String?;
+    final title = widget.message.metadata?['code_title'] as String?;
     
     return ElevatedButton.icon(
       onPressed: () {
@@ -154,7 +287,7 @@ class MessageBubble extends ConsumerWidget {
         
         ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
-            id: 'code_${message.id}',
+            id: 'code_${widget.message.id}',
             title: title ?? 'Generated Code',
             icon: Icons.code_rounded,
             type: WorkbenchTabType.code,
@@ -182,7 +315,6 @@ class MessageBubble extends ConsumerWidget {
   }
 
   String _detectLanguage(String code) {
-    // Simple detection based on common markers or first lines
     final lowerCode = code.toLowerCase();
     if (lowerCode.contains('import') && lowerCode.contains('package:')) return 'dart';
     if (lowerCode.contains('def ') || lowerCode.contains('import os')) return 'python';
@@ -231,6 +363,35 @@ class MessageBubble extends ConsumerWidget {
           Text(text, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey)),
         ],
       ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _ActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IconButton(
+      icon: Icon(
+        icon, 
+        size: 16, 
+        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+      ),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      visualDensity: VisualDensity.compact,
+      padding: const EdgeInsets.all(8),
+      constraints: const BoxConstraints(),
     );
   }
 }

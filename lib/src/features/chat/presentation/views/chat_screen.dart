@@ -388,7 +388,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       padding: const EdgeInsets.symmetric(vertical: 20),
       itemCount: chatState.messages.length,
       itemBuilder: (context, index) {
-        return MessageBubble(message: chatState.messages[index]);
+        final message = chatState.messages[index];
+        return MessageBubble(
+          key: ValueKey(message.id),
+          message: message,
+        );
       },
     );
   }

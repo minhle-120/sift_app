@@ -283,13 +283,23 @@ class ResearchOrchestrator {
       }
     }
 
+    // 3. Fallback: If we hit max iterations, gather everything we found and delegate to synthesis
+    final allResults = registry.getAllResults();
+    if (allResults.isNotEmpty) {
+      return ResearchResult(
+        package: ResearchPackage(indices: allResults.map((r) => r.index).toList()),
+        visualSchema: capturedVisualSchema,
+        codeSnippet: capturedCodeSnippet,
+        codeLanguage: capturedCodeLanguage,
+        codeTitle: capturedCodeTitle,
+        steps: messages.sublist(newStepsStartIndex),
+      );
+    }
+
     return ResearchResult(
+      noInfoFound: true,
+      noInfoReason: 'I have reached the maximum research depth without finding specific details in the library to answer your query.',
       steps: messages.sublist(newStepsStartIndex),
-      output: ChatMessage(
-        role: ChatRole.assistant,
-        content: 'I have reached the maximum research depth. Here is what I found:\n\n'
-                 '${messages.lastWhere((m) => m.role == ChatRole.tool, orElse: () => ChatMessage(role: ChatRole.assistant, content: 'No results found.')).content}',
-      ),
     );
   }
 
@@ -318,12 +328,13 @@ You have access to the conversation history. Use this context to resolve pronoun
   - Your mission is complete when you have delegated the work via `finalize_research_response` or called `no_info_found`.
 
 ### Flow:
-1. Call `query_knowledge_base` tool to search for information.
-2. Analyze the search results.
-3. If more information is needed, call `query_knowledge_base` again with different keywords or queries.
-4. If the data is inherently visual, call `delegate_to_visualizer`.
-5. If the request involves code, call `delegate_to_coder`.
-6. Once findings are gathered and artifacts are generated, call `finalize_research_response` to provide the final synthesis.
+1. Check what is the current query is and focus on it.
+2. Call `query_knowledge_base` tool to search for information.
+3. Analyze the search results.
+4. If more information is needed, call `query_knowledge_base` again with different keywords or queries.
+5. If the data is inherently visual, call `delegate_to_visualizer`.
+6. If the request involves code, call `delegate_to_coder`.
+7. Once findings are gathered and artifacts are generated, call `finalize_research_response` to provide the final synthesis.
 ''';
   }
 

@@ -14,6 +14,7 @@ import 'package:sift_app/core/models/ai_models.dart' as ai;
 import 'package:sift_app/core/services/openai_service.dart';
 import 'package:sift_app/core/services/model_platform_service.dart';
 import 'package:sift_app/core/services/embedding_platform_service.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 
 class ChatState {
@@ -143,6 +144,7 @@ class ChatController extends StateNotifier<ChatState> {
           text: m.content,
           role: _parseRole(m.role),
           timestamp: m.createdAt,
+          lastUpdatedAt: m.lastUpdatedAt,
           reasoning: m.reasoning,
           citations: m.citations != null ? (jsonDecode(m.citations!) as Map<String, dynamic>) : null,
           metadata: m.metadata != null ? (jsonDecode(m.metadata!) as Map<String, dynamic>) : null,
@@ -162,6 +164,97 @@ class ChatController extends StateNotifier<ChatState> {
     await _db.deleteConversation(id);
     if (state.conversationId == id) {
       newChat();
+    }
+  }
+
+  Future<void> deleteMessage(String uuid) async {
+    final dbMsgs = await _db.watchMessages(state.conversationId!).first;
+    final msgIndex = dbMsgs.indexWhere((m) => m.uuid == uuid);
+    if (msgIndex == -1) return;
+
+    final msg = dbMsgs[msgIndex];
+    await _db.softDeleteMessage(msg.id);
+
+    // If deleting a user message, also delete the subsequent assistant response (the "pair")
+    if (msg.role == 'user' && msgIndex + 1 < dbMsgs.length) {
+      final nextMsg = dbMsgs[msgIndex + 1];
+      if (nextMsg.role == 'assistant') {
+        await _db.softDeleteMessage(nextMsg.id);
+      }
+    }
+  }
+
+  Future<void> editMessage(String uuid, String newText, int? activeCollectionId) async {
+    if (state.isLoading) return;
+
+    final dbMsgs = await _db.watchMessages(state.conversationId!).first;
+    final msg = dbMsgs.firstWhere((m) => m.uuid == uuid);
+
+    // 1. Update user message content and mark as edited
+    final metadata = Map<String, dynamic>.from(msg.metadata != null ? jsonDecode(msg.metadata!) : {});
+    metadata['is_edited'] = true;
+    
+    await _db.updateMessageContent(msg.id, newText);
+    await _db.updateMessageMetadata(msg.id, metadata: jsonEncode(metadata));
+
+    // 2. Clear subsequent AI responses in this turn (if any) or find existing placeholder
+    // For simplicity, we find the message immediately AFTER this one. If it's an assistant message, we regenerate it.
+    final nextMsgIndex = dbMsgs.indexWhere((m) => m.sortOrder > msg.sortOrder);
+    if (nextMsgIndex != -1 && dbMsgs[nextMsgIndex].role == 'assistant') {
+      await regenerateResponse(dbMsgs[nextMsgIndex].uuid, activeCollectionId);
+    } else {
+      // No assistant message to regenerate? Create one.
+      await _db.insertMessage(
+        conversationId: state.conversationId!,
+        role: 'assistant',
+        content: 'Refining memory...',
+        sortOrder: msg.sortOrder + 1,
+      );
+      // Now regenerate (lazy way to reuse logic)
+      final updatedMsgs = await _db.watchMessages(state.conversationId!).first;
+      final newAssistant = updatedMsgs.firstWhere((m) => m.sortOrder == msg.sortOrder + 1);
+      await regenerateResponse(newAssistant.uuid, activeCollectionId);
+    }
+  }
+
+  Future<void> regenerateResponse(String assistantUuid, int? activeCollectionId) async {
+    if (state.isLoading) return;
+
+    final dbMsgs = await _db.watchMessages(state.conversationId!).first;
+    final assistantMsg = dbMsgs.firstWhere((m) => m.uuid == assistantUuid);
+
+    // Find the user message associated with this response
+    final userMsg = await _db.getMessageBefore(state.conversationId!, assistantMsg.sortOrder);
+    if (userMsg == null || userMsg.role != 'user') {
+      state = state.copyWith(error: "Cannot regenerate: No preceding user prompt found.");
+      return;
+    }
+
+    // Clear assistant content/metadata
+    await _db.clearMessageMetadata(assistantMsg.id);
+
+    // Sliced history for context isolation (only messages strictly before this assistant message)
+    final slicedDomainMessages = state.messages.where((m) {
+      final dbMatch = dbMsgs.firstWhere((dbm) => dbm.uuid == m.id);
+      return dbMatch.sortOrder < assistantMsg.sortOrder;
+    }).toList();
+
+    _isAiProcessing = true;
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      await _processAiResponse(
+        query: userMsg.content,
+        activeCollectionId: activeCollectionId,
+        placeholderMessage: assistantMsg,
+        currentMessageId: userMsg.uuid,
+        historyOverride: slicedDomainMessages,
+      );
+    } catch (e) {
+       state = state.copyWith(isLoading: false, error: "Regeneration failed: $e");
+    } finally {
+      _isAiProcessing = false;
+      state = state.copyWith(isLoading: false, researchStatus: null);
     }
   }
 
@@ -189,11 +282,54 @@ class ChatController extends StateNotifier<ChatState> {
       }
     }
 
-    _isAiProcessing = true;
+      _isAiProcessing = true;
     state = state.copyWith(isLoading: true, error: null);
     
     try {
-      // 2. Pre-flight connection check
+      final maxSortOrder = await _db.getMaxSortOrder(conversationId);
+
+      // 3. User Message
+      final userMessage = await _db.insertMessage(
+        conversationId: conversationId,
+        role: 'user',
+        content: text,
+        sortOrder: maxSortOrder + 1,
+      );
+
+      // 4. Placeholder Assistant Message
+      final placeholderMessage = await _db.insertMessage(
+        conversationId: conversationId,
+        role: 'assistant',
+        content: 'Researching...',
+        sortOrder: maxSortOrder + 2,
+      );
+
+      // 3. Process AI loop
+      await _processAiResponse(
+        query: text,
+        activeCollectionId: activeCollectionId,
+        placeholderMessage: placeholderMessage,
+        currentMessageId: userMessage.uuid,
+        messageIdForPruning: userMessage.id,
+      );
+
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: "Failed to process research: $e", researchStatus: null);
+    } finally {
+      _isAiProcessing = false;
+      state = state.copyWith(isLoading: false, researchStatus: null);
+    }
+  }
+
+  Future<void> _processAiResponse({
+    required String query,
+    required int? activeCollectionId,
+    required dynamic placeholderMessage, // Message object from DB
+    required String currentMessageId,
+    List<domain.Message>? historyOverride,
+    int? messageIdForPruning,
+  }) async {
+    try {
       final settings = _ref.read(settingsProvider);
       final isMobileInternal = (Platform.isAndroid || Platform.isIOS) && settings.backendType == BackendType.internal;
 
@@ -203,45 +339,37 @@ class ChatController extends StateNotifier<ChatState> {
           throw Exception(state.connectionError ?? "AI Server is unreachable.");
         }
       } else {
-        // For mobile internal, check if engines are initialized
         if (!settings.isMobileEngineInitialized || !settings.isMobileEmbedderInitialized) {
           throw Exception("Mobile AI engines are not initialized. Please check settings.");
         }
       }
 
-      // 3. Prepare Isolated Histories via Orchestrators
+      // 3. Prepare Isolated Histories
       final researchOrchestrator = _ref.read(researchOrchestratorProvider);
       final chatOrchestrator = _ref.read(chatOrchestratorProvider);
 
-      final chatHistory = chatOrchestrator.buildHistory(state.messages);
-      final researchHistory = researchOrchestrator.buildHistory(state.messages);
+      // Precise Filtering:
+      // Exclude the current user message and the assistant placeholder from history.
+      // This prevents the current query from being duplicated in the LLM payload.
+      final effectiveHistory = (historyOverride ?? state.messages)
+          .where((m) => 
+            m.id != placeholderMessage.uuid && 
+            m.id != currentMessageId
+          )
+          .toList();
 
-      // 3. User Message
-      final userMessage = await _db.insertMessage(
-        conversationId: conversationId,
-        role: 'user',
-        content: text,
-        sortOrder: state.messages.length,
-      );
-
-      // 4. Placeholder Assistant Message
-      final placeholderMessage = await _db.insertMessage(
-        conversationId: conversationId,
-        role: 'assistant',
-        content: isMobileInternal ? 'Searching local knowledge...' : 'Researching...',
-        sortOrder: state.messages.length + 1,
-      );
+      final chatHistory = chatOrchestrator.buildHistory(effectiveHistory);
+      final researchHistory = researchOrchestrator.buildHistory(effectiveHistory);
 
       state = state.copyWith(researchStatus: isMobileInternal ? 'Searching...' : 'Initializing research...');
 
       // --- BRANCH: Mobile Lite-RAG vs Desktop Orchestrator ---
       if (isMobileInternal) {
-        await _handleMobileLiteRag(text, activeCollectionId!, placeholderMessage, chatHistory);
-        state = state.copyWith(isLoading: false, researchStatus: null);
+        await _handleMobileLiteRag(query, activeCollectionId!, placeholderMessage, chatHistory);
         return;
       }
 
-      // --- NEW: Extract Active Contexts from Workbench ---
+      // --- NEW: Context Sanitization for Workbench ---
       final workbench = _ref.read(workbenchProvider);
       final activeTab = workbench.activeTab;
       String? currentVisualSchema;
@@ -249,11 +377,16 @@ class ChatController extends StateNotifier<ChatState> {
       String? currentCodeTitle;
       
       if (activeTab != null) {
-        if (activeTab.type == WorkbenchTabType.visualization) {
-          currentVisualSchema = activeTab.metadata?['schema'];
-        } else if (activeTab.type == WorkbenchTabType.code) {
-          currentCodeContext = activeTab.metadata?['code'];
-          currentCodeTitle = activeTab.title;
+        // Block "Stale" context: If the active tab belongs to the message we are regenerating
+        if (activeTab.id.contains(placeholderMessage.uuid)) {
+          debugPrint('Sifting isolation: Blocking stale workbench tab ${activeTab.id}');
+        } else {
+          if (activeTab.type == WorkbenchTabType.visualization) {
+            currentVisualSchema = activeTab.metadata?['schema'];
+          } else if (activeTab.type == WorkbenchTabType.code) {
+            currentCodeContext = activeTab.metadata?['code'];
+            currentCodeTitle = activeTab.title;
+          }
         }
       }
 
@@ -261,7 +394,7 @@ class ChatController extends StateNotifier<ChatState> {
       final researchResult = await researchOrchestrator.research(
         collectionId: activeCollectionId!,
         historicalContext: researchHistory,
-        userQuery: text,
+        userQuery: query,
         currentSchema: currentVisualSchema,
         currentCode: currentCodeContext,
         currentCodeTitle: currentCodeTitle,
@@ -279,7 +412,9 @@ class ChatController extends StateNotifier<ChatState> {
         };
 
         // Mark user query as pruned too
-        await _db.updateMessageMetadata(userMessage.id, metadata: jsonEncode({'exclude_from_history': true}));
+        if (messageIdForPruning != null) {
+          await _db.updateMessageMetadata(messageIdForPruning, metadata: jsonEncode({'exclude_from_history': true}));
+        }
         
         // Update assistant placeholder
         final reason = researchResult.noInfoReason ?? 'No information found about that in the current library.';
@@ -355,7 +490,7 @@ class ChatController extends StateNotifier<ChatState> {
         await _db.updateMessageContent(placeholderMessage.id, 'Synthesizing...');
         
         final stream = chatOrchestrator.streamSynthesize(
-          originalQuery: text,
+          originalQuery: query,
           conversation: chatHistory,
           package: researchResult.package!,
           registry: researchOrchestrator.registry,
@@ -457,6 +592,9 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(isLoading: false);
   }
 
+  void copyToClipboard(String text) {
+    Clipboard.setData(ClipboardData(text: text));
+  }
   Future<void> _handleMobileLiteRag(
     String query,
     int collectionId,

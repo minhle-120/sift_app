@@ -120,8 +120,56 @@ class AppDatabase extends _$AppDatabase {
   /// Update a message's content.
   Future<void> updateMessageContent(int id, String content) {
     return (update(messages)..where((t) => t.id.equals(id))).write(
-      MessagesCompanion(content: Value(content)),
+      MessagesCompanion(
+        content: Value(content),
+        lastUpdatedAt: Value(DateTime.now()),
+      ),
     );
+  }
+
+  /// Soft delete a message.
+  Future<void> softDeleteMessage(int id) {
+    return (update(messages)..where((t) => t.id.equals(id))).write(
+      MessagesCompanion(
+        isDeleted: const Value(true),
+        lastUpdatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Clear all metadata/citations for a message (used for regeneration).
+  Future<void> clearMessageMetadata(int id) {
+    return (update(messages)..where((t) => t.id.equals(id))).write(
+      MessagesCompanion(
+        content: const Value(''),
+        reasoning: const Value(null),
+        citations: const Value(null),
+        metadata: const Value(null),
+        lastUpdatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Finds the message immediately before the given ID in the same conversation.
+  Future<Message?> getMessageBefore(int conversationId, int currentSortOrder) {
+    return (select(messages)
+          ..where((t) => 
+            t.conversationId.equals(conversationId) & 
+            t.sortOrder.isSmallerThan(Variable(currentSortOrder)) &
+            t.isDeleted.equals(false)
+          )
+          ..orderBy([(t) => OrderingTerm.desc(t.sortOrder)])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  /// Get the maximum sort order for a conversation.
+  Future<int> getMaxSortOrder(int conversationId) async {
+    final query = selectOnly(messages)
+      ..addColumns([messages.sortOrder.max()])
+      ..where(messages.conversationId.equals(conversationId) & messages.isDeleted.equals(false));
+    final result = await query.map((row) => row.read(messages.sortOrder.max())).getSingle();
+    return result ?? -1;
   }
 
   /// Update a message's metadata and citations.
