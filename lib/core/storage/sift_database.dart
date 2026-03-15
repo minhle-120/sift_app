@@ -127,6 +127,16 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  /// Update a message's reasoning content.
+  Future<void> updateMessageReasoning(int id, String reasoning) {
+    return (update(messages)..where((t) => t.id.equals(id))).write(
+      MessagesCompanion(
+        reasoning: Value(reasoning),
+        lastUpdatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
   /// Soft delete a message.
   Future<void> softDeleteMessage(int id) {
     return (update(messages)..where((t) => t.id.equals(id))).write(

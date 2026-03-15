@@ -35,6 +35,7 @@ class OpenAiService implements IAiService {
       final choice = response.data['choices'][0]['message'];
       final roleStr = choice['role'];
       final content = choice['content'] ?? '';
+      final reasoning = choice['reasoning_content'] as String?;
       
       ChatRole role;
       switch (roleStr) {
@@ -64,6 +65,7 @@ class OpenAiService implements IAiService {
       return ChatMessage(
         role: role,
         content: content,
+        reasoning: reasoning,
         toolCalls: toolCalls,
       );
     } else {
@@ -72,7 +74,7 @@ class OpenAiService implements IAiService {
   }
 
   @override
-  Stream<String> streamChat(List<ChatMessage> messages) async* {
+  Stream<ChatStreamChunk> streamChat(List<ChatMessage> messages) async* {
     final settings = _ref.read(settingsProvider);
     final baseUrl = settings.llamaServerUrl;
     final model = settings.chatModel;
@@ -112,9 +114,15 @@ class OpenAiService implements IAiService {
 
             try {
               final json = jsonDecode(data);
-              final content = json['choices'][0]['delta']['content'] as String?;
-              if (content != null && content.isNotEmpty) {
-                yield content;
+              final delta = json['choices'][0]['delta'];
+              final content = delta['content'] as String?;
+              final reasoningContent = delta['reasoning_content'] as String?;
+              
+              if ((content != null && content.isNotEmpty) || (reasoningContent != null && reasoningContent.isNotEmpty)) {
+                yield ChatStreamChunk(
+                  content: content,
+                  reasoningContent: reasoningContent,
+                );
               }
             } catch (e) {
               // Ignore invalid JSON chunks (often headers or partial chunks)
@@ -128,9 +136,9 @@ class OpenAiService implements IAiService {
   }
 
   @override
-  Stream<String> streamResponse(String message) {
+  Stream<ChatStreamChunk> streamResponse(String message) {
     // Basic streaming implementation placeholder
-    return Stream.value("Streaming not fully implemented in this minimalist path yet.");
+    return Stream.value(ChatStreamChunk(content: "Streaming not fully implemented in this minimalist path yet."));
   }
 
   @override

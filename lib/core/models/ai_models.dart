@@ -95,6 +95,7 @@ enum ChatRole {
 class ChatMessage {
   final ChatRole role;
   final String content;
+  final String? reasoning;
   final String? name; // For tool role
   final String? toolCallId; // For tool response
   final List<ToolCall>? toolCalls;
@@ -102,6 +103,7 @@ class ChatMessage {
   ChatMessage({
     required this.role,
     required this.content,
+    this.reasoning,
     this.name,
     this.toolCallId,
     this.toolCalls,
@@ -111,6 +113,7 @@ class ChatMessage {
     return {
       'role': role.name,
       'content': content,
+      if (reasoning != null) 'reasoning_content': reasoning,
       if (name != null) 'name': name,
       if (toolCallId != null) 'tool_call_id': toolCallId,
       if (toolCalls != null) 'tool_calls': toolCalls!.map((e) => e.toJson()).toList(),
@@ -121,6 +124,7 @@ class ChatMessage {
     return ChatMessage(
       role: ChatRole.values.firstWhere((e) => e.name == json['role']),
       content: json['content'] ?? '',
+      reasoning: json['reasoning_content'],
       name: json['name'],
       toolCallId: json['tool_call_id'],
       toolCalls: json['tool_calls'] != null
@@ -128,6 +132,13 @@ class ChatMessage {
           : null,
     );
   }
+}
+
+class ChatStreamChunk {
+  final String? content;
+  final String? reasoningContent;
+
+  ChatStreamChunk({this.content, this.reasoningContent});
 }
 
 class ToolCall {

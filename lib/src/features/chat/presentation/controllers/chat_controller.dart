@@ -7,6 +7,7 @@ import 'package:sift_app/core/storage/sift_database.dart';
 import 'package:sift_app/core/storage/database_provider.dart';
 import 'package:sift_app/src/features/orchestrator/domain/research_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/chat_orchestrator.dart';
+import 'package:sift_app/src/features/orchestrator/domain/brainstorm_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/visual_orchestrator.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/workbench_controller.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
@@ -25,6 +26,7 @@ class ChatState {
   final String? researchStatus;
   final bool isConnectionValid;
   final String? connectionError;
+  final bool isBrainstormMode;
 
   const ChatState({
     this.isLoading = false,
@@ -34,6 +36,7 @@ class ChatState {
     this.researchStatus,
     this.isConnectionValid = true,
     this.connectionError,
+    this.isBrainstormMode = false,
   });
 
   ChatState copyWith({
@@ -44,6 +47,7 @@ class ChatState {
     String? researchStatus,
     bool? isConnectionValid,
     String? connectionError,
+    bool? isBrainstormMode,
     bool clearConversationId = false,
   }) {
     return ChatState(
@@ -54,6 +58,7 @@ class ChatState {
       researchStatus: researchStatus ?? this.researchStatus,
       isConnectionValid: isConnectionValid ?? this.isConnectionValid,
       connectionError: connectionError ?? this.connectionError,
+      isBrainstormMode: isBrainstormMode ?? this.isBrainstormMode,
     );
   }
 }
@@ -158,6 +163,10 @@ class ChatController extends StateNotifier<ChatState> {
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  void toggleBrainstormMode() {
+    state = state.copyWith(isBrainstormMode: !state.isBrainstormMode);
   }
 
   Future<void> deleteConversation(int id) async {
@@ -343,8 +352,6 @@ class ChatController extends StateNotifier<ChatState> {
           throw Exception("Mobile AI engines are not initialized. Please check settings.");
         }
       }
-
-      // 3. Prepare Isolated Histories
       final researchOrchestrator = _ref.read(researchOrchestratorProvider);
       final chatOrchestrator = _ref.read(chatOrchestratorProvider);
 
@@ -359,6 +366,40 @@ class ChatController extends StateNotifier<ChatState> {
           .toList();
 
       final chatHistory = chatOrchestrator.buildHistory(effectiveHistory);
+
+      // --- BRANCH: Brainstorm Mode (Simple Mode) ---
+      if (state.isBrainstormMode) {
+        final brainstormOrchestrator = _ref.read(brainstormOrchestratorProvider);
+        state = state.copyWith(researchStatus: 'Brainstorming...');
+        
+        String finalContent = '';
+        String finalReasoning = '';
+        final stream = brainstormOrchestrator.streamBrainstorm(
+          history: chatHistory,
+          query: query,
+        );
+
+        bool isFirstToken = true;
+        await for (final chunk in stream) {
+          if (isFirstToken && (chunk.reasoningContent != null || chunk.content != null)) {
+            isFirstToken = false;
+            await _db.updateMessageContent(placeholderMessage.id, '');
+          }
+          if (chunk.reasoningContent != null) {
+            finalReasoning += chunk.reasoningContent!;
+            _db.updateMessageReasoning(placeholderMessage.id, finalReasoning);
+          }
+          if (chunk.content != null) {
+            finalContent += chunk.content!;
+            _db.updateMessageContent(placeholderMessage.id, finalContent);
+          }
+        }
+
+        state = state.copyWith(isLoading: false, researchStatus: null);
+        return;
+      }
+
+      // --- BRANCH: RAG Research Mode ---
       final researchHistory = researchOrchestrator.buildHistory(effectiveHistory);
 
       state = state.copyWith(researchStatus: isMobileInternal ? 'Searching...' : 'Initializing research...');
@@ -464,9 +505,6 @@ class ChatController extends StateNotifier<ChatState> {
         ),
       );
     }
-
-      String finalContent = '';
-
       if (researchResult.package != null) {
         // 1. Build Citation Metadata Early (so citations work DURING streaming)
         final citationData = <String, dynamic>{};
@@ -489,6 +527,8 @@ class ChatController extends StateNotifier<ChatState> {
         state = state.copyWith(researchStatus: 'Synthesizing final answer...');
         await _db.updateMessageContent(placeholderMessage.id, 'Synthesizing...');
         
+        String finalContent = '';
+        String finalReasoning = '';
         final stream = chatOrchestrator.streamSynthesize(
           originalQuery: query,
           conversation: chatHistory,
@@ -498,10 +538,20 @@ class ChatController extends StateNotifier<ChatState> {
           codeSnippet: researchResult.codeSnippet,
         );
 
+        bool isFirstToken = true;
         await for (final chunk in stream) {
-          finalContent += chunk;
-          // Update DB in real-time for UI reactivity
-          _db.updateMessageContent(placeholderMessage.id, finalContent);
+          if (isFirstToken && (chunk.reasoningContent != null || chunk.content != null)) {
+            isFirstToken = false;
+            await _db.updateMessageContent(placeholderMessage.id, '');
+          }
+          if (chunk.reasoningContent != null) {
+            finalReasoning += chunk.reasoningContent!;
+            _db.updateMessageReasoning(placeholderMessage.id, finalReasoning);
+          }
+          if (chunk.content != null) {
+            finalContent += chunk.content!;
+            _db.updateMessageContent(placeholderMessage.id, finalContent);
+          }
         }
 
         // --- Persist Research Steps & Metadata ---

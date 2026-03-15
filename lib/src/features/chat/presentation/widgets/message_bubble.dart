@@ -20,6 +20,7 @@ class MessageBubble extends ConsumerStatefulWidget {
 
 class _MessageBubbleState extends ConsumerState<MessageBubble> {
   bool _isEditing = false;
+  bool _isReasoningExpanded = false;
   late TextEditingController _editController;
 
   @override
@@ -123,8 +124,40 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                           },
                         ),
                       },
-                      styleSheet: MarkdownStyleSheet(
+                      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
                         p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                        blockquoteDecoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border(
+                            left: BorderSide(
+                              color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                              width: 4,
+                            ),
+                          ),
+                        ),
+                        blockquotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        blockquote: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        code: theme.textTheme.bodyMedium?.copyWith(
+                          backgroundColor: Colors.transparent, // Avoid default blocky bg
+                          color: theme.colorScheme.primary,
+                          fontFamily: 'monospace',
+                        ),
+                        codeblockDecoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        horizontalRuleDecoration: BoxDecoration(
+                          border: Border(
+                            top: BorderSide(
+                              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                              width: 1.0,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   if (widget.message.metadata?['visual_schema'] != null) ...[
@@ -342,25 +375,65 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
 
   Widget _buildReasoning(ThemeData theme, String text) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.psychology_outlined, size: 16, color: Colors.grey),
-              const SizedBox(width: 8),
-              Text('Reasoning', style: theme.textTheme.labelMedium?.copyWith(color: Colors.grey)),
-            ],
+          InkWell(
+            onTap: () => setState(() => _isReasoningExpanded = !_isReasoningExpanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.psychology_outlined, 
+                    size: 16, 
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6)
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Thought process', 
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.w600,
+                    )
+                  ),
+                  const Spacer(),
+                  AnimatedRotation(
+                    duration: const Duration(milliseconds: 200),
+                    turns: _isReasoningExpanded ? 0.5 : 0,
+                    child: Icon(
+                      Icons.expand_more, 
+                      size: 16, 
+                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(text, style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey)),
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: SelectableText(
+                text,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                  fontStyle: FontStyle.italic,
+                  height: 1.5,
+                ),
+              ),
+            ),
+            crossFadeState: _isReasoningExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
+          ),
         ],
       ),
     );

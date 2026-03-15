@@ -43,7 +43,7 @@ class ChatOrchestrator {
     return await aiService.chat(messages);
   }
 
-  Stream<String> streamSynthesize({
+  Stream<ChatStreamChunk> streamSynthesize({
     required String originalQuery,
     required List<ChatMessage> conversation,
     required ResearchPackage package,
@@ -97,6 +97,7 @@ class ChatOrchestrator {
       history.add(ChatMessage(
         role: m.role == domain.MessageRole.user ? ChatRole.user : ChatRole.assistant,
         content: content,
+        reasoning: m.reasoning,
       ));
     }
     return history;

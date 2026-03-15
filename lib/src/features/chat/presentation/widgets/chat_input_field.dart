@@ -87,8 +87,18 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                 ),
                   const SizedBox(width: 8),
                   
-                  // Visualizer Toggle (Hidden in Lite Mode)
-                  if (!settings.isMobileInternal) ...[
+                  // Brainstorm Mode Toggle
+                  _buildTrayAction(
+                    context,
+                    icon: chatState.isBrainstormMode ? Icons.psychology : Icons.psychology_outlined,
+                    label: chatState.isBrainstormMode ? 'Brainstorm: ON' : 'Brainstorm: OFF',
+                    isHighlight: chatState.isBrainstormMode,
+                    onPressed: () => ref.read(chatControllerProvider.notifier).toggleBrainstormMode(),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Visualizer Toggle (Hidden in Lite Mode or Brainstorm Mode)
+                  if (!settings.isMobileInternal && !chatState.isBrainstormMode) ...[
                     _buildTrayAction(
                       context,
                       icon: _getVisualizerIcon(settings.visualizerMode),
@@ -124,8 +134,8 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
               ),
             ),
             const SizedBox(height: 12),
-            // Guidance/Blocker if no documents
-            if (!collectionState.hasDocuments && collectionState.activeCollection != null)
+            // Guidance/Blocker if no documents (only if NOT in Brainstorm Mode)
+            if (!collectionState.hasDocuments && collectionState.activeCollection != null && !chatState.isBrainstormMode)
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(12),
@@ -140,7 +150,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'This collection is empty. Please upload documents to start researching.',
+                        'This collection is empty. Please upload documents to start researching, or toggle Brainstorm Mode to chat directly with Sift.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.bold,
@@ -155,7 +165,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
             CallbackShortcuts(
               bindings: {
                 const SingleActivator(LogicalKeyboardKey.enter): () {
-                  if (!chatState.isLoading && _hasText && collectionState.hasDocuments) {
+                  if (!chatState.isLoading && _hasText && (collectionState.hasDocuments || chatState.isBrainstormMode)) {
                     _sendMessage();
                   }
                 },
@@ -174,14 +184,16 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
               child: TextField(
                 controller: _controller,
                 focusNode: _focusNode,
-                enabled: !chatState.isLoading && collectionState.hasDocuments,
+                enabled: !chatState.isLoading && (collectionState.hasDocuments || chatState.isBrainstormMode),
                 maxLines: 5,
                 minLines: 1,
                 textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(
                   hintText: chatState.isLoading 
                       ? 'Thinking...' 
-                      : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...'),
+                      : (chatState.isBrainstormMode 
+                          ? 'Directly message Sift...'
+                          : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...')),
                   filled: true,
                   fillColor: theme.colorScheme.surfaceContainerHigh,
                   border: OutlineInputBorder(
@@ -226,13 +238,13 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                                 ? theme.colorScheme.onPrimary 
                                 : theme.colorScheme.onSurfaceVariant.withAlpha(100),
                           ),
-                          onPressed: (_hasText && collectionState.hasDocuments) ? _sendMessage : null,
+                          onPressed: (_hasText && (collectionState.hasDocuments || chatState.isBrainstormMode)) ? _sendMessage : null,
                         ),
                   ),
                 ),
                 onSubmitted: (_) {
                   // onSubmitted is still useful for mobile "Done" button
-                  if (collectionState.hasDocuments) _sendMessage();
+                  if (collectionState.hasDocuments || chatState.isBrainstormMode) _sendMessage();
                 },
               ),
             ),
