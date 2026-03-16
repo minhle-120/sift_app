@@ -17,6 +17,7 @@ import 'package:sift_app/core/services/model_platform_service.dart';
 import 'package:sift_app/core/services/embedding_platform_service.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 
 class ChatState {
   final bool isLoading;
@@ -267,8 +268,10 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  Future<void> sendMessage(String text, int? activeCollectionId) async {
-    if (state.isLoading || text.trim().isEmpty) return;
+  Future<void> sendMessage(String text, int? activeCollectionId, {List<PlatformFile>? attachments}) async {
+    if (state.isLoading && text.trim().isEmpty && (attachments == null || attachments.isEmpty)) return;
+    if (state.isLoading) return;
+    if (text.trim().isEmpty && (attachments == null || attachments.isEmpty)) return;
 
     // 1. Ensure conversation exists
     int? conversationId = state.conversationId;
@@ -298,11 +301,23 @@ class ChatController extends StateNotifier<ChatState> {
       final maxSortOrder = await _db.getMaxSortOrder(conversationId);
 
       // 3. User Message
+      final metadata = attachments != null && attachments.isNotEmpty
+          ? jsonEncode({
+              'attachments': attachments.map((a) => {
+                'name': a.name,
+                'path': a.path,
+                'size': a.size,
+                'extension': a.extension,
+              }).toList(),
+            })
+          : null;
+
       final userMessage = await _db.insertMessage(
         conversationId: conversationId,
         role: 'user',
         content: text,
         sortOrder: maxSortOrder + 1,
+        metadata: metadata,
       );
 
       // 4. Placeholder Assistant Message
@@ -320,6 +335,7 @@ class ChatController extends StateNotifier<ChatState> {
         placeholderMessage: placeholderMessage,
         currentMessageId: userMessage.uuid,
         messageIdForPruning: userMessage.id,
+        attachments: attachments,
       );
 
     } catch (e) {
@@ -337,6 +353,7 @@ class ChatController extends StateNotifier<ChatState> {
     required String currentMessageId,
     List<domain.Message>? historyOverride,
     int? messageIdForPruning,
+    List<PlatformFile>? attachments,
   }) async {
     try {
       final settings = _ref.read(settingsProvider);
@@ -365,7 +382,10 @@ class ChatController extends StateNotifier<ChatState> {
           )
           .toList();
 
-      final chatHistory = chatOrchestrator.buildHistory(effectiveHistory);
+      final chatHistory = chatOrchestrator.buildHistory(
+        effectiveHistory,
+        limit: state.isBrainstormMode ? null : 8,
+      );
 
       // --- BRANCH: Brainstorm Mode (Simple Mode) ---
       if (state.isBrainstormMode) {
@@ -377,6 +397,7 @@ class ChatController extends StateNotifier<ChatState> {
         final stream = brainstormOrchestrator.streamBrainstorm(
           history: chatHistory,
           query: query,
+          attachments: attachments,
         );
 
         bool isFirstToken = true;

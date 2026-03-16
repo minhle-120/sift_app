@@ -75,12 +75,12 @@ class ChatOrchestrator {
   /// Builds a clean user-visible history from domain messages.
   /// This excludes internal tool calls and internal research steps.
   /// Limits history to the last 4 turns (8 messages).
-  List<ChatMessage> buildHistory(List<domain.Message> domainMessages) {
+  List<ChatMessage> buildHistory(List<domain.Message> domainMessages, {int? limit = 8}) {
     final List<ChatMessage> history = [];
 
-    // History Pruning: Only keep the last 4 turns (8 messages)
-    final prunedMessages = domainMessages.length > 8
-        ? domainMessages.sublist(domainMessages.length - 8)
+    // History Pruning: only prune if limit is provided
+    final prunedMessages = (limit != null && domainMessages.length > limit)
+        ? domainMessages.sublist(domainMessages.length - limit)
         : domainMessages;
 
     for (final m in prunedMessages) {

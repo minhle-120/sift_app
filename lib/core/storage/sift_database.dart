@@ -102,6 +102,7 @@ class AppDatabase extends _$AppDatabase {
     required String content,
     String? reasoning,
     String? citations,
+    String? metadata,
     required int sortOrder,
   }) {
     return into(messages).insertReturning(
@@ -112,6 +113,7 @@ class AppDatabase extends _$AppDatabase {
         content: content,
         reasoning: Value(reasoning),
         citations: Value(citations),
+        metadata: Value(metadata),
         sortOrder: sortOrder,
       ),
     );

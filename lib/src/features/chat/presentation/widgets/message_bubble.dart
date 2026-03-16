@@ -4,6 +4,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_markdown_latex/flutter_markdown_latex.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'dart:convert';
+import 'dart:io';
 import '../../domain/entities/message.dart';
 import '../controllers/workbench_controller.dart';
 import '../controllers/collection_controller.dart';
@@ -160,6 +161,48 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                         ),
                       ),
                     ),
+                  if (widget.message.metadata?['attachments'] != null) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: (widget.message.metadata!['attachments'] as List).map((att) {
+                        final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains((att['extension'] as String?)?.toLowerCase());
+                        if (isImage && att['path'] != null) {
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(att['path']),
+                              width: 200,
+                              height: 150,
+                              fit: BoxFit.cover,
+                            ),
+                          );
+                        }
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: theme.colorScheme.outlineVariant),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.attach_file, size: 14, color: theme.colorScheme.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                att['name'] ?? 'File', 
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                   if (widget.message.metadata?['visual_schema'] != null) ...[
                     const SizedBox(height: 12),
                     _buildVisualTrigger(context, ref, theme),

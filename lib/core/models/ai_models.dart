@@ -92,9 +92,47 @@ enum ChatRole {
   tool,
 }
 
+abstract class ContentPart {
+  Map<String, dynamic> toJson();
+  
+  static ContentPart fromJson(Map<String, dynamic> json) {
+    final type = json['type'];
+    if (type == 'text') return TextPart(json['text'] ?? '');
+    if (type == 'image_url') {
+      final url = json['image_url']?['url'] ?? '';
+      return ImagePart(url);
+    }
+    return TextPart(''); // Fallback
+  }
+}
+
+class TextPart extends ContentPart {
+  final String text;
+  TextPart(this.text);
+  @override
+  Map<String, dynamic> toJson() => {'type': 'text', 'text': text};
+}
+
+class ImagePart extends ContentPart {
+  final String base64Data;
+  final String mimeType;
+  ImagePart(this.base64Data, {this.mimeType = 'image/jpeg'});
+  
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'image_url',
+    'image_url': {
+      'url': 'data:$mimeType;base64,$base64Data',
+    }
+  };
+}
+
 class ChatMessage {
   final ChatRole role;
-  final String content;
+  
+  /// content can be a String or a List<ContentPart> for multi-modal messages.
+  final dynamic content;
+  
   final String? reasoning;
   final String? name; // For tool role
   final String? toolCallId; // For tool response
@@ -112,7 +150,9 @@ class ChatMessage {
   Map<String, dynamic> toJson() {
     return {
       'role': role.name,
-      'content': content,
+      'content': content is List<ContentPart> 
+          ? (content as List<ContentPart>).map((p) => p.toJson()).toList()
+          : content,
       if (reasoning != null) 'reasoning_content': reasoning,
       if (name != null) 'name': name,
       if (toolCallId != null) 'tool_call_id': toolCallId,
@@ -121,9 +161,17 @@ class ChatMessage {
   }
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final jsonContent = json['content'];
+    dynamic parsedContent;
+    if (jsonContent is List) {
+      parsedContent = jsonContent.map((p) => ContentPart.fromJson(p as Map<String, dynamic>)).toList();
+    } else {
+      parsedContent = jsonContent ?? '';
+    }
+
     return ChatMessage(
       role: ChatRole.values.firstWhere((e) => e.name == json['role']),
-      content: json['content'] ?? '',
+      content: parsedContent,
       reasoning: json['reasoning_content'],
       name: json['name'],
       toolCallId: json['tool_call_id'],
