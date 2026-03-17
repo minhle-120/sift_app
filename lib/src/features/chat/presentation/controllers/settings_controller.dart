@@ -80,6 +80,7 @@ class SettingsState {
   final double mobileBundleProgress;
   final String mobileBundleStatus;
   final bool isMobileBundleInstalled;
+  final bool isBrainstormMode;
   final ModelBundleSize selectedBundleSize;
 
   const SettingsState({
@@ -139,6 +140,7 @@ class SettingsState {
     this.mobileBundleProgress = 0.0,
     this.mobileBundleStatus = '',
     this.isMobileBundleInstalled = false,
+    this.isBrainstormMode = false,
     this.selectedBundleSize = ModelBundleSize.standard4B,
   });
 
@@ -210,6 +212,7 @@ class SettingsState {
     double? mobileBundleProgress,
     String? mobileBundleStatus,
     bool? isMobileBundleInstalled,
+    bool? isBrainstormMode,
     ModelBundleSize? selectedBundleSize,
   }) {
     return SettingsState(
@@ -269,6 +272,7 @@ class SettingsState {
       mobileBundleProgress: mobileBundleProgress ?? this.mobileBundleProgress,
       mobileBundleStatus: mobileBundleStatus ?? this.mobileBundleStatus,
       isMobileBundleInstalled: isMobileBundleInstalled ?? this.isMobileBundleInstalled,
+      isBrainstormMode: isBrainstormMode ?? this.isBrainstormMode,
       selectedBundleSize: selectedBundleSize ?? this.selectedBundleSize,
     );
   }
@@ -327,6 +331,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       mobileTokenizerPath: prefs.getString('mobileTokenizerPath') ?? '',
       mobileUseGpu: prefs.getBool('mobileUseGpu') ?? false,
       autoInitMobileEngine: prefs.getBool('autoInitMobileEngine') ?? true,
+      isBrainstormMode: prefs.getBool('isBrainstormMode') ?? false,
       selectedBundleSize: ModelBundleSize.values[prefs.getInt('selectedBundleSize') ?? 0],
     );
     
@@ -794,6 +799,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setBool('isSyncEnabled', enabled);
     state = state.copyWith(isSyncEnabled: enabled);
+  }
+
+  Future<void> updateBrainstormMode(bool value) async {
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setBool('isBrainstormMode', value);
+    state = state.copyWith(isBrainstormMode: value);
   }
 
   Future<void> updateVisualizerMode(VisualizerMode mode) async {

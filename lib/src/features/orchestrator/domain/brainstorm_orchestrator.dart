@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/models/ai_models.dart';
 import '../../../../services/ai/i_ai_service.dart';
 import '../../../../core/services/openai_service.dart';
@@ -65,7 +66,11 @@ class BrainstormOrchestrator {
   }
 
   String _buildBrainstormSystemPrompt() {
-    return r'''You are Sift's Assistant.
+    final now = DateTime.now();
+    final dateStr = DateFormat('EEEE, MMMM d, y').format(now);
+
+    return '''You are Sift's Assistant.
+Today is $dateStr.
 
 ### Your Mission:
 - Help the user brainstorm ideas, solve problems, or explore topics using your broad internal knowledge.

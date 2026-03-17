@@ -92,16 +92,6 @@ class AppDatabase extends _$AppDatabase {
     return (select(conversations)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
-  /// Update conversation metadata.
-  Future<void> updateConversationMetadata(int id, {String? metadata}) {
-    return (update(conversations)..where((t) => t.id.equals(id))).write(
-      ConversationsCompanion(
-        metadata: metadata != null ? Value(metadata) : const Value.absent(),
-        lastUpdatedAt: Value(DateTime.now()),
-      ),
-    );
-  }
-
   /// Watch messages for a conversation.
   Stream<List<Message>> watchMessages(int conversationId) {
     return (select(messages)

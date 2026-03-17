@@ -124,15 +124,17 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                 ),
                   const SizedBox(width: 8),
                   
-                  // Brainstorm Mode Toggle
-                  _buildTrayAction(
-                    context,
-                    icon: chatState.isBrainstormMode ? Icons.psychology : Icons.psychology_outlined,
-                    label: chatState.isBrainstormMode ? 'Brainstorm: ON' : 'Brainstorm: OFF',
-                    isHighlight: chatState.isBrainstormMode,
-                    onPressed: () => ref.read(chatControllerProvider.notifier).toggleBrainstormMode(),
-                  ),
-                  const SizedBox(width: 8),
+                  // Brainstorm Mode Toggle (Hidden in Lite Mode)
+                  if (!settings.isMobileInternal) ...[
+                    _buildTrayAction(
+                      context,
+                      icon: chatState.isBrainstormMode ? Icons.psychology : Icons.psychology_outlined,
+                      label: chatState.isBrainstormMode ? 'Brainstorm: ON' : 'Brainstorm: OFF',
+                      isHighlight: chatState.isBrainstormMode,
+                      onPressed: () => ref.read(chatControllerProvider.notifier).toggleBrainstormMode(),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
 
                   // Visualizer Toggle (Hidden in Lite Mode or Brainstorm Mode)
                   if (!settings.isMobileInternal && !chatState.isBrainstormMode) ...[

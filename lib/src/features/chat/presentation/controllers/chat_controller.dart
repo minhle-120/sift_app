@@ -72,19 +72,34 @@ class ChatController extends StateNotifier<ChatState> {
   bool _isAiProcessing = false;
   bool _isCanceled = false;
 
-  ChatController(this._db, this._ref) : super(const ChatState()) {
+  ChatController(this._db, this._ref) : super(ChatState(
+    isBrainstormMode: _ref.read(settingsProvider).isBrainstormMode,
+  )) {
     // Initial check
     checkAiConnection();
     
-    // Watch for settings changes to re-verify connectivity
+    // Watch for settings changes to re-verify connectivity and sync Brainstorm Mode
     _ref.listen<SettingsState>(settingsProvider, (previous, next) {
       final urlChanged = previous?.llamaServerUrl != next.llamaServerUrl;
       final modelChanged = previous?.chatModel != next.chatModel;
       final serverStarted = previous?.isServerRunning == false && next.isServerRunning == true;
       final modelsLoaded = previous?.isLoadingModels == true && next.isLoadingModels == false;
+      final brainstormModeChanged = previous?.isBrainstormMode != next.isBrainstormMode;
 
       if (urlChanged || modelChanged || serverStarted || modelsLoaded) {
         checkAiConnection();
+      }
+
+      if (brainstormModeChanged) {
+        state = state.copyWith(isBrainstormMode: next.isBrainstormMode);
+      }
+
+      // Safeguard: If we are on mobile internal, we must NOT be in brainstorm mode.
+      if (next.isMobileInternal && state.isBrainstormMode) {
+        // Use Future.microtask to avoid state mutation during the listener callback
+        Future.microtask(() {
+          _ref.read(settingsProvider.notifier).updateBrainstormMode(false);
+        });
       }
     });
   }
@@ -162,10 +177,9 @@ class ChatController extends StateNotifier<ChatState> {
       final conv = await _db.getConversationById(conversationId);
       if (conv != null && conv.metadata != null) {
         try {
-          final meta = jsonDecode(conv.metadata!);
-          if (meta['isBrainstormMode'] != null) {
-            state = state.copyWith(isBrainstormMode: meta['isBrainstormMode'] as bool);
-          }
+          // We load common metadata here, but we ignore isBrainstormMode 
+          // because it is now a global sticky setting.
+          // We still keep the metadata loading for future per-chat properties.
         } catch (e) {
           debugPrint("Error parsing conversation metadata: $e");
         }
@@ -193,23 +207,11 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  void toggleBrainstormMode() {
+  Future<void> toggleBrainstormMode() async {
     final newValue = !state.isBrainstormMode;
     state = state.copyWith(isBrainstormMode: newValue);
-    
-    // Persist if we are in a conversation
-    if (state.conversationId != null) {
-      _saveConversationMetadata(state.conversationId!, newValue);
-    }
-  }
-
-  Future<void> _saveConversationMetadata(int conversationId, bool brainstormMode) async {
-    final conv = await _db.getConversationById(conversationId);
-    final meta = (conv != null && conv.metadata != null) 
-        ? jsonDecode(conv.metadata!) as Map<String, dynamic> 
-        : <String, dynamic>{};
-    meta['isBrainstormMode'] = brainstormMode;
-    await _db.updateConversationMetadata(conversationId, metadata: jsonEncode(meta));
+    // Update global settings
+    await _ref.read(settingsProvider.notifier).updateBrainstormMode(newValue);
   }
 
   Future<void> deleteConversation(int id) async {
@@ -351,14 +353,10 @@ class ChatController extends StateNotifier<ChatState> {
       try {
         final title = text.length > 30 ? '${text.substring(0, 30)}...' : text;
         
-        // Include initial brainstorm mode in metadata
-        final initialMetadata = jsonEncode({
-          'isBrainstormMode': state.isBrainstormMode,
-        });
-        
-        final newConv = await _db.createConversation(activeCollectionId, title);
-        await _db.updateConversationMetadata(newConv.id, metadata: initialMetadata);
-        
+        final newConv = await _db.createConversation(
+          activeCollectionId,
+          title,
+        );
         conversationId = newConv.id;
         
         // Start watching the new conversation
@@ -369,12 +367,13 @@ class ChatController extends StateNotifier<ChatState> {
       }
     }
 
-      _isAiProcessing = true;
+    final id = conversationId;
+    _isAiProcessing = true;
     _isCanceled = false;
     state = state.copyWith(isLoading: true, error: null);
     
     try {
-      final maxSortOrder = await _db.getMaxSortOrder(conversationId);
+      final maxSortOrder = await _db.getMaxSortOrder(id);
 
       // 3. User Message
       final metadata = attachments != null && attachments.isNotEmpty
@@ -389,7 +388,7 @@ class ChatController extends StateNotifier<ChatState> {
           : null;
 
       final userMessage = await _db.insertMessage(
-        conversationId: conversationId,
+        conversationId: id,
         role: 'user',
         content: text,
         sortOrder: maxSortOrder + 1,
@@ -398,7 +397,7 @@ class ChatController extends StateNotifier<ChatState> {
 
       // 4. Placeholder Assistant Message
       final placeholderMessage = await _db.insertMessage(
-        conversationId: conversationId,
+        conversationId: id,
         role: 'assistant',
         content: 'Researching...',
         sortOrder: maxSortOrder + 2,
@@ -465,7 +464,8 @@ class ChatController extends StateNotifier<ChatState> {
       );
 
       // --- BRANCH: Brainstorm Mode (Simple Mode) ---
-      if (state.isBrainstormMode) {
+      // Force Lite Mode (RAG) on mobile internal even if brainstorm is somehow true
+      if (state.isBrainstormMode && !isMobileInternal) {
         final brainstormOrchestrator = _ref.read(brainstormOrchestratorProvider);
         state = state.copyWith(researchStatus: 'Brainstorming...');
         
