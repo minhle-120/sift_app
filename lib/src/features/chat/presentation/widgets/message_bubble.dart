@@ -22,17 +22,59 @@ class MessageBubble extends ConsumerStatefulWidget {
 class _MessageBubbleState extends ConsumerState<MessageBubble> {
   bool _isEditing = false;
   bool _isReasoningExpanded = false;
+  bool _userScrolledReasoning = false;
   late TextEditingController _editController;
+  late ScrollController _reasoningScrollController;
 
   @override
   void initState() {
     super.initState();
     _editController = TextEditingController(text: widget.message.text);
+    _reasoningScrollController = ScrollController();
+    _reasoningScrollController.addListener(_onReasoningScroll);
+  }
+
+  void _onReasoningScroll() {
+    if (!_reasoningScrollController.hasClients) return;
+    final pos = _reasoningScrollController.position;
+    // If user scrolled away from the bottom, stop auto-following
+    if (pos.maxScrollExtent - pos.pixels > 20) {
+      _userScrolledReasoning = true;
+    }
+  }
+
+  @override
+  void didUpdateWidget(MessageBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.message.reasoning != null &&
+        widget.message.reasoning != oldWidget.message.reasoning &&
+        _isReasoningExpanded) {
+      // Reset the flag if reasoning just started (was previously null)
+      if (oldWidget.message.reasoning == null) {
+        _userScrolledReasoning = false;
+      }
+      if (!_userScrolledReasoning) {
+        _scrollReasoningToBottom();
+      }
+    }
+  }
+
+  void _scrollReasoningToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_reasoningScrollController.hasClients) {
+        _reasoningScrollController.animateTo(
+          _reasoningScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
     _editController.dispose();
+    _reasoningScrollController.dispose();
     super.dispose();
   }
 
@@ -88,9 +130,15 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                   if (widget.message.reasoning != null) _buildReasoning(theme, widget.message.reasoning!),
                   if (_isEditing)
                     _buildEditMode(theme)
-                  else if (widget.message.text.isEmpty && chatState.isLoading && !isUser)
+                  else if (widget.message.text.isEmpty && 
+                           (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) && 
+                           chatState.isLoading && 
+                           !isUser)
                     _buildStatusIndicator(theme, chatState.researchStatus ?? 'Thinking...')
-                  else if (widget.message.text.isEmpty && !chatState.isLoading && !isUser)
+                  else if (widget.message.text.isEmpty && 
+                           (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) && 
+                           !chatState.isLoading && 
+                           !isUser)
                     const SizedBox.shrink()
                   else
                     MarkdownBody(
@@ -503,13 +551,17 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
           ),
           AnimatedCrossFade(
             firstChild: const SizedBox(width: double.infinity),
-            secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: SelectableText(
-                text,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                  height: 1.5,
+            secondChild: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 250),
+              child: SingleChildScrollView(
+                controller: _reasoningScrollController,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: SelectableText(
+                  text,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    height: 1.5,
+                  ),
                 ),
               ),
             ),

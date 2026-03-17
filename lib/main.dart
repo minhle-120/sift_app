@@ -79,8 +79,16 @@ class _SiftAppState extends State<SiftApp> {
       title: 'Sift',
       debugShowCheckedModeBanner: false,
       theme: SiftTheme.darkTheme,
+      scrollBehavior: NoScrollbarBehavior(),
       home: const _AppGate(),
     );
+  }
+}
+
+class NoScrollbarBehavior extends MaterialScrollBehavior {
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
   }
 }
 

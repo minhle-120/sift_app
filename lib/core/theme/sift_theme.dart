@@ -45,6 +45,12 @@ class SiftTheme {
         thickness: 1,
         space: 1,
       ),
+      scrollbarTheme: ScrollbarThemeData(
+        thickness: WidgetStateProperty.all(0),
+        thumbVisibility: WidgetStateProperty.all(false),
+        trackVisibility: WidgetStateProperty.all(false),
+        interactive: false,
+      ),
     );
   }
 }

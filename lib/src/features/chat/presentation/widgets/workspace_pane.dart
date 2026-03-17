@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/models/ai_models.dart';
 import '../controllers/workbench_controller.dart';
+import '../controllers/settings_controller.dart';
 import '../../../knowledge/presentation/widgets/document_viewer.dart';
 import 'visualization_viewer.dart';
 import 'code_viewer.dart';
@@ -16,6 +17,15 @@ class WorkbenchPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final workbench = ref.watch(workbenchProvider);
+    final settings = ref.watch(settingsProvider);
+    
+    // Filter tabs for Mobile Lite Mode (internal AI)
+    final filteredTabs = workbench.tabs.where((tab) {
+      if (settings.isMobileInternal && tab.type == WorkbenchTabType.controlPanel) {
+        return false;
+      }
+      return true;
+    }).toList();
     
     return Container(
       decoration: BoxDecoration(
@@ -29,16 +39,16 @@ class WorkbenchPanel extends ConsumerWidget {
       ),
       child: Column(
         children: [
-          if (workbench.tabs.isNotEmpty) _buildTabBar(ref, workbench, theme),
+          if (filteredTabs.isNotEmpty) _buildTabBar(ref, workbench, filteredTabs, theme),
           Expanded(
-            child: _buildContent(workbench.activeTab, theme),
+            child: _buildContent(workbench.activeTab, settings.isMobileInternal, theme),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTabBar(WidgetRef ref, WorkbenchState state, ThemeData theme) {
+  Widget _buildTabBar(WidgetRef ref, WorkbenchState state, List<WorkbenchTab> tabs, ThemeData theme) {
     return Container(
       height: 48,
       decoration: BoxDecoration(
@@ -51,9 +61,9 @@ class WorkbenchPanel extends ConsumerWidget {
       ),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: state.tabs.length,
+        itemCount: tabs.length,
         itemBuilder: (context, index) {
-          final tab = state.tabs[index];
+          final tab = tabs[index];
           final isActive = tab.id == state.activeTabId;
 
           return InkWell(
@@ -94,8 +104,8 @@ class WorkbenchPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildContent(WorkbenchTab? tab, ThemeData theme) {
-    if (tab == null) {
+  Widget _buildContent(WorkbenchTab? tab, bool isMobileInternal, ThemeData theme) {
+    if (tab == null || (isMobileInternal && tab.type == WorkbenchTabType.controlPanel)) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

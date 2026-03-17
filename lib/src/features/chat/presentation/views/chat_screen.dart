@@ -67,10 +67,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     });
 
-    final chatView = Column(
+    final chatContent = Column(
       children: [
-        _buildHeader(context, ref, collectionState.activeCollection),
-        
         Expanded(
           child: Column(
             children: [
@@ -96,12 +94,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     if (isDesktop) {
       final workbenchWidth = workbench.isCollapsed ? 0.0 : size.width * workbench.panelRatio;
+      final availableChatWidth = size.width - workbenchWidth;
       
+      // Fixed width constraint: 900px, but scaled down if the window is smaller
+      final constraintWidth = 900.0.clamp(600.0, availableChatWidth * 0.95);
+
       return Scaffold(
         drawer: const ConversationDrawer(),
         body: Row(
           children: [
-            Expanded(child: chatView),
+            Expanded(
+              child: Column(
+                children: [
+                  _buildHeader(context, ref, collectionState.activeCollection),
+                  Expanded(
+                    child: Container(
+                      color: theme.colorScheme.surface,
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: SizedBox(
+                          width: constraintWidth,
+                          child: chatContent,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             if (!workbench.isCollapsed) ...[
               GestureDetector(
                 onHorizontalDragUpdate: (details) {
@@ -148,7 +168,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       return Scaffold(
         drawer: const ConversationDrawer(),
-        body: SafeArea(child: chatView),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(context, ref, collectionState.activeCollection),
+              Expanded(child: chatContent),
+            ],
+          ),
+        ),
       );
     }
   }
