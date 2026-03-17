@@ -24,7 +24,7 @@ jobs:
           persist-credentials: true
       - name: Bump version and push tag
         id: tag_action
-        uses: anothrNick/github-tag-action@1.64.0
+        uses: anothrNick/github-tag-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WITH_V: true
@@ -99,10 +99,42 @@ jobs:
           name: sift-windows-x64
           path: dist/windows/
 
+  build_android:
+    name: Build Android
+    needs: [tagging]
+    if: always() && (needs.tagging.result == 'success' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sift-android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
   # 3. Release Job
   create_release:
     name: Create GitHub Release
-    needs: [tagging, build_linux, build_windows]
+    needs: [tagging, build_linux, build_windows, build_android]
     # Run only if we have a tag (either from tagging job or from manual push)
     if: always() && (needs.tagging.outputs.new_tag != '' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
@@ -130,20 +162,28 @@ jobs:
           name: sift-windows-x64
           path: windows-dist
 
+      - name: Download Android Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sift-android-apk
+          path: android-dist
+
       - name: Package Release Assets
         run: |
           sudo apt-get update && sudo apt-get install -y zip
           TAG=${{ steps.vars.outputs.tag }}
           cd linux-dist && zip -r ../sift-${TAG}-linux-x64.zip . && cd ..
           cd windows-dist && zip -r ../sift-${TAG}-windows-x64.zip . && cd ..
+          cp android-dist/app-release.apk sift-${TAG}-android.apk
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           files: |
             sift-${{ steps.vars.outputs.tag }}-linux-x64.zip
             sift-${{ steps.vars.outputs.tag }}-windows-x64.zip
+            sift-${{ steps.vars.outputs.tag }}-android.apk
           draft: false
           prerelease: false
         env:
