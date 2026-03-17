@@ -399,7 +399,7 @@ class ChatController extends StateNotifier<ChatState> {
       final placeholderMessage = await _db.insertMessage(
         conversationId: id,
         role: 'assistant',
-        content: 'Researching...',
+        content: '',
         sortOrder: maxSortOrder + 2,
       );
 
@@ -515,6 +515,7 @@ class ChatController extends StateNotifier<ChatState> {
       String? currentVisualSchema;
       String? currentCodeContext;
       String? currentCodeTitle;
+      List<ai.Flashcard>? currentFlashcards;
       
       if (activeTab != null) {
         // Block "Stale" context: If the active tab belongs to the message we are regenerating
@@ -526,6 +527,11 @@ class ChatController extends StateNotifier<ChatState> {
           } else if (activeTab.type == WorkbenchTabType.code) {
             currentCodeContext = activeTab.metadata?['code'];
             currentCodeTitle = activeTab.title;
+          } else if (activeTab.type == WorkbenchTabType.flashcards) {
+            final dynamic cardsRaw = activeTab.metadata?['cards'];
+            if (cardsRaw is List) {
+              currentFlashcards = cardsRaw.map((c) => ai.Flashcard.fromJson(c as Map<String, dynamic>)).toList();
+            }
           }
         }
       }
@@ -538,6 +544,7 @@ class ChatController extends StateNotifier<ChatState> {
         currentSchema: currentVisualSchema,
         currentCode: currentCodeContext,
         currentCodeTitle: currentCodeTitle,
+        currentFlashcards: currentFlashcards,
         onStatusUpdate: (status) => state = state.copyWith(researchStatus: status),
         isCanceled: () => _isCanceled,
       );
@@ -607,6 +614,21 @@ class ChatController extends StateNotifier<ChatState> {
         ),
       );
     }
+
+    if (researchResult.flashcardResult != null) {
+      // Auto-open the flashcard tab
+      _ref.read(workbenchProvider.notifier).addTab(
+        WorkbenchTab(
+          id: 'cards_${placeholderMessage.uuid}',
+          title: researchResult.flashcardTitle ?? 'Study Deck',
+          icon: Icons.sports_esports_outlined,
+          type: WorkbenchTabType.flashcards,
+          metadata: {
+            'cards': researchResult.flashcardResult!.map((c) => c.toJson()).toList(),
+          },
+        ),
+      );
+    }
       if (researchResult.package != null) {
         // 1. Build Citation Metadata Early (so citations work DURING streaming)
         final citationData = <String, dynamic>{};
@@ -638,6 +660,8 @@ class ChatController extends StateNotifier<ChatState> {
           registry: researchOrchestrator.registry,
           visualSchema: researchResult.visualSchema,
           codeSnippet: researchResult.codeSnippet,
+          flashcardTitle: researchResult.flashcardTitle,
+          flashcardCount: researchResult.flashcardResult?.length,
         );
 
         bool isFirstToken = true;

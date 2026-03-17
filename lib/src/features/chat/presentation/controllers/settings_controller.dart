@@ -29,6 +29,7 @@ class SettingsState {
   final bool isSyncEnabled;
   final VisualizerMode visualizerMode;
   final CoderMode coderMode;
+  final FlashcardMode flashcardMode;
   final List<String> availableModels;
   final bool isLoadingModels;
   final String? error;
@@ -95,6 +96,7 @@ class SettingsState {
     this.isSyncEnabled = true,
     this.visualizerMode = VisualizerMode.auto,
     this.coderMode = CoderMode.auto,
+    this.flashcardMode = FlashcardMode.auto,
     this.availableModels = const [],
     this.isLoadingModels = false,
     this.error,
@@ -167,6 +169,7 @@ class SettingsState {
     bool? isSyncEnabled,
     VisualizerMode? visualizerMode,
     CoderMode? coderMode,
+    FlashcardMode? flashcardMode,
     List<String>? availableModels,
     bool? isLoadingModels,
     String? error,
@@ -227,6 +230,7 @@ class SettingsState {
       isSyncEnabled: isSyncEnabled ?? this.isSyncEnabled,
       visualizerMode: visualizerMode ?? this.visualizerMode,
       coderMode: coderMode ?? this.coderMode,
+      flashcardMode: flashcardMode ?? this.flashcardMode,
       availableModels: availableModels ?? this.availableModels,
       isLoadingModels: isLoadingModels ?? this.isLoadingModels,
       error: error ?? this.error,
@@ -304,6 +308,7 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     final url = prefs.getString('llamaServerUrl') ?? 'http://localhost:8080';
     final externalUrl = prefs.getString('externalLlamaServerUrl') ?? url;
+    final flashcardMode = FlashcardMode.values[prefs.getInt('flashcardMode') ?? FlashcardMode.auto.index];
     
     state = state.copyWith(
       llamaServerUrl: url,
@@ -316,6 +321,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       isSyncEnabled: prefs.getBool('isSyncEnabled') ?? true,
       visualizerMode: VisualizerMode.values[prefs.getInt('visualizerMode') ?? 0],
       coderMode: CoderMode.values[prefs.getInt('coderMode') ?? 0],
+      flashcardMode: flashcardMode,
       backendType: BackendType.values[prefs.getInt('backendType') ?? 0],
       gpuDeviceIndex: prefs.getInt('gpuDeviceIndex') ?? 0,
       modelsPath: prefs.getString('modelsPath') ?? await _downloader.getModelsDirectory(),
@@ -825,6 +831,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setInt('coderMode', mode.index);
     state = state.copyWith(coderMode: mode);
+  }
+
+  Future<void> updateFlashcardMode(FlashcardMode mode) async {
+    state = state.copyWith(flashcardMode: mode);
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setInt('flashcardMode', mode.index);
   }
 
   Future<void> setSelectedBundleSize(ModelBundleSize size) async {

@@ -141,7 +141,7 @@ fit = on
 
 [$modelTitle]
 model = $resolvedInstructPath
-fit-ctx = 8192
+fit-ctx = 16384
 chat-template-kwargs = {"enable_thinking": false}
 cache-type-k = q8_0
 cache-type-v = q8_0

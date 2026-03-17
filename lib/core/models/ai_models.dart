@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum VisualizerMode { auto, off, on }
 enum CoderMode { auto, off, on }
+enum FlashcardMode { auto, off, on }
 
 enum AiConnectionStatus { ok, loading, unreachable }
 
@@ -19,10 +20,15 @@ class ResearchResult {
   final ResearchPackage? package;
   final VisualPackage? visualPackage;
   final String? visualSchema;
+  final VisualizerMode? visualizerMode;
   final CodePackage? codePackage;
   final String? codeSnippet;
   final String? codeLanguage;
   final String? codeTitle;
+  final FlashcardPackage? flashcardPackage;
+  final List<Flashcard>? flashcardResult;
+  final String? flashcardTitle;
+  final FlashcardMode? flashcardMode;
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
@@ -37,6 +43,11 @@ class ResearchResult {
     this.codeSnippet,
     this.codeLanguage,
     this.codeTitle,
+    this.flashcardPackage,
+    this.flashcardResult,
+    this.flashcardTitle,
+    this.flashcardMode,
+    this.visualizerMode,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
@@ -64,6 +75,16 @@ class CodePackage {
   String toString() => 'CodePackage(indices: $indices, goal: $codingGoal)';
 }
 
+class FlashcardPackage {
+  final List<int> indices;
+  final String studyGoal;
+
+  FlashcardPackage({required this.indices, required this.studyGoal});
+
+  @override
+  String toString() => 'FlashcardPackage(indices: $indices, goal: $studyGoal)';
+}
+
 class VisualResult {
   final VisualPackage package;
   final String schema;
@@ -84,6 +105,50 @@ class CodeResult {
     required this.codeSnippet,
     this.language = 'plaintext',
     this.title,
+    required this.steps,
+  });
+}
+
+class Flashcard {
+  final String id;
+  final String question;
+  final String answer;
+  final String? explanation;
+
+  Flashcard({
+    required this.id,
+    required this.question,
+    required this.answer,
+    this.explanation,
+  });
+
+  factory Flashcard.fromJson(Map<String, dynamic> json) {
+    return Flashcard(
+      id: json['id'] ?? '',
+      question: json['question'] ?? '',
+      answer: json['answer'] ?? '',
+      explanation: json['explanation'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'question': question,
+    'answer': answer,
+    if (explanation != null) 'explanation': explanation,
+  };
+}
+
+class FlashcardResult {
+  final FlashcardPackage package;
+  final List<Flashcard> cards;
+  final String title;
+  final List<ChatMessage> steps;
+
+  FlashcardResult({
+    required this.package,
+    required this.cards,
+    required this.title,
     required this.steps,
   });
 }

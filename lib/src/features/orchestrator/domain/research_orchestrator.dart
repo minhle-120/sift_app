@@ -14,12 +14,15 @@ import '../../../../core/tools/delegate_to_visualizer_tool.dart';
 import '../../../../core/tools/delegate_to_coder_tool.dart';
 import 'visual_orchestrator.dart';
 import 'code_orchestrator.dart';
+import 'flashcard_orchestrator.dart';
 import '../../chat/presentation/controllers/settings_controller.dart';
+import '../../../../core/tools/delegate_to_flashcards_tool.dart';
 
 final researchOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
   final visualOrchestrator = ref.watch(visualOrchestratorProvider);
   final codeOrchestrator = ref.watch(codeOrchestratorProvider);
+  final flashcardOrchestrator = ref.watch(flashcardOrchestratorProvider);
   final database = AppDatabase.instance;
   final embeddingService = ref.watch(embeddingServiceProvider);
   final rerankService = ref.watch(rerankServiceProvider);
@@ -35,16 +38,19 @@ final researchOrchestratorProvider = Provider((ref) {
   final noInfoTool = NoInfoFoundTool();
   final visualTool = DelegateToVisualizerTool();
   final codeTool = DelegateToCoderTool();
+  final flashcardTool = DelegateToFlashcardsTool();
   
   return ResearchOrchestrator(
     aiService: aiService,
     visualOrchestrator: visualOrchestrator,
     codeOrchestrator: codeOrchestrator,
+    flashcardOrchestrator: flashcardOrchestrator,
     ragTool: ragTool,
     delegateTool: delegateTool,
     noInfoTool: noInfoTool,
     visualTool: visualTool,
     codeTool: codeTool,
+    flashcardTool: flashcardTool,
   );
 });
 
@@ -52,15 +58,18 @@ final researchOrchestratorProvider = Provider((ref) {
 class ResearchOrchestrator {
   static const String visualMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_visualizer` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.';
   static const String codeMandate = '**CRITICAL MANDATE**: The user has requested to write or modify code. You MUST call `query_knowledge_base` first to gather context. After searching, you MUST call `delegate_to_coder` if the user wants code generation, script writing, or technical implementation. Do NOT write the code yourself; delegate it to the code specialist.';
+  static const String flashcardMandate = '**CRITICAL MANDATE**: The user has requested flashcards or study materials. You MUST call `query_knowledge_base` first to gather factual context. After searching, you MUST call `delegate_to_flashcards` to transform that data into a high-quality study deck.';
 
   final IAiService aiService;
   final VisualOrchestrator visualOrchestrator;
   final CodeOrchestrator codeOrchestrator;
+  final FlashcardOrchestrator flashcardOrchestrator;
   final RAGTool ragTool;
   final DelegateToSynthesizerTool delegateTool;
   final NoInfoFoundTool noInfoTool;
   final DelegateToVisualizerTool visualTool;
   final DelegateToCoderTool codeTool;
+  final DelegateToFlashcardsTool flashcardTool;
 
   ChunkRegistry get registry => ragTool.registry;
 
@@ -68,11 +77,13 @@ class ResearchOrchestrator {
     required this.aiService,
     required this.visualOrchestrator,
     required this.codeOrchestrator,
+    required this.flashcardOrchestrator,
     required this.ragTool,
     required this.delegateTool,
     required this.noInfoTool,
     required this.visualTool,
     required this.codeTool,
+    required this.flashcardTool,
   });
 
   /// Starts a research session for a given query and context.
@@ -87,6 +98,7 @@ class ResearchOrchestrator {
     String? currentSchema,
     String? currentCode,
     String? currentCodeTitle,
+    List<Flashcard>? currentFlashcards,
     void Function(String status)? onStatusUpdate,
     bool Function()? isCanceled,
   }) async {
@@ -103,14 +115,18 @@ class ResearchOrchestrator {
       noInfoTool.definition,
       if (settings.visualizerMode != VisualizerMode.off) visualTool.definition,
       if (settings.coderMode != CoderMode.off) codeTool.definition,
+      flashcardTool.definition,
     ];
 
     String finalUserQuery = userQuery;
     if (settings.visualizerMode == VisualizerMode.on) {
-      finalUserQuery = '$visualMandate\n\nUser Query: $userQuery';
+      finalUserQuery = '$finalUserQuery\n\n$visualMandate';
     }
     if (settings.coderMode == CoderMode.on) {
-      finalUserQuery = '$codeMandate\n\nUser Query: $finalUserQuery';
+      finalUserQuery = '$finalUserQuery\n\n$codeMandate';
+    }
+    if (settings.flashcardMode == FlashcardMode.on) {
+      finalUserQuery = '$finalUserQuery\n\n$flashcardMandate';
     }
 
     final contextPrompt = historicalContext.isEmpty 
@@ -133,6 +149,8 @@ class ResearchOrchestrator {
     String? capturedCodeSnippet;
     String? capturedCodeLanguage;
     String? capturedCodeTitle;
+    List<Flashcard>? capturedFlashcards;
+    String? capturedFlashcardTitle;
 
     // 2. ReAct Loop
     int iterations = 0;
@@ -199,6 +217,8 @@ class ResearchOrchestrator {
             codeSnippet: capturedCodeSnippet,
             codeLanguage: capturedCodeLanguage,
             codeTitle: capturedCodeTitle,
+            flashcardResult: capturedFlashcards,
+            flashcardTitle: capturedFlashcardTitle,
             steps: messages.sublist(newStepsStartIndex),
           );
         } else if (toolCall.function.name == DelegateToVisualizerTool.name) {
@@ -266,6 +286,39 @@ class ResearchOrchestrator {
             toolCallId: toolCall.id,
             name: DelegateToCoderTool.name,
           ));
+        } else if (toolCall.function.name == DelegateToFlashcardsTool.name) {
+          final args = _parseArgs(toolCall.function.arguments);
+          onStatusUpdate?.call('Designing study deck for "${args['studyGoal'] ?? 'topic'}..."');
+          
+          final package = flashcardTool.execute(args);
+          
+          final cleanContext = contextPrompt
+              .replaceAll(visualMandate, '')
+              .replaceAll(codeMandate, '')
+              .replaceAll(flashcardMandate, '')
+              .replaceAll('\n\nUser Query: ', '\n')
+              .replaceAll('Current query: \n', 'Current query: ')
+              .trim();
+
+          final flashcardResult = await flashcardOrchestrator.generateFlashcards(
+            package: package, 
+            registry: registry,
+            fullContext: cleanContext,
+            currentCards: currentFlashcards,
+          );
+
+          capturedFlashcards = flashcardResult.cards;
+          capturedFlashcardTitle = flashcardResult.title;
+
+          messages.add(ChatMessage(
+            role: ChatRole.tool,
+            content: 'FLASHCARDS_GENERATED: ${flashcardResult.cards.length} cards in deck "${flashcardResult.title}"\n\n'
+                     'Assistant Note: The study deck has been generated and added to the workspace. '
+                     'You should now call delegate_to_synthesizer to explain the key concepts covered in the flashcards '
+                     'and encourage the user to test their knowledge.',
+            toolCallId: toolCall.id,
+            name: DelegateToFlashcardsTool.name,
+          ));
         } else if (toolCall.function.name == NoInfoFoundTool.name) {
           // AI specifically said no info found
           final args = _parseArgs(toolCall.function.arguments);
@@ -296,6 +349,14 @@ class ResearchOrchestrator {
         codeSnippet: capturedCodeSnippet,
         codeLanguage: capturedCodeLanguage,
         codeTitle: capturedCodeTitle,
+        flashcardResult: capturedFlashcards,
+        flashcardTitle: capturedFlashcardTitle,
+        flashcardPackage: FlashcardPackage(
+          indices: allResults.map((r) => r.index).toList(),
+          studyGoal: userQuery,
+        ),
+        flashcardMode: settings.flashcardMode,
+        visualizerMode: settings.visualizerMode,
         steps: messages.sublist(newStepsStartIndex),
       );
     }
@@ -319,14 +380,15 @@ You have access to the conversation history. Use this context to resolve pronoun
 5. **Synthesis**: If you have enough info to answer as text, call `finalize_research_response`. **CRITICAL**: Do NOT use this tool if the user's request involves showing, writing, or modifying code.
 6. **Visualization**: If the data is inherently visual (comparisons, trends, hierarchies, complex relationships), call `delegate_to_visualizer` with the relevant chunks. After calling this, you will receive confirmation and the generated JSON schema. You MUST then use that context to provide a final textual response via `finalize_research_response`.
 7. **Code Generation**: If the user asks to show, write, generate, or modify code, you MUST call `delegate_to_coder` with the relevant chunks. This is the ONLY tool for handling code. After calling this, you will receive confirmation and the generated code. You MUST then use that context to provide a final textual response via `finalize_research_response` to explain the results.
+8. **Flashcard Generation**: If the user asks to study, memorize, or generate flashcards, you MUST call `delegate_to_flashcards` with the relevant chunks. This tool transforms data into a study deck for the Memory workspace. After calling it, you MUST follow up with `finalize_research_response` to explain the study material.
  
 ### Rules:
   - **ONLY output Tool Calls**. Do not provide any conversational text, explanations, or reasoning.
-  - **No Code in Final Response**: `finalize_research_response` is for textual summaries and analysis only. NEVER use it to output code blocks, scripts, or implementation details; use `delegate_to_coder` for that.
+  - **No Code or Flashcard Data in Final Response**: `finalize_research_response` is for textual summaries and analysis only. NEVER use it to output code blocks, scripts, or raw flashcard JSON; use the respective specialists instead.
   - Use the conversation history to ensure your searches are targeted and context-aware.
   - **Search First**: Do NOT call `no_info_found` unless you have already received search results that were irrelevant or insufficient.
   - If you call `no_info_found`, the research session will terminate immediately.
-  - **Visual/Code-Text Synergy**: When you call `delegate_to_visualizer` or `delegate_to_coder`, the system prepares the result in the workspace. You MUST follow up by calling `finalize_research_response` so the user gets both the interactive result and your textual explanation.
+  - **Specialist**: When you call `delegate_to_visualizer`, `delegate_to_coder`, or `delegate_to_flashcards`, the system prepares the result in the workspace. You MUST follow up by calling `finalize_research_response` so the user gets both the interactive result and your textual explanation.
   - Do not take shortcuts or skip any of the user's request.
   - Always use the `query_knowledge_base` tool to search for information, no mater how simple the query may seem.
   - Your mission is complete when you have delegated the work via `finalize_research_response` or called `no_info_found`.
@@ -368,10 +430,12 @@ You have access to the conversation history. Use this context to resolve pronoun
         final cleanQuery = m.text
             .replaceAll(visualMandate, '')
             .replaceAll(codeMandate, '')
+            .replaceAll(flashcardMandate, '')
             .replaceAll('\n\nUser Query: ', '')
             .trim();
         buffer.write('Query: $cleanQuery');
       } else if (m.role == domain.MessageRole.assistant) {
+        if (m.text.trim().isEmpty) continue; // Skip empty assistant messages (placeholders)
         if (buffer.isNotEmpty) buffer.write('\n');
         // Strip Citations: Remove [[Chunk X]] markers to keep history clean for the researcher
         final cleanAnswer = m.text.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '');

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/services/portable_settings.dart';
 
-enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization, code, controlPanel }
+enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization, code, flashcards, controlPanel }
 
 class WorkbenchTab {
   final String id;
@@ -175,7 +175,50 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
       return;
     }
 
-    // 3. Default behavior for other tab types
+    // 3. Specialized Logic for Flashcards: Merge New Cards with Existing
+    if (tab.type == WorkbenchTabType.flashcards) {
+      final List<dynamic>? incomingCards = tab.metadata?['cards'];
+      if (incomingCards != null) {
+        final existingTabIndex = state.tabs.indexWhere(
+          (t) => t.type == WorkbenchTabType.flashcards && t.title == tab.title
+        );
+
+        if (existingTabIndex != -1) {
+          final existingTab = state.tabs[existingTabIndex];
+          final List<dynamic> currentCards = List.from(existingTab.metadata?['cards'] ?? []);
+          
+          // Merge logic: Add only cards with new IDs
+          final existingIds = currentCards.map((c) => c['id']).toSet();
+          for (final card in incomingCards) {
+            if (!existingIds.contains(card['id'])) {
+              currentCards.add(card);
+            }
+          }
+
+          final updatedTab = WorkbenchTab(
+            id: existingTab.id,
+            title: existingTab.title,
+            icon: existingTab.icon,
+            type: existingTab.type,
+            metadata: {
+              'cards': currentCards,
+            },
+          );
+
+          final newTabs = List<WorkbenchTab>.from(state.tabs);
+          newTabs[existingTabIndex] = updatedTab;
+
+          state = state.copyWith(
+            tabs: newTabs,
+            activeTabId: existingTab.id,
+            isCollapsed: false,
+          );
+          return;
+        }
+      }
+    }
+
+    // 4. Default behavior for other tab types
     state = state.copyWith(
       tabs: [...state.tabs, tab],
       activeTabId: tab.id,

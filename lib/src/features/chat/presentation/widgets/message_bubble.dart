@@ -40,6 +40,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
   Widget build(BuildContext context) {
     final isUser = widget.message.role == MessageRole.user;
     final theme = Theme.of(context);
+    final chatState = ref.watch(chatControllerProvider);
 
     return Container(
         width: double.infinity,
@@ -87,6 +88,10 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                   if (widget.message.reasoning != null) _buildReasoning(theme, widget.message.reasoning!),
                   if (_isEditing)
                     _buildEditMode(theme)
+                  else if (widget.message.text.isEmpty && chatState.isLoading && !isUser)
+                    _buildStatusIndicator(theme, chatState.researchStatus ?? 'Thinking...')
+                  else if (widget.message.text.isEmpty && !chatState.isLoading && !isUser)
+                    const SizedBox.shrink()
                   else
                     MarkdownBody(
                       data: widget.message.text,
@@ -217,6 +222,17 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
           ],
         ),
       );
+  }
+
+  Widget _buildStatusIndicator(ThemeData theme, String status) {
+    return Text(
+      status,
+      style: theme.textTheme.bodyLarge?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+        fontStyle: FontStyle.italic,
+        height: 1.5,
+      ),
+    );
   }
 
   Widget _buildEditMode(ThemeData theme) {

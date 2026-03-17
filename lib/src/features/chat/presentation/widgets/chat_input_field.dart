@@ -141,7 +141,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                     _buildTrayAction(
                       context,
                       icon: _getVisualizerIcon(settings.visualizerMode),
-                      label: 'Visualizer: ${_getVisualizerLabel(settings.visualizerMode)}',
+                      label: 'Chart: ${_getVisualizerLabel(settings.visualizerMode)}',
                       isHighlight: settings.visualizerMode != VisualizerMode.off,
                       onPressed: () => _cycleVisualizerMode(settings, settingsNotifier),
                     ),
@@ -149,9 +149,17 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                     _buildTrayAction(
                       context,
                       icon: _getCoderIcon(settings.coderMode),
-                      label: 'Coder: ${_getCoderLabel(settings.coderMode)}',
+                      label: 'Code: ${_getCoderLabel(settings.coderMode)}',
                       isHighlight: settings.coderMode != CoderMode.off,
                       onPressed: () => _cycleCoderMode(settings, settingsNotifier),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildTrayAction(
+                      context,
+                      icon: _getFlashcardIcon(settings.flashcardMode),
+                      label: 'Flashcard: ${_getFlashcardLabel(settings.flashcardMode)}',
+                      isHighlight: settings.flashcardMode != FlashcardMode.off,
+                      onPressed: () => _cycleFlashcardMode(settings, settingsNotifier),
                     ),
                     const SizedBox(width: 8),
                   ],
@@ -392,8 +400,6 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 6),
             Text(
               label, 
               style: theme.textTheme.labelSmall?.copyWith(
@@ -420,7 +426,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
     switch (mode) {
       case VisualizerMode.auto: return 'Auto';
       case VisualizerMode.off: return 'Off';
-      case VisualizerMode.on: return 'Always On';
+      case VisualizerMode.on: return 'On';
     }
   }
 
@@ -441,13 +447,34 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
     switch (mode) {
       case CoderMode.auto: return 'Auto';
       case CoderMode.off: return 'Off';
-      case CoderMode.on: return 'Always On';
+      case CoderMode.on: return 'On';
     }
   }
 
   void _cycleCoderMode(SettingsState settings, SettingsController notifier) {
     final nextIndex = (settings.coderMode.index + 1) % CoderMode.values.length;
     notifier.updateCoderMode(CoderMode.values[nextIndex]);
+  }
+
+  IconData _getFlashcardIcon(FlashcardMode mode) {
+    switch (mode) {
+      case FlashcardMode.auto: return Icons.auto_awesome_outlined;
+      case FlashcardMode.off: return Icons.close_rounded;
+      case FlashcardMode.on: return Icons.school_outlined;
+    }
+  }
+
+  String _getFlashcardLabel(FlashcardMode mode) {
+    switch (mode) {
+      case FlashcardMode.auto: return 'Auto';
+      case FlashcardMode.off: return 'Off';
+      case FlashcardMode.on: return 'On';
+    }
+  }
+
+  void _cycleFlashcardMode(SettingsState settings, SettingsController notifier) {
+    final nextIndex = (settings.flashcardMode.index + 1) % FlashcardMode.values.length;
+    notifier.updateFlashcardMode(FlashcardMode.values[nextIndex]);
   }
 
   IconData _getFileIcon(String? extension) {

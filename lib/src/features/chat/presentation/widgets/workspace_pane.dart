@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../../core/models/ai_models.dart';
 import '../controllers/workbench_controller.dart';
 import '../../../knowledge/presentation/widgets/document_viewer.dart';
 import 'visualization_viewer.dart';
 import 'code_viewer.dart';
+import 'flashcard_viewer.dart';
 import 'control_panel.dart';
 import 'dart:convert';
 
@@ -153,6 +155,17 @@ class WorkbenchPanel extends ConsumerWidget {
           key: ValueKey(tab.id),
           code: code,
           language: language,
+        );
+      }
+    } else if (tab.type == WorkbenchTabType.flashcards) {
+      final meta = tab.metadata as Map<String, dynamic>?;
+      final cardsRaw = meta?['cards'] as List<dynamic>?;
+      
+      if (cardsRaw != null) {
+        final cards = cardsRaw.map((c) => Flashcard.fromJson(c as Map<String, dynamic>)).toList();
+        return FlashcardViewer(
+          key: ValueKey(tab.id),
+          cards: cards,
         );
       }
     } else if (tab.type == WorkbenchTabType.controlPanel) {

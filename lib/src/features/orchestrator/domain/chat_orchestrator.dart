@@ -21,6 +21,8 @@ class ChatOrchestrator {
     required ChunkRegistry registry,
     String? visualSchema,
     String? codeSnippet,
+    String? flashcardTitle,
+    int? flashcardCount,
   }) async {
     // 1. Resolve and Sort Chunks
     final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
@@ -31,6 +33,8 @@ class ChatOrchestrator {
       originalQuery,
       visualSchema: visualSchema,
       codeSnippet: codeSnippet,
+      flashcardTitle: flashcardTitle,
+      flashcardCount: flashcardCount,
     );
 
     final messages = [
@@ -50,6 +54,8 @@ class ChatOrchestrator {
     required ChunkRegistry registry,
     String? visualSchema,
     String? codeSnippet,
+    String? flashcardTitle,
+    int? flashcardCount,
   }) async* {
     // 1. Resolve and Sort Chunks
     final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
@@ -60,6 +66,8 @@ class ChatOrchestrator {
       originalQuery,
       visualSchema: visualSchema,
       codeSnippet: codeSnippet,
+      flashcardTitle: flashcardTitle,
+      flashcardCount: flashcardCount,
     );
 
     final messages = [
@@ -90,6 +98,7 @@ class ChatOrchestrator {
 
       String content = m.text;
       if (m.role == domain.MessageRole.assistant) {
+        if (content.trim().isEmpty) continue; // Skip empty assistant messages (placeholders)
         // Strip historical citations to avoid confusing the LLM with old chunk references
         content = content.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '').trim();
       }
@@ -124,6 +133,9 @@ class ChatOrchestrator {
   - If a RENDERED_CHART is provided, provide a textual explanation of the chart.
   - If a WRITTEN_CODE is provided, provide a textual explanation of the code.
 - **NO Redundancy**: Do NOT attempt to redraw the chart or rewrite the entire code block in your response. Focus on synthesis and explanation.
+- **Study Support**: 
+  - If a FLASHCARD_DECK is mentioned in the message, acknowledge its creation (e.g., "I've created a study deck with X cards in the Memory tab").
+  - Encourage the user to use the cards for reinforcement.
 - Be honest: If the context doesn't contain the answer, state that "The provided documents do not contain information about [topic]."
 - Maintain a professional, objective, and helpful tone.
 ''';
@@ -145,6 +157,8 @@ class ChatOrchestrator {
     String query, {
     String? visualSchema, 
     String? codeSnippet,
+    String? flashcardTitle,
+    int? flashcardCount,
     List<ChatMessage>? history,
   }) {
     final historySection = (history != null && history.isNotEmpty)
@@ -154,7 +168,7 @@ class ChatOrchestrator {
     return '''$historySection### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
-${visualSchema != null ? '### RENDERED_CHART\n$visualSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '### WRITTEN_CODE\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}### User Query:
+${visualSchema != null ? '### RENDERED_CHART\n$visualSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '### WRITTEN_CODE\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}${flashcardTitle != null ? '### FLASHCARD_DECK\nTitle: $flashcardTitle\nCount: $flashcardCount\n(Note: This study deck has been generated. Acknowledge this in your response.)\n\n' : ''}### User Query:
 $query
 ''';
   }
