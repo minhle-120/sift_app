@@ -5,16 +5,19 @@ import 'package:file_picker/file_picker.dart';
 import '../../../../core/models/ai_models.dart';
 import '../../../../services/ai/i_ai_service.dart';
 import '../../../../core/services/openai_service.dart';
+import '../../../../core/services/document_processor.dart';
 
 final brainstormOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
-  return BrainstormOrchestrator(aiService: aiService);
+  final processor = ref.watch(documentProcessorProvider);
+  return BrainstormOrchestrator(aiService: aiService, processor: processor);
 });
 
 class BrainstormOrchestrator {
   final IAiService aiService;
+  final DocumentProcessor processor;
 
-  BrainstormOrchestrator({required this.aiService});
+  BrainstormOrchestrator({required this.aiService, required this.processor});
 
   Stream<ChatStreamChunk> streamBrainstorm({
     required List<ChatMessage> history,
@@ -24,7 +27,7 @@ class BrainstormOrchestrator {
     dynamic content;
 
     if (attachments != null && attachments.isNotEmpty) {
-      final parts = <ContentPart>[TextPart(query)];
+      final parts = <ContentPart>[];
       
       for (final file in attachments) {
         if (file.path == null) continue;
@@ -36,15 +39,17 @@ class BrainstormOrchestrator {
           final bytes = await File(file.path!).readAsBytes();
           parts.add(ImagePart(base64Encode(bytes), mimeType: 'image/${extension == 'jpg' ? 'jpeg' : extension}'));
         } else {
-          // Try reading as text for context inclusion
-          try {
-            final text = await File(file.path!).readAsString();
-            parts.add(TextPart('\n\n--- Attached File: ${file.name} ---\n$text\n---'));
-          } catch (e) {
-            // Skip non-text files for now or handle differently
+          // Use robust byte-based extraction with the known extension
+          final bytes = await File(file.path!).readAsBytes();
+          final extractedText = await processor.extractTextFromBytes(bytes, extension ?? '');
+          if (extractedText.isNotEmpty) {
+            parts.add(TextPart('--- Attached File: ${file.name} ---\n$extractedText\n---\n\n'));
           }
         }
       }
+      
+      // Add the user prompt last so the model sees the context first
+      parts.add(TextPart(query));
       content = parts;
     } else {
       content = query;
@@ -60,11 +65,11 @@ class BrainstormOrchestrator {
   }
 
   String _buildBrainstormSystemPrompt() {
-    return r'''You are Sift's Brainstorming Assistant.
+    return r'''You are Sift's Assistant.
 
 ### Your Mission:
 - Help the user brainstorm ideas, solve problems, or explore topics using your broad internal knowledge.
-- Be creative, analytical, and highly helpful.
+- Be creative, analytical, and helpful.
 ''';
   }
 }

@@ -5,32 +5,47 @@ import 'package:path/path.dart' as p;
 import 'package:docx_to_text/docx_to_text.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
+
+final documentProcessorProvider = Provider((ref) => DocumentProcessor());
 
 class DocumentProcessor {
   /// Extracts plain text from the given file based on its extension.
-  Future<String> extractText(File file) async {
-    final ext = p.extension(file.path).toLowerCase();
-    
+  Future<String> extractText(File file, {String? extension}) async {
+    final bytes = await file.readAsBytes();
+    return extractTextFromBytes(bytes, extension ?? p.extension(file.path));
+  }
+
+  /// New robust method that works on raw bytes and a known extension.
+  Future<String> extractTextFromBytes(Uint8List bytes, String extension) async {
+    String ext = extension.toLowerCase();
+    if (!ext.startsWith('.')) ext = '.$ext';
+
+    debugPrint('[DocumentProcessor] Extracting text for extension: $ext, bytes: ${bytes.length}');
+
     String text;
     try {
       if (ext == '.pdf') {
-        text = await _extractFromPdf(file);
+        text = await _extractFromPdf(bytes);
       } else if (ext == '.docx') {
-        text = _extractFromDocx(file);
+        text = _extractFromDocx(bytes);
       } else {
         // Basic text file handling with fallback for encoding issues
         try {
-          text = await file.readAsString();
+          text = utf8.decode(bytes);
         } catch (_) {
-          final bytes = await file.readAsBytes();
           text = utf8.decode(bytes, allowMalformed: true);
         }
       }
     } catch (e) {
+      debugPrint('[DocumentProcessor] Error extracting $ext: $e');
       text = '';
     }
     
-    return normalizeText(_repairNumericEncoding(text));
+    final normalizedText = normalizeText(_repairNumericEncoding(text));
+    debugPrint('[DocumentProcessor] Extracted ${normalizedText.length} characters');
+    return normalizedText;
   }
 
   /// Some PDFs (subsetted or scrambled) extract as decimal ASCII codes prefixed with 'a'
@@ -92,8 +107,7 @@ class DocumentProcessor {
   }
 
   /// Official implementation pattern for PDF text extraction.
-  Future<String> _extractFromPdf(File file) async {
-    final bytes = await file.readAsBytes();
+  Future<String> _extractFromPdf(Uint8List bytes) async {
     final PdfDocument document = PdfDocument(inputBytes: bytes);
     
     try {
@@ -108,8 +122,7 @@ class DocumentProcessor {
   }
 
   /// Extracts plain text from a Word document (.docx).
-  String _extractFromDocx(File file) {
-    final bytes = file.readAsBytesSync();
+  String _extractFromDocx(Uint8List bytes) {
     return docxToText(bytes);
   }
 

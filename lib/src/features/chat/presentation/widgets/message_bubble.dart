@@ -256,6 +256,29 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                     widget.message.id,
                     newText,
                     collectionId,
+                    resend: false,
+                  );
+                }
+                setState(() => _isEditing = false);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                foregroundColor: theme.colorScheme.onSecondaryContainer,
+                elevation: 0,
+              ),
+              child: const Text('Save'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              onPressed: () {
+                final newText = _editController.text.trim();
+                if (newText.isNotEmpty) {
+                  final collectionId = ref.read(collectionProvider).activeCollection?.id;
+                  ref.read(chatControllerProvider.notifier).editMessage(
+                    widget.message.id,
+                    newText,
+                    collectionId,
+                    resend: true,
                   );
                 }
                 setState(() => _isEditing = false);
@@ -263,8 +286,9 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
+                elevation: 0,
               ),
-              child: const Text('Save'),
+              child: const Text('Resend'),
             ),
           ],
         ),
@@ -469,7 +493,6 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                 text,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                  fontStyle: FontStyle.italic,
                   height: 1.5,
                 ),
               ),

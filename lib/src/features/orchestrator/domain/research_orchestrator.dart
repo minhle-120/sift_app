@@ -88,6 +88,7 @@ class ResearchOrchestrator {
     String? currentCode,
     String? currentCodeTitle,
     void Function(String status)? onStatusUpdate,
+    bool Function()? isCanceled,
   }) async {
     registry.reset();
     onStatusUpdate?.call('Starting research...');
@@ -139,6 +140,9 @@ class ResearchOrchestrator {
     bool hasQueried = false;
 
     while (iterations < maxIterations) {
+      if (isCanceled?.call() ?? false) {
+        return ResearchResult(canceled: true, steps: messages.sublist(newStepsStartIndex));
+      }
       iterations++;
       
       onStatusUpdate?.call('Analyzing context (Iteration $iterations)...');

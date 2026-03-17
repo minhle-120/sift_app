@@ -70,6 +70,7 @@ class ChatController extends StateNotifier<ChatState> {
   final Ref _ref;
   StreamSubscription<List<Message>>? _messagesSubscription;
   bool _isAiProcessing = false;
+  bool _isCanceled = false;
 
   ChatController(this._db, this._ref) : super(const ChatState()) {
     // Initial check
@@ -116,12 +117,25 @@ class ChatController extends StateNotifier<ChatState> {
       }
     }
 
-    final isValid = await aiService.checkConnection();
+    final status = await aiService.checkConnection();
     
-    state = state.copyWith(
-      isConnectionValid: isValid,
-      connectionError: isValid ? null : "AI Server is unreachable. Please check your settings.",
-    );
+    switch (status) {
+      case ai.AiConnectionStatus.ok:
+        state = state.copyWith(isConnectionValid: true, connectionError: null);
+        break;
+      case ai.AiConnectionStatus.loading:
+        state = state.copyWith(
+          isConnectionValid: false, 
+          connectionError: "AI Server is still loading the model. Please wait a moment and try again."
+        );
+        break;
+      case ai.AiConnectionStatus.unreachable:
+        state = state.copyWith(
+          isConnectionValid: false, 
+          connectionError: "AI Server is unreachable. Please check your settings or ensure the server is running."
+        );
+        break;
+    }
   }
 
   @override
@@ -144,6 +158,19 @@ class ChatController extends StateNotifier<ChatState> {
     state = state.copyWith(isLoading: true, conversationId: conversationId);
     
     try {
+      // 1. Load conversation metadata to restore mode
+      final conv = await _db.getConversationById(conversationId);
+      if (conv != null && conv.metadata != null) {
+        try {
+          final meta = jsonDecode(conv.metadata!);
+          if (meta['isBrainstormMode'] != null) {
+            state = state.copyWith(isBrainstormMode: meta['isBrainstormMode'] as bool);
+          }
+        } catch (e) {
+          debugPrint("Error parsing conversation metadata: $e");
+        }
+      }
+
       _messagesSubscription = _db.watchMessages(conversationId).listen((messages) {
         final domainMessages = messages.map((m) => domain.Message(
           id: m.uuid,
@@ -167,7 +194,22 @@ class ChatController extends StateNotifier<ChatState> {
   }
 
   void toggleBrainstormMode() {
-    state = state.copyWith(isBrainstormMode: !state.isBrainstormMode);
+    final newValue = !state.isBrainstormMode;
+    state = state.copyWith(isBrainstormMode: newValue);
+    
+    // Persist if we are in a conversation
+    if (state.conversationId != null) {
+      _saveConversationMetadata(state.conversationId!, newValue);
+    }
+  }
+
+  Future<void> _saveConversationMetadata(int conversationId, bool brainstormMode) async {
+    final conv = await _db.getConversationById(conversationId);
+    final meta = (conv != null && conv.metadata != null) 
+        ? jsonDecode(conv.metadata!) as Map<String, dynamic> 
+        : <String, dynamic>{};
+    meta['isBrainstormMode'] = brainstormMode;
+    await _db.updateConversationMetadata(conversationId, metadata: jsonEncode(meta));
   }
 
   Future<void> deleteConversation(int id) async {
@@ -194,7 +236,7 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  Future<void> editMessage(String uuid, String newText, int? activeCollectionId) async {
+  Future<void> editMessage(String uuid, String newText, int? activeCollectionId, {bool resend = true}) async {
     if (state.isLoading) return;
 
     final dbMsgs = await _db.watchMessages(state.conversationId!).first;
@@ -206,6 +248,8 @@ class ChatController extends StateNotifier<ChatState> {
     
     await _db.updateMessageContent(msg.id, newText);
     await _db.updateMessageMetadata(msg.id, metadata: jsonEncode(metadata));
+
+    if (!resend) return;
 
     // 2. Clear subsequent AI responses in this turn (if any) or find existing placeholder
     // For simplicity, we find the message immediately AFTER this one. If it's an assistant message, we regenerate it.
@@ -250,7 +294,28 @@ class ChatController extends StateNotifier<ChatState> {
     }).toList();
 
     _isAiProcessing = true;
+    _isCanceled = false;
     state = state.copyWith(isLoading: true, error: null);
+
+    // Extract attachments from user message metadata if they exist
+    List<PlatformFile>? attachments;
+    if (userMsg.metadata != null) {
+      try {
+        final Map<String, dynamic> metadata = jsonDecode(userMsg.metadata!);
+        if (metadata['attachments'] != null) {
+          attachments = (metadata['attachments'] as List).map((a) {
+            return PlatformFile(
+              name: a['name'] ?? 'file',
+              path: a['path'],
+              size: a['size'] ?? 0,
+              identifier: a['extension'],
+            );
+          }).toList();
+        }
+      } catch (e) {
+        debugPrint("Error parsing attachment metadata for regeneration: $e");
+      }
+    }
 
     try {
       await _processAiResponse(
@@ -258,7 +323,9 @@ class ChatController extends StateNotifier<ChatState> {
         activeCollectionId: activeCollectionId,
         placeholderMessage: assistantMsg,
         currentMessageId: userMsg.uuid,
+        messageIdForPruning: userMsg.id,
         historyOverride: slicedDomainMessages,
+        attachments: attachments,
       );
     } catch (e) {
        state = state.copyWith(isLoading: false, error: "Regeneration failed: $e");
@@ -283,7 +350,15 @@ class ChatController extends StateNotifier<ChatState> {
       
       try {
         final title = text.length > 30 ? '${text.substring(0, 30)}...' : text;
+        
+        // Include initial brainstorm mode in metadata
+        final initialMetadata = jsonEncode({
+          'isBrainstormMode': state.isBrainstormMode,
+        });
+        
         final newConv = await _db.createConversation(activeCollectionId, title);
+        await _db.updateConversationMetadata(newConv.id, metadata: initialMetadata);
+        
         conversationId = newConv.id;
         
         // Start watching the new conversation
@@ -295,6 +370,7 @@ class ChatController extends StateNotifier<ChatState> {
     }
 
       _isAiProcessing = true;
+    _isCanceled = false;
     state = state.copyWith(isLoading: true, error: null);
     
     try {
@@ -329,6 +405,7 @@ class ChatController extends StateNotifier<ChatState> {
       );
 
       // 3. Process AI loop
+      _isCanceled = false;
       await _processAiResponse(
         query: text,
         activeCollectionId: activeCollectionId,
@@ -402,6 +479,7 @@ class ChatController extends StateNotifier<ChatState> {
 
         bool isFirstToken = true;
         await for (final chunk in stream) {
+          if (_isCanceled) break;
           if (isFirstToken && (chunk.reasoningContent != null || chunk.content != null)) {
             isFirstToken = false;
             await _db.updateMessageContent(placeholderMessage.id, '');
@@ -460,11 +538,14 @@ class ChatController extends StateNotifier<ChatState> {
         currentSchema: currentVisualSchema,
         currentCode: currentCodeContext,
         currentCodeTitle: currentCodeTitle,
-        onStatusUpdate: (status) {
-          state = state.copyWith(researchStatus: status);
-          _db.updateMessageContent(placeholderMessage.id, status);
-        },
+        onStatusUpdate: (status) => state = state.copyWith(researchStatus: status),
+        isCanceled: () => _isCanceled,
       );
+
+      if (researchResult.canceled || _isCanceled) {
+        state = state.copyWith(isLoading: false, researchStatus: 'Canceled');
+        return;
+      }
 
       if (researchResult.noInfoFound) {
         // AI found nothing. Stop and prune this turn.
@@ -561,6 +642,7 @@ class ChatController extends StateNotifier<ChatState> {
 
         bool isFirstToken = true;
         await for (final chunk in stream) {
+          if (_isCanceled) break;
           if (isFirstToken && (chunk.reasoningContent != null || chunk.content != null)) {
             isFirstToken = false;
             await _db.updateMessageContent(placeholderMessage.id, '');
@@ -660,7 +742,8 @@ class ChatController extends StateNotifier<ChatState> {
   }
 
   void stopResponse() {
-    state = state.copyWith(isLoading: false);
+    _isCanceled = true;
+    state = state.copyWith(isLoading: false, researchStatus: 'Stopping...');
   }
 
   void copyToClipboard(String text) {

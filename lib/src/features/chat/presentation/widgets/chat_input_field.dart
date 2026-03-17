@@ -294,7 +294,8 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
               child: TextField(
                 controller: _controller,
                 focusNode: _focusNode,
-                enabled: !chatState.isLoading && (collectionState.hasDocuments || chatState.isBrainstormMode),
+                enabled: (collectionState.hasDocuments || chatState.isBrainstormMode),
+                readOnly: chatState.isLoading,
                 maxLines: 5,
                 minLines: 1,
                 textInputAction: TextInputAction.newline,

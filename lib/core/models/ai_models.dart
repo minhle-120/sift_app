@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 enum VisualizerMode { auto, off, on }
 enum CoderMode { auto, off, on }
 
+enum AiConnectionStatus { ok, loading, unreachable }
+
 class ResearchPackage {
   final List<int> indices;
 
@@ -12,7 +14,6 @@ class ResearchPackage {
   @override
   String toString() => 'ResearchPackage(indices: $indices)';
 }
-
 class ResearchResult {
   final ChatMessage? output;
   final ResearchPackage? package;
@@ -25,6 +26,7 @@ class ResearchResult {
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
+  final bool canceled;
 
   ResearchResult({
     this.output,
@@ -38,6 +40,7 @@ class ResearchResult {
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
+    this.canceled = false,
   });
 }
 

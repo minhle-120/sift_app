@@ -26,7 +26,7 @@ class OpenAiService implements IAiService {
         if (tools != null && tools.isNotEmpty) 'tool_choice': toolChoice ?? 'auto',
       },
       options: Options(
-        receiveTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(minutes: 5),
         sendTimeout: const Duration(seconds: 30),
       ),
     );
@@ -88,7 +88,7 @@ class OpenAiService implements IAiService {
       },
       options: Options(
         responseType: ResponseType.stream,
-        receiveTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(minutes: 5),
         sendTimeout: const Duration(seconds: 30),
       ),
     );
@@ -142,21 +142,28 @@ class OpenAiService implements IAiService {
   }
 
   @override
-  Future<bool> checkConnection() async {
+  Future<AiConnectionStatus> checkConnection() async {
     final settings = _ref.read(settingsProvider);
     final baseUrl = settings.llamaServerUrl;
 
     try {
       final response = await _dio.get(
-        '$baseUrl/v1/models',
+        '$baseUrl/health',
         options: Options(
           receiveTimeout: const Duration(seconds: 5),
           sendTimeout: const Duration(seconds: 5),
+          validateStatus: (status) => status != null, // Accept all statuses to handle 503 manually
         ),
       );
-      return response.statusCode == 200;
+      
+      if (response.statusCode == 200) {
+        return AiConnectionStatus.ok;
+      } else if (response.statusCode == 503) {
+        return AiConnectionStatus.loading;
+      }
+      return AiConnectionStatus.unreachable;
     } catch (e) {
-      return false;
+      return AiConnectionStatus.unreachable;
     }
   }
 }
