@@ -84,11 +84,17 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
     final theme = Theme.of(context);
     final chatState = ref.watch(chatControllerProvider);
 
+    final margin = isUser 
+        ? const EdgeInsets.fromLTRB(16, 4, 16, 4) 
+        : const EdgeInsets.symmetric(vertical: 4);
+
     return Container(
         width: double.infinity,
+        margin: margin,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isUser ? theme.colorScheme.surfaceContainerHigh : Colors.transparent,
+          borderRadius: isUser ? BorderRadius.circular(20) : null,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,30 +106,24 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            isUser ? 'You' : 'Sift',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: isUser ? theme.colorScheme.primary : theme.colorScheme.secondary,
-                            ),
-                          ),
-                          if (widget.message.isEdited) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '(Edited)',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ],
+                      Text(
+                        isUser ? 'You' : 'Sift',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isUser ? theme.colorScheme.primary : theme.colorScheme.secondary,
+                        ),
                       ),
-                      if (!_isEditing) _buildActionMenu(context, ref, isUser),
+                      if (widget.message.isEdited) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '(Edited)',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -263,6 +263,15 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                   if (widget.message.metadata?['code_snippet'] != null) ...[
                     const SizedBox(height: 12),
                     _buildCodeTrigger(context, ref, theme),
+                  ],
+                  if (!_isEditing) ...[
+                    const SizedBox(height: 4),
+                    isUser 
+                      ? Transform.translate(
+                          offset: const Offset(-16, 0),
+                          child: _buildActionMenu(context, ref, isUser),
+                        )
+                      : _buildActionMenu(context, ref, isUser),
                   ],
                 ],
               ),
