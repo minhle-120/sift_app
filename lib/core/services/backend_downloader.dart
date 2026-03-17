@@ -109,21 +109,26 @@ class BackendDownloader {
     return File(configPath).exists();
   }
 
-  Future<void> generateDefaultConfig() async {
+  Future<void> generateDefaultConfig({
+    String? instructPath,
+    String? embeddingPath,
+    String? rerankerPath,
+  }) async {
     final modelsDir = await getModelsDirectory();
     final configPath = await getConfigPath();
 
     final model4BPath = p.join(modelsDir, 'Qwen3.5-4B-Q4_K_M.gguf');
     final model2BPath = p.join(modelsDir, 'Qwen3.5-2B-Q4_K_M.gguf');
     
-    final bool has4B = await File(model4BPath).exists();
-    final bool has2B = await File(model2BPath).exists();
+    // Fallback logic if paths aren't provided
+    final resolvedInstructPath = instructPath ?? (await File(model4BPath).exists() 
+        ? model4BPath 
+        : (await File(model2BPath).exists() ? model2BPath : model4BPath));
     
-    final instructPath = has4B ? model4BPath : (has2B ? model2BPath : model4BPath);
-    final modelTitle = instructPath.contains('2B') ? 'Qwen3.5-2B-Instruct' : 'Qwen3.5-4B-Instruct';
+    final modelTitle = resolvedInstructPath.contains('2B') ? 'Qwen3.5-2B-Instruct' : 'Qwen3.5-4B-Instruct';
 
-    final embeddingPath = p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf');
-    final rerankerPath = p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf');
+    final resolvedEmbeddingPath = embeddingPath ?? p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf');
+    final resolvedRerankerPath = rerankerPath ?? p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf');
 
     final config = '''[*]
 flash-attn = auto
@@ -135,7 +140,7 @@ cache-ram = 1024
 fit = on
 
 [$modelTitle]
-model = $instructPath
+model = $resolvedInstructPath
 fit-ctx = 8192
 chat-template-kwargs = {"enable_thinking": false}
 cache-type-k = q8_0
@@ -148,7 +153,7 @@ presence-penalty = 1.5
 repeat-penalty = 1.0
 
 [Qwen3-Embedding-0.6B]
-model = $embeddingPath
+model = $resolvedEmbeddingPath
 embedding = true
 fit-ctx = 2048
 ubatch-size = 2048
@@ -156,7 +161,7 @@ batch-size = 2048
 n-gpu-layers = 99
 
 [Qwen3-Reranker-0.6B]
-model = $rerankerPath
+model = $resolvedRerankerPath
 reranking = true
 fit-ctx = 2048
 ubatch-size = 2048
@@ -167,13 +172,21 @@ n-gpu-layers = 99
     await File(configPath).writeAsString(config);
   }
 
-  Future<void> resetConfig() async {
+  Future<void> resetConfig({
+    String? instructPath,
+    String? embeddingPath,
+    String? rerankerPath,
+  }) async {
     final configPath = await getConfigPath();
     final file = File(configPath);
     if (await file.exists()) {
       await file.delete();
     }
-    await generateDefaultConfig();
+    await generateDefaultConfig(
+      instructPath: instructPath,
+      embeddingPath: embeddingPath,
+      rerankerPath: rerankerPath,
+    );
   }
 
   Future<void> openConfigFile() async {

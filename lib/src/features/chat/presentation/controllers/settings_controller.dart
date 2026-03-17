@@ -523,7 +523,11 @@ class SettingsController extends StateNotifier<SettingsState> {
   }
 
   Future<void> resetConfig() async {
-    await _downloader.resetConfig();
+    await _downloader.resetConfig(
+      instructPath: state.chatModel,
+      embeddingPath: state.embeddingModel,
+      rerankerPath: state.rerankModel,
+    );
     await verifyConfig();
     appendLog('Config reset to default.');
   }
@@ -647,9 +651,13 @@ class SettingsController extends StateNotifier<SettingsState> {
       await updateEmbeddingModel(p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf'));
       await updateRerankModel(p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf'));
 
-      // Auto-generate config after bundle download
+      // Auto-generate config after bundle download with specific model paths
       appendLog('Generating default config (sift_config.ini)...');
-      await _downloader.generateDefaultConfig();
+      await _downloader.generateDefaultConfig(
+        instructPath: p.join(modelsDir, modelFile),
+        embeddingPath: p.join(modelsDir, 'Qwen3-Embedding-0.6B-Q8_0.gguf'),
+        rerankerPath: p.join(modelsDir, 'qwen3-reranker-0.6b-q8_0.gguf'),
+      );
       await verifyConfig();
       appendLog('Config ready!');
       
