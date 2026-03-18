@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sift_app/core/storage/database_provider.dart';
 import 'package:sift_app/core/storage/sift_database.dart';
@@ -9,6 +10,8 @@ import 'package:sift_app/core/services/document_processor.dart';
 import 'package:sift_app/core/services/embedding_service.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/collection_controller.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart';
 
@@ -83,6 +86,57 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
       uploadFiles(paths);
     } finally {
       _isPickingFile = false;
+    }
+  }
+
+  Future<void> savePastedText(String title, String content) async {
+    final db = _ref.read(databaseProvider);
+    final activeCollection = _ref.read(collectionProvider).activeCollection;
+    final collectionId = activeCollection?.id;
+
+    try {
+      state = state.copyWith(status: const AsyncValue.loading());
+
+      // 1. Prepare Directory
+      final appDocDir = await getApplicationDocumentsDirectory();
+      final pastedDir = Directory(p.join(appDocDir.path, 'pasted_content'));
+      if (!await pastedDir.exists()) {
+        await pastedDir.create(recursive: true);
+      }
+
+      // 2. Generate Filename
+      String fileName;
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      
+      if (title.trim().isEmpty) {
+        fileName = 'pasted_text_$timestamp.txt';
+      } else {
+        // Sanitize title: remove illegal chars for filesystem, replace space with underscore
+        final sanitizedTitle = title.trim().replaceAll(RegExp(r'[<>:"/\\|?*]'), '').replaceAll(' ', '_');
+        fileName = '${sanitizedTitle}_$timestamp.txt';
+      }
+
+      final filePath = p.join(pastedDir.path, fileName);
+      final file = File(filePath);
+
+      // 3. Save File
+      await file.writeAsString(content);
+
+      // 4. Create Document Entry
+      final doc = await db.createDocument(
+        collectionId: collectionId,
+        title: title.trim().isEmpty ? fileName : title.trim(),
+        filePath: filePath,
+        type: 'txt',
+      );
+
+      // 5. Process for RAG
+      await _processDocument(doc, extractedText: content);
+      
+      state = state.copyWith(status: const AsyncValue.data(null));
+    } catch (e) {
+      state = state.copyWith(status: AsyncValue.error(e, StackTrace.current));
+      rethrow;
     }
   }
 

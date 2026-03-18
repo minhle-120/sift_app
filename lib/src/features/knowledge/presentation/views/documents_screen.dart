@@ -171,6 +171,18 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                   _showUrlInputDialog(context, ref);
                 },
               ),
+              const SizedBox(height: 12),
+              _buildAddAction(
+                context,
+                icon: Icons.paste_rounded,
+                title: 'Paste Text',
+                subtitle: 'Save text directy to your library',
+                color: theme.colorScheme.tertiary,
+                onTap: () {
+                  Navigator.pop(context);
+                  _showPasteTextInputDialog(context, ref);
+                },
+              ),
             ],
           ),
         ),
@@ -231,6 +243,70 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showPasteTextInputDialog(BuildContext context, WidgetRef ref) {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Paste Text Content'),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  hintText: 'Document Title (Optional)',
+                  labelText: 'Title',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: contentController,
+                maxLines: 10,
+                minLines: 5,
+                decoration: const InputDecoration(
+                  hintText: 'Paste your text here...',
+                  labelText: 'Content',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+                autofocus: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final content = contentController.text.trim();
+              if (content.isNotEmpty) {
+                ref.read(knowledgeControllerProvider.notifier).savePastedText(
+                  titleController.text.trim(),
+                  content,
+                );
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please paste some content first')),
+                );
+              }
+            },
+            child: const Text('Save Document'),
+          ),
+        ],
       ),
     );
   }

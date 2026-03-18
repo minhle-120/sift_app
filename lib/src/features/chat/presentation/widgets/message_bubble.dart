@@ -23,6 +23,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
   bool _isEditing = false;
   bool _isReasoningExpanded = false;
   bool _userScrolledReasoning = false;
+  bool _isAutoScrolling = false;
   late TextEditingController _editController;
   late ScrollController _reasoningScrollController;
 
@@ -35,11 +36,14 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
   }
 
   void _onReasoningScroll() {
-    if (!_reasoningScrollController.hasClients) return;
+    if (_isAutoScrolling || !_reasoningScrollController.hasClients) return;
     final pos = _reasoningScrollController.position;
     // If user scrolled away from the bottom, stop auto-following
-    if (pos.maxScrollExtent - pos.pixels > 20) {
+    if (pos.maxScrollExtent - pos.pixels > 30) {
       _userScrolledReasoning = true;
+    } else {
+      // If they scrolled back to the absolute bottom, resume following
+      _userScrolledReasoning = false;
     }
   }
 
@@ -60,13 +64,20 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
   }
 
   void _scrollReasoningToBottom() {
+    if (_isAutoScrolling || !_reasoningScrollController.hasClients) return;
+    
+    _isAutoScrolling = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_reasoningScrollController.hasClients) {
-        _reasoningScrollController.animateTo(
-          _reasoningScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 100),
-          curve: Curves.easeOut,
-        );
+        _reasoningScrollController
+          .animateTo(
+            _reasoningScrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+          )
+          .then((_) => _isAutoScrolling = false);
+      } else {
+        _isAutoScrolling = false;
       }
     });
   }
@@ -530,6 +541,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
               _isReasoningExpanded = !_isReasoningExpanded;
               if (_isReasoningExpanded) {
                 _userScrolledReasoning = false;
+                _scrollReasoningToBottom();
               }
             }),
             child: Padding(
