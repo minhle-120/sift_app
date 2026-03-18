@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:super_clipboard/super_clipboard.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import '../controllers/settings_controller.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/collection_controller.dart';
@@ -20,6 +24,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   bool _hasText = false;
+  bool _isDragging = false;
   final List<PlatformFile> _attachments = [];
 
   @override
@@ -79,6 +84,58 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
     }
   }
 
+  Future<void> _handleClipboardPaste() async {
+    final clipboard = SystemClipboard.instance;
+    if (clipboard == null) return;
+
+    final reader = await clipboard.read();
+    
+    // 1. Handle Images
+    if (reader.canProvide(Formats.png)) {
+      reader.getFile(Formats.png, (file) async {
+        final bytes = await file.readAll();
+        final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+        final fileName = 'pasted_image_$timestamp.png';
+        
+        final tempDir = await getTemporaryDirectory();
+        final filePath = '${tempDir.path}/$fileName';
+        await File(filePath).writeAsBytes(bytes);
+
+        if (mounted) {
+          setState(() {
+            _attachments.add(PlatformFile(
+              name: fileName,
+              path: filePath,
+              size: bytes.length,
+              bytes: bytes,
+            ));
+          });
+        }
+      });
+    } else {
+      // If it's just text and we triggered this manually (via button), 
+      // we could paste it into the controller, but usually the system does this.
+      if (reader.canProvide(Formats.plainText)) {
+        final text = await reader.readValue(Formats.plainText);
+        if (text != null && mounted) {
+          final currentText = _controller.text;
+          final selection = _controller.selection;
+          final newText = currentText.replaceRange(
+            selection.start >= 0 ? selection.start : currentText.length,
+            selection.end >= 0 ? selection.end : currentText.length,
+            text,
+          );
+          _controller.value = TextEditingValue(
+            text: newText,
+            selection: TextSelection.collapsed(
+              offset: (selection.start >= 0 ? selection.start : currentText.length) + text.length,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   void _removeAttachment(int index) {
     setState(() {
       _attachments.removeAt(index);
@@ -87,6 +144,27 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
 
   void _stopResponse() {
     ref.read(chatControllerProvider.notifier).stopResponse();
+  }
+
+  Future<void> _handleFilesDropped(DropDoneDetails details) async {
+    if (details.files.isEmpty) return;
+
+    final newFiles = <PlatformFile>[];
+    for (final xFile in details.files) {
+      final bytes = await xFile.readAsBytes();
+      newFiles.add(PlatformFile(
+        name: xFile.name,
+        path: xFile.path,
+        size: bytes.length,
+        bytes: bytes,
+      ));
+    }
+
+    if (mounted) {
+      setState(() {
+        _attachments.addAll(newFiles);
+      });
+    }
   }
 
   @override
@@ -100,12 +178,99 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
 
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: Column(
+      child: DropTarget(
+        onDragDone: _handleFilesDropped,
+        onDragEntered: (_) => setState(() => _isDragging = true),
+        onDragExited: (_) => setState(() => _isDragging = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          decoration: BoxDecoration(
+            color: _isDragging 
+                ? theme.colorScheme.primaryContainer.withAlpha(50) 
+                : Colors.transparent,
+            border: _isDragging 
+                ? Border.all(color: theme.colorScheme.primary, width: 2)
+                : null,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Attachment Tray
+            if (_attachments.isNotEmpty)
+              Container(
+                height: 80,
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _attachments.length,
+                  separatorBuilder: (context, index) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final file = _attachments[index];
+                    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(file.extension?.toLowerCase());
+                    
+                    return Container(
+                      width: 80,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: theme.colorScheme.outlineVariant),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Stack(
+                        children: [
+                          Center(
+                            child: isImage && file.path != null
+                                ? Image.file(
+                                    File(file.path!),
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                  )
+                                : Icon(
+                                    _getFileIcon(file.extension),
+                                    color: theme.colorScheme.primary,
+                                  ),
+                          ),
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: GestureDetector(
+                              onTap: () => _removeAttachment(index),
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.error,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close, size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              color: Colors.black54,
+                              child: Text(
+                                file.name,
+                                style: const TextStyle(color: Colors.white, fontSize: 8),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+
             // Premium Tray
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -181,78 +346,6 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
             ),
             const SizedBox(height: 12),
 
-            // Attachment Tray
-            if (_attachments.isNotEmpty)
-              Container(
-                height: 80,
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _attachments.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final file = _attachments[index];
-                    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(file.extension?.toLowerCase());
-                    
-                    return Container(
-                      width: 80,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: theme.colorScheme.outlineVariant),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Stack(
-                        children: [
-                          Center(
-                            child: isImage && file.path != null
-                                ? Image.file(
-                                    File(file.path!),
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                  )
-                                : Icon(
-                                    _getFileIcon(file.extension),
-                                    color: theme.colorScheme.primary,
-                                  ),
-                          ),
-                          Positioned(
-                            top: 2,
-                            right: 2,
-                            child: GestureDetector(
-                              onTap: () => _removeAttachment(index),
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.error,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.close, size: 12, color: Colors.white),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                              color: Colors.black54,
-                              child: Text(
-                                file.name,
-                                style: const TextStyle(color: Colors.white, fontSize: 8),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
 
             // Guidance/Blocker if no documents (only if NOT in Brainstorm Mode)
             if (!collectionState.hasDocuments && collectionState.activeCollection != null && !chatState.isBrainstormMode)
@@ -284,88 +377,90 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
             // Input Pill
             CallbackShortcuts(
               bindings: {
+                // Intercept Paste for images on Desktop
+                const SingleActivator(LogicalKeyboardKey.keyV, control: true): _handleClipboardPaste,
+                const SingleActivator(LogicalKeyboardKey.keyV, meta: true): _handleClipboardPaste,
+
                 const SingleActivator(LogicalKeyboardKey.enter): () {
-                  if (!chatState.isLoading && (_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) {
-                    _sendMessage();
-                  }
+                    if (!chatState.isLoading && (_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) {
+                      _sendMessage();
+                    }
+                  },
+                  const SingleActivator(LogicalKeyboardKey.enter, shift: true): () {
+                    final text = _controller.text;
+                    final selection = _controller.selection;
+                    final newText = text.replaceRange(selection.start, selection.end, '\n');
+                    _controller.value = TextEditingValue(
+                      text: newText,
+                      selection: TextSelection.collapsed(offset: selection.start + 1),
+                    );
+                  },
                 },
-                const SingleActivator(LogicalKeyboardKey.enter, shift: true): () {
-                  // Standard behavior for Shift+Enter is newline, 
-                  // but we need to ensure the event isn't swallowed by the parent shortcut
-                  final text = _controller.text;
-                  final selection = _controller.selection;
-                  final newText = text.replaceRange(selection.start, selection.end, '\n');
-                  _controller.value = TextEditingValue(
-                    text: newText,
-                    selection: TextSelection.collapsed(offset: selection.start + 1),
-                  );
-                },
-              },
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                enabled: (collectionState.hasDocuments || chatState.isBrainstormMode),
-                readOnly: chatState.isLoading,
-                maxLines: 5,
-                minLines: 1,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                  hintText: chatState.isLoading 
-                      ? 'Thinking...' 
-                      : (chatState.isBrainstormMode 
-                          ? 'Directly message Sift...'
-                          : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...')),
-                  filled: true,
-                  fillColor: theme.colorScheme.surfaceContainerHigh,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(28),
-                    borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(28),
-                    borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(28),
-                    borderSide: BorderSide(color: theme.colorScheme.primary.withAlpha(127)),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  prefixIcon: Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      tooltip: 'Attach Files',
-                      onPressed: _pickFiles,
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  enabled: (collectionState.hasDocuments || chatState.isBrainstormMode),
+                  readOnly: chatState.isLoading,
+                  maxLines: 5,
+                  minLines: 1,
+                  textInputAction: TextInputAction.newline,
+                  decoration: InputDecoration(
+                    hintText: chatState.isLoading 
+                        ? 'Thinking...' 
+                        : (chatState.isBrainstormMode 
+                            ? 'Directly message Sift...'
+                            : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...')),
+                    filled: true,
+                    fillColor: theme.colorScheme.surfaceContainerHigh,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(28),
+                      borderSide: BorderSide(color: theme.colorScheme.primary.withAlpha(127)),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        tooltip: 'Attach Files',
+                        onPressed: _pickFiles,
+                      ),
+                    ),
+                    suffixIcon: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: chatState.isLoading 
+                        ? IconButton(
+                            icon: Icon(Icons.stop_circle, color: theme.colorScheme.error),
+                            onPressed: _stopResponse,
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.arrow_upward_rounded),
+                            style: IconButton.styleFrom(
+                              backgroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) 
+                                  ? theme.colorScheme.primary 
+                                  : Colors.transparent,
+                              foregroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) 
+                                  ? theme.colorScheme.onPrimary 
+                                  : theme.colorScheme.onSurfaceVariant.withAlpha(100),
+                            ),
+                            onPressed: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) ? _sendMessage : null,
+                          ),
                     ),
                   ),
-                  suffixIcon: Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: chatState.isLoading 
-                      ? IconButton(
-                          icon: Icon(Icons.stop_circle, color: theme.colorScheme.error),
-                          onPressed: _stopResponse,
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.arrow_upward_rounded),
-                          style: IconButton.styleFrom(
-                            backgroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) 
-                                ? theme.colorScheme.primary 
-                                : Colors.transparent,
-                            foregroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) 
-                                ? theme.colorScheme.onPrimary 
-                                : theme.colorScheme.onSurfaceVariant.withAlpha(100),
-                          ),
-                          onPressed: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) ? _sendMessage : null,
-                        ),
-                  ),
+                  onSubmitted: (_) {
+                    if (collectionState.hasDocuments || chatState.isBrainstormMode) _sendMessage();
+                  },
                 ),
-                onSubmitted: (_) {
-                  // onSubmitted is still useful for mobile "Done" button
-                  if (collectionState.hasDocuments || chatState.isBrainstormMode) _sendMessage();
-                },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
