@@ -526,7 +526,12 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
-            onTap: () => setState(() => _isReasoningExpanded = !_isReasoningExpanded),
+            onTap: () => setState(() {
+              _isReasoningExpanded = !_isReasoningExpanded;
+              if (_isReasoningExpanded) {
+                _userScrolledReasoning = false;
+              }
+            }),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
