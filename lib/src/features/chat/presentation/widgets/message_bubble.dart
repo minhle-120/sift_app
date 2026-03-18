@@ -146,12 +146,12 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                       selectable: false,
                       extensionSet: md.ExtensionSet(
                         [
-                          ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
                           LatexBlockSyntax(),
+                          ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
                         ],
                         [
-                          ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
                           LatexInlineSyntax(),
+                          ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
                           CitationSyntax(),
                         ],
                       ),
