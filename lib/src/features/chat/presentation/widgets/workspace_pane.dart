@@ -7,6 +7,7 @@ import '../../../knowledge/presentation/widgets/document_viewer.dart';
 import 'chart_viewer.dart';
 import 'code_viewer.dart';
 import 'flashcard_viewer.dart';
+import 'interactive_canvas_viewer.dart';
 import 'control_panel.dart';
 import 'dart:convert';
 
@@ -176,6 +177,16 @@ class WorkbenchPanel extends ConsumerWidget {
         return FlashcardViewer(
           key: ValueKey(tab.id),
           cards: cards,
+        );
+      }
+    } else if (tab.type == WorkbenchTabType.interactiveCanvas) {
+      final meta = tab.metadata as Map<String, dynamic>?;
+      final html = meta?['htmlContent'] as String?;
+      
+      if (html != null) {
+        return InteractiveCanvasViewer(
+          key: ValueKey('${tab.id}_${meta?['currentIndex'] ?? 0}'),
+          htmlContent: html,
         );
       }
     } else if (tab.type == WorkbenchTabType.controlPanel) {

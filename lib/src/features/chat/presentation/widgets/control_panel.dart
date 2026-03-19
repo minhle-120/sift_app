@@ -63,6 +63,17 @@ class ControlPanel extends ConsumerWidget {
             child: _buildFlashcardToggles(settings, settingsNotifier, theme),
           ),
           
+          const SizedBox(height: 24),
+
+          _buildControlCard(
+            context,
+            title: 'Interactive Canvas',
+            icon: Icons.auto_awesome_mosaic_rounded,
+            description: _getInteractiveCanvasDescription(settings.interactiveCanvasMode),
+            isEnabled: !settings.isBrainstormMode,
+            child: _buildInteractiveCanvasToggles(settings, settingsNotifier, theme),
+          ),
+          
           const SizedBox(height: 12),
         ],
       ),
@@ -266,6 +277,28 @@ class ControlPanel extends ConsumerWidget {
     );
   }
 
+  Widget _buildInteractiveCanvasToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
+    return SegmentedButton<InteractiveCanvasMode>(
+      segments: const [
+        ButtonSegment(
+          value: InteractiveCanvasMode.auto,
+          label: Text('Auto'),
+        ),
+        ButtonSegment(
+          value: InteractiveCanvasMode.on,
+          label: Text('On'),
+        ),
+        ButtonSegment(
+          value: InteractiveCanvasMode.off,
+          label: Text('Off'),
+        ),
+      ],
+      selected: {settings.interactiveCanvasMode},
+      onSelectionChanged: (value) => notifier.updateInteractiveCanvasMode(value.first),
+      showSelectedIcon: false,
+    );
+  }
+
   String _getChartGeneratorDescription(ChartGeneratorMode mode) {
     switch (mode) {
       case ChartGeneratorMode.auto:
@@ -296,6 +329,17 @@ class ControlPanel extends ConsumerWidget {
         return 'AI treats every research turn as a flashcard session, distilling information into atomic cards.';
       case FlashcardMode.off:
         return 'Disables flashcard generation entirely. Useful for purely data-driven research tasks.';
+    }
+  }
+
+  String _getInteractiveCanvasDescription(InteractiveCanvasMode mode) {
+    switch (mode) {
+      case InteractiveCanvasMode.auto:
+        return 'AI creates highly interactive HTML/SVG components when data complexity warrants custom visualization.';
+      case InteractiveCanvasMode.on:
+        return 'AI prioritizes building interactive canvases and structured reports for every research task.';
+      case InteractiveCanvasMode.off:
+        return 'Disables interactive canvas generation for a strictly text and standard chart experience.';
     }
   }
 }

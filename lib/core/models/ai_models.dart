@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 enum ChartGeneratorMode { auto, off, on }
 enum CoderMode { auto, off, on }
 enum FlashcardMode { auto, off, on }
+enum InteractiveCanvasMode { auto, off, on }
 
 enum AiConnectionStatus { ok, loading, unreachable }
 
@@ -29,6 +30,9 @@ class ResearchResult {
   final List<Flashcard>? flashcardResult;
   final String? flashcardTitle;
   final FlashcardMode? flashcardMode;
+  final InteractiveCanvasPackage? canvasPackage;
+  final String? canvasHtml;
+  final InteractiveCanvasMode? interactiveCanvasMode;
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
@@ -48,6 +52,9 @@ class ResearchResult {
     this.flashcardTitle,
     this.flashcardMode,
     this.chartGeneratorMode,
+    this.canvasPackage,
+    this.canvasHtml,
+    this.interactiveCanvasMode,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
@@ -83,6 +90,16 @@ class FlashcardPackage {
 
   @override
   String toString() => 'FlashcardPackage(indices: $indices, goal: $studyGoal)';
+}
+
+class InteractiveCanvasPackage {
+  final List<int> indices;
+  final String canvasGoal;
+
+  InteractiveCanvasPackage({required this.indices, required this.canvasGoal});
+
+  @override
+  String toString() => 'InteractiveCanvasPackage(indices: $indices, goal: $canvasGoal)';
 }
 
 class ChartResult {
@@ -149,6 +166,18 @@ class FlashcardResult {
     required this.package,
     required this.cards,
     required this.title,
+    required this.steps,
+  });
+}
+
+class InteractiveCanvasResult {
+  final InteractiveCanvasPackage package;
+  final String htmlContent;
+  final List<ChatMessage> steps;
+
+  InteractiveCanvasResult({
+    required this.package,
+    required this.htmlContent,
     required this.steps,
   });
 }

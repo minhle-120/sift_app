@@ -536,6 +536,11 @@ class ChatController extends StateNotifier<ChatState> {
         }
       }
 
+      String? currentCanvasHtml;
+      if (activeTab?.type == WorkbenchTabType.interactiveCanvas) {
+        currentCanvasHtml = activeTab?.metadata?['htmlContent'] as String?;
+      }
+
       // 5. Research AI Step
       final researchResult = await researchOrchestrator.research(
         collectionId: activeCollectionId!,
@@ -545,6 +550,7 @@ class ChatController extends StateNotifier<ChatState> {
         currentCode: currentCodeContext,
         currentCodeTitle: currentCodeTitle,
         currentFlashcards: currentFlashcards,
+        currentCanvasHtml: currentCanvasHtml,
         onStatusUpdate: (status) => state = state.copyWith(researchStatus: status),
         isCanceled: () => _isCanceled,
       );
@@ -629,6 +635,21 @@ class ChatController extends StateNotifier<ChatState> {
         ),
       );
     }
+
+    if (researchResult.canvasHtml != null) {
+      // Auto-open the interactive canvas tab
+      _ref.read(workbenchProvider.notifier).addTab(
+        WorkbenchTab(
+          id: 'canvas_${placeholderMessage.uuid}',
+          title: 'Interactive Canvas',
+          icon: Icons.auto_awesome_mosaic_rounded,
+          type: WorkbenchTabType.interactiveCanvas,
+          metadata: {
+            'htmlContent': researchResult.canvasHtml,
+          },
+        ),
+      );
+    }
       if (researchResult.package != null) {
         // 1. Build Citation Metadata Early (so citations work DURING streaming)
         final citationData = <String, dynamic>{};
@@ -662,6 +683,7 @@ class ChatController extends StateNotifier<ChatState> {
           codeSnippet: researchResult.codeSnippet,
           flashcardTitle: researchResult.flashcardTitle,
           flashcardCount: researchResult.flashcardResult?.length,
+          canvasHtml: researchResult.canvasHtml,
         );
 
         bool isFirstToken = true;
@@ -707,6 +729,7 @@ class ChatController extends StateNotifier<ChatState> {
           if (researchResult.chartSchema != null) 'chart_schema': researchResult.chartSchema,
           if (researchResult.codeSnippet != null) 'code_snippet': researchResult.codeSnippet,
           if (researchResult.codeTitle != null) 'code_title': researchResult.codeTitle,
+          if (researchResult.canvasHtml != null) 'canvas_html': researchResult.canvasHtml,
         };
 
         await _db.updateMessageMetadata(

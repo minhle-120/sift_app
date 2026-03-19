@@ -30,6 +30,7 @@ class SettingsState {
   final ChartGeneratorMode chartGeneratorMode;
   final CoderMode coderMode;
   final FlashcardMode flashcardMode;
+  final InteractiveCanvasMode interactiveCanvasMode;
   final List<String> availableModels;
   final bool isLoadingModels;
   final String? error;
@@ -97,6 +98,7 @@ class SettingsState {
     this.chartGeneratorMode = ChartGeneratorMode.auto,
     this.coderMode = CoderMode.auto,
     this.flashcardMode = FlashcardMode.auto,
+    this.interactiveCanvasMode = InteractiveCanvasMode.auto,
     this.availableModels = const [],
     this.isLoadingModels = false,
     this.error,
@@ -170,6 +172,7 @@ class SettingsState {
     ChartGeneratorMode? chartGeneratorMode,
     CoderMode? coderMode,
     FlashcardMode? flashcardMode,
+    InteractiveCanvasMode? interactiveCanvasMode,
     List<String>? availableModels,
     bool? isLoadingModels,
     String? error,
@@ -231,6 +234,7 @@ class SettingsState {
       chartGeneratorMode: chartGeneratorMode ?? this.chartGeneratorMode,
       coderMode: coderMode ?? this.coderMode,
       flashcardMode: flashcardMode ?? this.flashcardMode,
+      interactiveCanvasMode: interactiveCanvasMode ?? this.interactiveCanvasMode,
       availableModels: availableModels ?? this.availableModels,
       isLoadingModels: isLoadingModels ?? this.isLoadingModels,
       error: error ?? this.error,
@@ -322,6 +326,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       chartGeneratorMode: ChartGeneratorMode.values[prefs.getInt('chartGeneratorMode') ?? prefs.getInt('visualizerMode') ?? 0],
       coderMode: CoderMode.values[prefs.getInt('coderMode') ?? 0],
       flashcardMode: flashcardMode,
+      interactiveCanvasMode: InteractiveCanvasMode.values[prefs.getInt('interactiveCanvasMode') ?? 0],
       backendType: BackendType.values[prefs.getInt('backendType') ?? 0],
       gpuDeviceIndex: prefs.getInt('gpuDeviceIndex') ?? 0,
       modelsPath: prefs.getString('modelsPath') ?? await _downloader.getModelsDirectory(),
@@ -854,6 +859,12 @@ class SettingsController extends StateNotifier<SettingsState> {
     state = state.copyWith(flashcardMode: mode);
     final prefs = await PortableSettings.getInstance();
     await prefs.setInt('flashcardMode', mode.index);
+  }
+
+  Future<void> updateInteractiveCanvasMode(InteractiveCanvasMode mode) async {
+    state = state.copyWith(interactiveCanvasMode: mode);
+    final prefs = await PortableSettings.getInstance();
+    await prefs.setInt('interactiveCanvasMode', mode.index);
   }
 
   Future<void> setSelectedBundleSize(ModelBundleSize size) async {

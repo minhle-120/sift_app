@@ -17,12 +17,15 @@ import 'code_orchestrator.dart';
 import 'flashcard_orchestrator.dart';
 import '../../chat/presentation/controllers/settings_controller.dart';
 import '../../../../core/tools/delegate_to_flashcards_tool.dart';
+import '../../../../core/tools/delegate_to_interactive_canvas_tool.dart';
+import 'interactive_canvas_orchestrator.dart';
 
 final researchOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
   final chartGeneratorOrchestrator = ref.watch(chartGeneratorOrchestratorProvider);
   final codeOrchestrator = ref.watch(codeOrchestratorProvider);
   final flashcardOrchestrator = ref.watch(flashcardOrchestratorProvider);
+  final interactiveCanvasOrchestrator = ref.watch(interactiveCanvasOrchestratorProvider);
   final database = AppDatabase.instance;
   final embeddingService = ref.watch(embeddingServiceProvider);
   final rerankService = ref.watch(rerankServiceProvider);
@@ -39,6 +42,7 @@ final researchOrchestratorProvider = Provider((ref) {
   final chartTool = DelegateToChartGeneratorTool();
   final codeTool = DelegateToCoderTool();
   final flashcardTool = DelegateToFlashcardsTool();
+  final canvasTool = DelegateToInteractiveCanvasTool();
   
   return ResearchOrchestrator(
     aiService: aiService,
@@ -51,6 +55,8 @@ final researchOrchestratorProvider = Provider((ref) {
     chartTool: chartTool,
     codeTool: codeTool,
     flashcardTool: flashcardTool,
+    canvasTool: canvasTool,
+    interactiveCanvasOrchestrator: interactiveCanvasOrchestrator,
   );
 });
 
@@ -59,6 +65,7 @@ class ResearchOrchestrator {
   static const String chartMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_chart_generator` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.';
   static const String codeMandate = '**CRITICAL MANDATE**: The user has requested to write or modify code. You MUST call `query_knowledge_base` first to gather context. After searching, you MUST call `delegate_to_coder` if the user wants code generation, script writing, or technical implementation. Do NOT write the code yourself; delegate it to the code specialist.';
   static const String flashcardMandate = '**CRITICAL MANDATE**: The user has requested flashcards or study materials. You MUST call `query_knowledge_base` first to gather factual context. After searching, you MUST call `delegate_to_flashcards` to transform that data into a high-quality study deck.';
+  static const String canvasMandate = '**CRITICAL MANDATE**: The user has requested a custom visual or interactive component. You MUST call `query_knowledge_base` first. After searching, you MUST call `delegate_to_interactive_canvas` to build the component using HTML/SVG.';
 
   final IAiService aiService;
   final ChartGeneratorOrchestrator chartGeneratorOrchestrator;
@@ -70,6 +77,8 @@ class ResearchOrchestrator {
   final DelegateToChartGeneratorTool chartTool;
   final DelegateToCoderTool codeTool;
   final DelegateToFlashcardsTool flashcardTool;
+  final DelegateToInteractiveCanvasTool canvasTool;
+  final InteractiveCanvasOrchestrator interactiveCanvasOrchestrator;
 
   ChunkRegistry get registry => ragTool.registry;
 
@@ -84,6 +93,8 @@ class ResearchOrchestrator {
     required this.chartTool,
     required this.codeTool,
     required this.flashcardTool,
+    required this.canvasTool,
+    required this.interactiveCanvasOrchestrator,
   });
 
   /// Starts a research session for a given query and context.
@@ -99,6 +110,7 @@ class ResearchOrchestrator {
     String? currentCode,
     String? currentCodeTitle,
     List<Flashcard>? currentFlashcards,
+    String? currentCanvasHtml,
     void Function(String status)? onStatusUpdate,
     bool Function()? isCanceled,
   }) async {
@@ -116,6 +128,7 @@ class ResearchOrchestrator {
       if (settings.chartGeneratorMode != ChartGeneratorMode.off) chartTool.definition,
       if (settings.coderMode != CoderMode.off) codeTool.definition,
       if (settings.flashcardMode != FlashcardMode.off) flashcardTool.definition,
+      if (settings.interactiveCanvasMode != InteractiveCanvasMode.off) canvasTool.definition,
     ];
 
     String finalUserQuery = userQuery;
@@ -127,6 +140,9 @@ class ResearchOrchestrator {
     }
     if (settings.flashcardMode == FlashcardMode.on) {
       finalUserQuery = '$finalUserQuery\n\n$flashcardMandate';
+    }
+    if (settings.interactiveCanvasMode == InteractiveCanvasMode.on) {
+      finalUserQuery = '$finalUserQuery\n\n$canvasMandate';
     }
 
     final contextPrompt = historicalContext.isEmpty 
@@ -151,6 +167,7 @@ class ResearchOrchestrator {
     String? capturedCodeTitle;
     List<Flashcard>? capturedFlashcards;
     String? capturedFlashcardTitle;
+    String? capturedCanvasHtml;
 
     // 2. ReAct Loop
     int iterations = 0;
@@ -219,6 +236,7 @@ class ResearchOrchestrator {
             codeTitle: capturedCodeTitle,
             flashcardResult: capturedFlashcards,
             flashcardTitle: capturedFlashcardTitle,
+            canvasHtml: capturedCanvasHtml,
             steps: messages.sublist(newStepsStartIndex),
           );
         } else if (toolCall.function.name == DelegateToChartGeneratorTool.name) {
@@ -319,6 +337,38 @@ class ResearchOrchestrator {
             toolCallId: toolCall.id,
             name: DelegateToFlashcardsTool.name,
           ));
+        } else if (toolCall.function.name == DelegateToInteractiveCanvasTool.name) {
+          final args = _parseArgs(toolCall.function.arguments);
+          onStatusUpdate?.call('Designing interactive canvas for "${args['canvasGoal'] ?? 'component'}..."');
+          
+          final package = canvasTool.execute(args);
+          
+          final cleanContext = contextPrompt
+              .replaceAll(chartMandate, '')
+              .replaceAll(codeMandate, '')
+              .replaceAll(flashcardMandate, '')
+              .replaceAll(canvasMandate, '')
+              .replaceAll('\n\nUser Query: ', '\n')
+              .replaceAll('Current query: \n', 'Current query: ')
+              .trim();
+
+          final canvasResult = await interactiveCanvasOrchestrator.generateCanvas(
+            package: package, 
+            registry: registry,
+            fullContext: cleanContext,
+          );
+
+          capturedCanvasHtml = canvasResult.htmlContent;
+
+          messages.add(ChatMessage(
+            role: ChatRole.tool,
+            content: 'CANVAS_GENERATED:\n${canvasResult.htmlContent.substring(0, canvasResult.htmlContent.length > 200 ? 200 : canvasResult.htmlContent.length)}...\n\n'
+                     'Assistant Note: The interactive canvas has been generated and will be displayed in the workspace. '
+                     'You should now call delegate_to_synthesizer to explain how the user can interact with this component '
+                     'and summarize its key takeaways.',
+            toolCallId: toolCall.id,
+            name: DelegateToInteractiveCanvasTool.name,
+          ));
         } else if (toolCall.function.name == NoInfoFoundTool.name) {
           // AI specifically said no info found
           final args = _parseArgs(toolCall.function.arguments);
@@ -357,6 +407,8 @@ class ResearchOrchestrator {
         ),
         flashcardMode: settings.flashcardMode,
         chartGeneratorMode: settings.chartGeneratorMode,
+        interactiveCanvasMode: settings.interactiveCanvasMode,
+        canvasHtml: capturedCanvasHtml,
         steps: messages.sublist(newStepsStartIndex),
       );
     }
@@ -421,6 +473,7 @@ You have access to the conversation history. Use this context to resolve pronoun
             .replaceAll(chartMandate, '')
             .replaceAll(codeMandate, '')
             .replaceAll(flashcardMandate, '')
+            .replaceAll(canvasMandate, '')
             .replaceAll('\n\nUser Query: ', '')
             .trim();
         buffer.write('Query: $cleanQuery');

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/services/portable_settings.dart';
 
-enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, chart, code, flashcards, controlPanel }
+enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, chart, code, flashcards, controlPanel, interactiveCanvas }
 
 class WorkbenchTab {
   final String id;
@@ -175,6 +175,56 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
       return;
     }
 
+    // Interactive Canvas Versioning
+    if (tab.type == WorkbenchTabType.interactiveCanvas) {
+      final String? incomingHtml = tab.metadata?['htmlContent'];
+      if (incomingHtml != null) {
+        final existingTabIndex = state.tabs.indexWhere(
+          (t) => t.type == WorkbenchTabType.interactiveCanvas && t.title == tab.title
+        );
+
+        if (existingTabIndex != -1) {
+          final existingTab = state.tabs[existingTabIndex];
+          final List<dynamic> versions = List.from(existingTab.metadata?['versions'] ?? [existingTab.metadata?['htmlContent']]);
+          
+          if (!versions.contains(incomingHtml)) {
+            versions.add(incomingHtml);
+          }
+
+          final updatedTab = WorkbenchTab(
+            id: existingTab.id,
+            title: existingTab.title,
+            icon: existingTab.icon,
+            type: existingTab.type,
+            metadata: {
+              'htmlContent': incomingHtml,
+              'versions': versions,
+              'currentIndex': versions.length - 1,
+            },
+          );
+
+          final newTabs = List<WorkbenchTab>.from(state.tabs);
+          newTabs[existingTabIndex] = updatedTab;
+          state = state.copyWith(tabs: newTabs, activeTabId: existingTab.id, isCollapsed: false);
+          return;
+        }
+      }
+      
+      final newTab = WorkbenchTab(
+        id: tab.id,
+        title: tab.title,
+        icon: tab.icon,
+        type: tab.type,
+        metadata: {
+          'htmlContent': tab.metadata?['htmlContent'],
+          'versions': [tab.metadata?['htmlContent']],
+          'currentIndex': 0,
+        },
+      );
+      state = state.copyWith(tabs: [...state.tabs, newTab], activeTabId: tab.id, isCollapsed: false);
+      return;
+    }
+
     // 3. Specialized Logic for Flashcards: Merge New Cards with Existing
     if (tab.type == WorkbenchTabType.flashcards) {
       final List<dynamic>? incomingCards = tab.metadata?['cards'];
@@ -228,9 +278,10 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
 
   void navigateVersion(String tabId, int index) {
     final newTabs = state.tabs.map((t) {
-      if (t.id == tabId && t.type == WorkbenchTabType.chart) {
+      if (t.id == tabId && (t.type == WorkbenchTabType.chart || t.type == WorkbenchTabType.interactiveCanvas)) {
         final List<dynamic>? versions = t.metadata?['versions'];
         if (versions != null && index >= 0 && index < versions.length) {
+          final dataKey = t.type == WorkbenchTabType.chart ? 'schema' : 'htmlContent';
           return WorkbenchTab(
             id: t.id,
             title: t.title,
@@ -238,7 +289,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
             type: t.type,
             metadata: {
               ...t.metadata as Map<String, dynamic>,
-              'schema': versions[index],
+              dataKey: versions[index],
               'currentIndex': index,
             },
           );

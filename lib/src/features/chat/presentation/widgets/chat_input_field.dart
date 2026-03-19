@@ -327,6 +327,14 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                       onPressed: () => _cycleFlashcardMode(settings, settingsNotifier),
                     ),
                     const SizedBox(width: 8),
+                    _buildTrayAction(
+                      context,
+                      icon: _getInteractiveCanvasIcon(settings.interactiveCanvasMode),
+                      label: 'Canvas: ${_getInteractiveCanvasLabel(settings.interactiveCanvasMode)}',
+                      isHighlight: settings.interactiveCanvasMode != InteractiveCanvasMode.off,
+                      onPressed: () => _cycleInteractiveCanvasMode(settings, settingsNotifier),
+                    ),
+                    const SizedBox(width: 8),
                   ],
 
                   // Lite Mode Indicator
@@ -570,6 +578,27 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
   void _cycleFlashcardMode(SettingsState settings, SettingsController notifier) {
     final nextIndex = (settings.flashcardMode.index + 1) % FlashcardMode.values.length;
     notifier.updateFlashcardMode(FlashcardMode.values[nextIndex]);
+  }
+
+  IconData _getInteractiveCanvasIcon(InteractiveCanvasMode mode) {
+    switch (mode) {
+      case InteractiveCanvasMode.auto: return Icons.auto_awesome_mosaic_rounded;
+      case InteractiveCanvasMode.off: return Icons.layers_clear_rounded;
+      case InteractiveCanvasMode.on: return Icons.layers_rounded;
+    }
+  }
+
+  String _getInteractiveCanvasLabel(InteractiveCanvasMode mode) {
+    switch (mode) {
+      case InteractiveCanvasMode.auto: return 'Auto';
+      case InteractiveCanvasMode.off: return 'Off';
+      case InteractiveCanvasMode.on: return 'On';
+    }
+  }
+
+  void _cycleInteractiveCanvasMode(SettingsState settings, SettingsController notifier) {
+    final nextIndex = (settings.interactiveCanvasMode.index + 1) % InteractiveCanvasMode.values.length;
+    notifier.updateInteractiveCanvasMode(InteractiveCanvasMode.values[nextIndex]);
   }
 
   IconData _getFileIcon(String? extension) {
