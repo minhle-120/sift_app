@@ -410,17 +410,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildMessagesList(ChatState chatState) {
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      itemCount: chatState.messages.length,
-      itemBuilder: (context, index) {
-        final message = chatState.messages[index];
-        return MessageBubble(
-          key: ValueKey(message.id),
-          message: message,
-        );
-      },
+    return Theme(
+      data: Theme.of(context).copyWith(
+        scrollbarTheme: Theme.of(context).scrollbarTheme.copyWith(
+          thickness: WidgetStateProperty.all(0),
+          thumbVisibility: WidgetStateProperty.all(false),
+        ),
+      ),
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        itemCount: chatState.messages.length,
+        itemBuilder: (context, index) {
+          final message = chatState.messages[index];
+          return MessageBubble(
+            key: ValueKey(message.id),
+            message: message,
+          );
+        },
+      ),
     );
   }
 

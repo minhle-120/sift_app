@@ -711,18 +711,35 @@ class SettingsController extends StateNotifier<SettingsState> {
             isLoadingModels: false,
           );
 
-          // Auto-select bundled models if in Internal mode
-          if (state.backendType == BackendType.internal) {
-            final instruct = models.firstWhere((m) => m.contains('Instruct'), orElse: () => '');
-            final embedding = models.firstWhere((m) => m.contains('Embedding'), orElse: () => '');
-            final reranker = models.firstWhere((m) => m.toLowerCase().contains('reranker'), orElse: () => '');
+          // Auto-select specialized models if current selection is empty
+          final currentEmbedding = state.embeddingModel;
+          final currentReranker = state.rerankModel;
 
-            if (instruct.isNotEmpty) await updateChatModel(instruct);
-            if (embedding.isNotEmpty) await updateEmbeddingModel(embedding);
-            if (reranker.isNotEmpty) await updateRerankModel(reranker);
+          String autoEmbedding = '';
+          String autoReranker = '';
+
+          try {
+            autoEmbedding = models.firstWhere(
+              (m) => m.toLowerCase().contains('embedding'), 
+              orElse: () => ''
+            );
+          } catch (_) {}
+
+          try {
+            autoReranker = models.firstWhere(
+              (m) => m.toLowerCase().contains('reranker') || m.toLowerCase().contains('rerank'), 
+              orElse: () => ''
+            );
+          } catch (_) {}
+
+          if (currentEmbedding.isEmpty && autoEmbedding.isNotEmpty) {
+            await updateEmbeddingModel(autoEmbedding);
+          }
+          if (currentReranker.isEmpty && autoReranker.isNotEmpty) {
+            await updateRerankModel(autoReranker);
           }
           
-          // Trigger dimension detection after fetching models if one is selected
+          // Trigger dimension detection after fetching models
           _detectEmbeddingDimension();
         }
       } else {

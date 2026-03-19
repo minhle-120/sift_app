@@ -46,10 +46,15 @@ class SiftTheme {
         space: 1,
       ),
       scrollbarTheme: ScrollbarThemeData(
-        thickness: WidgetStateProperty.all(0),
-        thumbVisibility: WidgetStateProperty.all(false),
-        trackVisibility: WidgetStateProperty.all(false),
-        interactive: false,
+        thickness: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) || states.contains(WidgetState.dragged)) {
+            return 8.0;
+          }
+          return 4.0;
+        }),
+        thumbColor: WidgetStateProperty.all(primary.withValues(alpha: 0.2)),
+        radius: const Radius.circular(8),
+        interactive: true,
       ),
     );
   }

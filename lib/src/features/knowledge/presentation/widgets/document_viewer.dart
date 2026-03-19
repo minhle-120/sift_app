@@ -115,17 +115,21 @@ class _DocumentViewerState extends ConsumerState<DocumentViewer> {
               child: Column(
                 children: [
                   Expanded(
-                    child: SingleChildScrollView(
+                    child: Scrollbar(
                       controller: _scrollController,
-                      padding: const EdgeInsets.all(24),
-                      child: SelectionArea(
-                        child: Text.rich(
-                          TextSpan(
-                            children: spans,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              height: 1.8,
-                              letterSpacing: 0.2,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(24),
+                        child: SelectionArea(
+                          child: Text.rich(
+                            TextSpan(
+                              children: spans,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                height: 1.8,
+                                letterSpacing: 0.2,
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+                              ),
                             ),
                           ),
                         ),
