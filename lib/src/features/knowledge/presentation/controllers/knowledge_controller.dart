@@ -15,26 +15,55 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart';
 
+const List<String> kSupportedDocumentExtensions = [
+  '.txt', '.md', '.csv', '.json', '.dart', '.py', '.js', '.html', '.css', 
+  '.c', '.cpp', '.h', '.java', '.go', '.rs', '.pdf', '.docx'
+];
+
+const List<String> kImageExtensions = [
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'
+];
+
+class PendingChunk {
+  final int documentId;
+  final int chunkIndex;
+  final String content;
+
+  PendingChunk({
+    required this.documentId,
+    required this.chunkIndex,
+    required this.content,
+  });
+}
+
 class KnowledgeState {
   final AsyncValue<void> status;
   final double reprocessingProgress; // 0.0 to 1.0
   final bool isReprocessing;
+  final int totalFilesToProcess;
+  final int processedFilesCount;
 
   const KnowledgeState({
     this.status = const AsyncValue.data(null),
     this.reprocessingProgress = 0.0,
     this.isReprocessing = false,
+    this.totalFilesToProcess = 0,
+    this.processedFilesCount = 0,
   });
 
   KnowledgeState copyWith({
     AsyncValue<void>? status,
     double? reprocessingProgress,
     bool? isReprocessing,
+    int? totalFilesToProcess,
+    int? processedFilesCount,
   }) {
     return KnowledgeState(
       status: status ?? this.status,
       reprocessingProgress: reprocessingProgress ?? this.reprocessingProgress,
       isReprocessing: isReprocessing ?? this.isReprocessing,
+      totalFilesToProcess: totalFilesToProcess ?? this.totalFilesToProcess,
+      processedFilesCount: processedFilesCount ?? this.processedFilesCount,
     );
   }
 }
@@ -83,7 +112,7 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
       final paths = result.files.map((f) => f.path).whereType<String>().toList();
       if (paths.isEmpty) return;
 
-      uploadFiles(paths);
+      uploadItems(paths);
     } finally {
       _isPickingFile = false;
     }
@@ -140,26 +169,185 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
     }
   }
 
-  Future<void> uploadFiles(List<String> paths) async {
+  Future<void> uploadItems(List<String> paths) async {
     final db = _ref.read(databaseProvider);
     final activeCollection = _ref.read(collectionProvider).activeCollection;
     final collectionId = activeCollection?.id;
 
-    for (final path in paths) {
-      final file = File(path);
-      if (!await file.exists()) continue;
+    state = state.copyWith(status: const AsyncValue.loading());
 
-      final fileName = path.split(Platform.pathSeparator).last;
-      final extension = fileName.split('.').last;
+    try {
+      // 1. Scan for valid text files
+      final List<File> validFiles = [];
 
-      final doc = await db.createDocument(
-        collectionId: collectionId,
-        title: fileName,
-        filePath: path,
-        type: extension,
+      Future<void> addIfValid(File file) async {
+          final ext = p.extension(file.path).toLowerCase();
+          
+          if (kImageExtensions.contains(ext)) {
+            return; // Explicitly reject images
+          }
+          
+          if (kSupportedDocumentExtensions.contains(ext)) {
+             validFiles.add(file);
+          } else if (ext.isEmpty || ext == '.log' || ext == '.env') {
+             try {
+                // Read a small chunk (4KB) to verify if it's text, instead of limiting total file size
+                final stream = file.openRead(0, 4096);
+                final bytes = <int>[];
+                await for (final chunk in stream) {
+                  bytes.addAll(chunk);
+                }
+                
+                if (bytes.isNotEmpty) {
+                  // Text files rarely contain null bytes
+                  if (bytes.contains(0)) throw Exception('Binary file');
+                  
+                  // Trim last 4 bytes to avoid ending in the middle of a multi-byte UTF-8 char
+                  final safeLength = bytes.length > 4 ? bytes.length - 4 : bytes.length;
+                  utf8.decode(bytes.sublist(0, safeLength), allowMalformed: false);
+                }
+                validFiles.add(file);
+             } catch (_) {
+                // Not valid UTF-8, ignore
+             }
+          }
+      }
+
+      for (final path in paths) {
+         if (await Directory(path).exists()) {
+            final dir = Directory(path);
+            await for (final entity in dir.list(recursive: true, followLinks: false)) {
+               if (entity is File) {
+                  await addIfValid(entity);
+               }
+            }
+         } else if (await File(path).exists()) {
+            await addIfValid(File(path));
+         }
+      }
+
+      state = state.copyWith(
+        totalFilesToProcess: validFiles.length,
+        processedFilesCount: 0,
       );
 
-      _processDocument(doc);
+      if (validFiles.isEmpty) {
+        state = state.copyWith(status: const AsyncValue.data(null), totalFilesToProcess: 0);
+        return;
+      }
+
+      // 2. Batch Processing Pipeline
+      final settings = _ref.read(settingsProvider);
+      final embeddingService = _ref.read(embeddingServiceProvider);
+      
+      final List<PendingChunk> buffer = [];
+
+      Future<void> flushBuffer() async {
+        if (buffer.isEmpty) return;
+
+        final textsToEmbed = buffer.map((c) => c.content).toList();
+        List<List<double>>? vectors;
+        
+        // Retry logic for embedding
+        for (int i = 0; i < 3; i++) {
+          try {
+             vectors = await embeddingService.getEmbeddings(textsToEmbed);
+             break;
+          } catch (e) {
+             if (i == 2) throw Exception('Failed to get embeddings after 3 retries: $e');
+             await Future.delayed(const Duration(seconds: 2));
+          }
+        }
+
+        if (vectors != null) {
+          final List<DocumentChunksCompanion> companions = [];
+          for (var i = 0; i < buffer.length; i++) {
+            companions.add(DocumentChunksCompanion.insert(
+              uuid: const Uuid().v4(),
+              documentId: buffer[i].documentId,
+              content: buffer[i].content,
+              embedding: jsonEncode(vectors[i]),
+              index: buffer[i].chunkIndex,
+            ));
+          }
+          await db.insertDocumentChunks(companions);
+        }
+        buffer.clear();
+      }
+
+      int processed = 0;
+      for (final file in validFiles) {
+        try {
+          // Yield to event loop to keep UI responsive
+          await Future.delayed(Duration.zero);
+          
+          // Use extension-aware extraction
+          final extensionStr = p.extension(file.path).toLowerCase();
+          String text;
+          
+          if (extensionStr == '.pdf' || extensionStr == '.docx') {
+             text = await _processor.extractText(file, extension: extensionStr);
+          } else {
+             // For standard code/text files, use fast native reading instead
+             final bytes = await file.readAsBytes();
+             try {
+               text = utf8.decode(bytes);
+             } catch (_) {
+               text = utf8.decode(bytes, allowMalformed: true);
+             }
+          }
+          
+          final fileName = p.basename(file.path);
+          final cleanExtension = extensionStr.replaceAll('.', '');
+
+          final doc = await db.createDocument(
+            collectionId: collectionId,
+            title: fileName,
+            filePath: file.path,
+            type: cleanExtension.isEmpty ? 'txt' : cleanExtension,
+          );
+
+          await (db.update(db.documents)..where((t) => t.id.equals(doc.id)))
+            .write(DocumentsCompanion(content: Value(text)));
+
+          final chunks = _processor.chunkText(text, settings.chunkSize, settings.chunkOverlap);
+
+          if (chunks.isEmpty) {
+             await db.updateDocumentStatus(doc.id, 'completed');
+          } else {
+             for (int i = 0; i < chunks.length; i++) {
+                 buffer.add(PendingChunk(documentId: doc.id, chunkIndex: i, content: chunks[i]));
+                 if (buffer.length >= 32) {
+                    await flushBuffer();
+                 }
+             }
+             await db.updateDocumentStatus(doc.id, 'completed');
+          }
+        } catch (e) {
+          // Log error internally or ignore so upload can continue
+          // debugPrint('Error processing file ${file.path}: $e');
+        }
+
+        processed++;
+        state = state.copyWith(processedFilesCount: processed);
+      }
+
+      if (buffer.isNotEmpty) {
+         await flushBuffer();
+      }
+
+      state = state.copyWith(
+        status: const AsyncValue.data(null),
+        totalFilesToProcess: 0,
+        processedFilesCount: 0,
+      );
+
+    } catch (e) {
+      state = state.copyWith(
+        status: AsyncValue.error(e, StackTrace.current),
+        totalFilesToProcess: 0,
+        processedFilesCount: 0,
+      );
     }
   }
 
@@ -196,27 +384,41 @@ class KnowledgeController extends StateNotifier<KnowledgeState> {
         return;
       }
 
-      // 3. Generate Embeddings
+      // 3. Generate Embeddings in batches of 32
       final embeddingService = _ref.read(embeddingServiceProvider);
       
-      final vectors = await embeddingService.getEmbeddings(chunks);
-      
-      final List<DocumentChunksCompanion> companions = [];
-      for (var i = 0; i < chunks.length; i++) {
-        final chunkContent = chunks[i];
-        final vector = vectors[i];
+      for (var batchStart = 0; batchStart < chunks.length; batchStart += 32) {
+        final batchEnd = (batchStart + 32 < chunks.length) ? batchStart + 32 : chunks.length;
+        final batchChunks = chunks.sublist(batchStart, batchEnd);
         
-        companions.add(DocumentChunksCompanion.insert(
-          uuid: const Uuid().v4(),
-          documentId: doc.id,
-          content: chunkContent,
-          embedding: jsonEncode(vector),
-          index: i,
-        ));
-      }
+        List<List<double>>? vectors;
+        // Retry logic for embedding
+        for (int i = 0; i < 3; i++) {
+          try {
+             vectors = await embeddingService.getEmbeddings(batchChunks);
+             break;
+          } catch (e) {
+             if (i == 2) throw Exception('Failed to get embeddings after 3 retries: $e');
+             await Future.delayed(const Duration(seconds: 2));
+          }
+        }
 
-      // 4. Save Chunks
-      await db.insertDocumentChunks(companions);
+        if (vectors != null) {
+          final List<DocumentChunksCompanion> companions = [];
+          for (var i = 0; i < batchChunks.length; i++) {
+            companions.add(DocumentChunksCompanion.insert(
+              uuid: const Uuid().v4(),
+              documentId: doc.id,
+              content: batchChunks[i],
+              embedding: jsonEncode(vectors[i]),
+              index: batchStart + i,
+            ));
+          }
+
+          // 4. Save Chunks
+          await db.insertDocumentChunks(companions);
+        }
+      }
 
       // 5. Complete
       await db.updateDocumentStatus(doc.id, 'completed');

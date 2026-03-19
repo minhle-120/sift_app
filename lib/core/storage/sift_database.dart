@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
@@ -260,50 +260,102 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Performs a simple cosine-similarity search over chunks in a collection.
+  // --- Vector Search & Scoring ---
+
+  /// Memory-optimized vector search with selective fetching, paging, and hydration.
+  /// Parallelized via Isolates across multiple CPU cores.
   Future<List<TypedResult>> vectorSearch({
     required int collectionId,
     required List<double> queryEmbedding,
     int limit = 10,
   }) async {
-    // Join chunks with documents to filter by collectionId
-    final query = select(documentChunks).join([
-      innerJoin(documents, documents.id.equalsExp(documentChunks.documentId)),
-    ])
-      ..where(documents.collectionId.equals(collectionId));
+    // 1. Initial Selective Scan: Only pull IDs and embeddings
+    final List<MapEntry<int, double>> topScores = [];
+    const batchSize = 1000;
+    int offset = 0;
+    
+    // Determine worker count based on CPU cores (capped at 4 for overhead balance)
+    final workerCount = (Platform.numberOfProcessors / 2).clamp(1, 4).toInt();
 
-    final allResults = await query.get();
-    
-    // Sort by cosine similarity in memory (Dart)
-    // For production-grade at scale, we'd use a vector DB or sqlite-vss
-    final List<MapEntry<TypedResult, double>> scored = [];
-    
-    for (final row in allResults) {
-      final chunk = row.readTable(documentChunks);
-      final embeddingData = jsonDecode(chunk.embedding) as List<dynamic>;
-      final embedding = embeddingData.cast<double>();
+    while (true) {
+      final query = selectOnly(documentChunks)
+        ..addColumns([documentChunks.id, documentChunks.embedding])
+        ..join([
+          innerJoin(documents, documents.id.equalsExp(documentChunks.documentId))
+        ])
+        ..where(documents.collectionId.equals(collectionId))
+        ..limit(batchSize, offset: offset);
+
+      final batch = await query.get();
+      if (batch.isEmpty) break;
+
+      // 2. Parallel Dispatch: Split the 1000-chunk page into sub-batches for Isolates
+      final List<int> batchIds = [];
+      final List<String> batchEmbeddings = [];
+      for (final row in batch) {
+          batchIds.add(row.read(documentChunks.id)!);
+          batchEmbeddings.add(row.read(documentChunks.embedding)!);
+      }
+
+      final subBatchSize = (batchIds.length / workerCount).ceil();
+      final List<Future<List<MapEntry<int, double>>>> futures = [];
+
+      for (var i = 0; i < workerCount; i++) {
+          final start = i * subBatchSize;
+          if (start >= batchIds.length) break;
+          final end = (start + subBatchSize < batchIds.length) ? start + subBatchSize : batchIds.length;
+          
+          final task = _ScoreTask(
+              ids: batchIds.sublist(start, end),
+              embeddings: batchEmbeddings.sublist(start, end),
+              queryEmbedding: queryEmbedding,
+          );
+
+          futures.add(compute(_scoreBatchIsolate, task));
+      }
+
+      final partialResults = await Future.wait(futures);
+      for (final list in partialResults) {
+          topScores.addAll(list);
+      }
+
+      // Sort and prune to keep memory low
+      topScores.sort((a, b) => b.value.compareTo(a.value));
+      if (topScores.length > 50) {
+        topScores.removeRange(50, topScores.length);
+      }
+
+      // Yield to let GC clean up
+      await Future.delayed(Duration.zero);
       
-      final score = _calculateCosineSimilarity(queryEmbedding, embedding);
-      scored.add(MapEntry(row, score));
+      if (batch.length < batchSize) break;
+      offset += batchSize;
     }
 
-    scored.sort((a, b) => b.value.compareTo(a.value));
+    if (topScores.isEmpty) return [];
+
+    // 3. Final Pruning to requested limit
+    topScores.sort((a, b) => b.value.compareTo(a.value));
+    final winnerIds = topScores.take(limit).map((e) => e.key).toList();
+
+    // 4. Hydration: Fetch full objects only for the winners
+    final hydrationQuery = select(documentChunks).join([
+      innerJoin(documents, documents.id.equalsExp(documentChunks.documentId))
+    ])
+      ..where(documentChunks.id.isIn(winnerIds));
+
+    final hydratedResults = await hydrationQuery.get();
     
-    return scored.take(limit).map((e) => e.key).toList();
+    // Sort hydrated results to match the original score order
+    hydratedResults.sort((a, b) {
+      final idA = a.readTable(documentChunks).id;
+      final idB = b.readTable(documentChunks).id;
+      return winnerIds.indexOf(idA).compareTo(winnerIds.indexOf(idB));
+    });
+
+    return hydratedResults;
   }
 
-  double _calculateCosineSimilarity(List<double> a, List<double> b) {
-    if (a.length != b.length) return 0.0;
-    double dotProduct = 0.0;
-    double normA = 0.0;
-    double normB = 0.0;
-    for (int i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
-    }
-    return dotProduct / (math.sqrt(normA) * math.sqrt(normB));
-  }
 
   // --- Shared Sync Logic ---
 
@@ -402,4 +454,65 @@ LazyDatabase _openConnection() {
     final file = File(p.join(dataDir.path, 'sift.sqlite'));
     return NativeDatabase.createInBackground(file);
   });
+}
+
+// --- Top-level Isolate Workers ---
+// We move these outside the class to ensure Isolate.run doesn't capture 'this' (AppDatabase).
+
+class _ScoreTask {
+  final List<int> ids;
+  final List<String> embeddings;
+  final List<double> queryEmbedding;
+
+  _ScoreTask({
+    required this.ids,
+    required this.embeddings,
+    required this.queryEmbedding,
+  });
+}
+
+/// Helper for parallel isolate scoring
+List<MapEntry<int, double>> _scoreBatchIsolate(_ScoreTask task) {
+  final results = <MapEntry<int, double>>[];
+  for (var i = 0; i < task.ids.length; i++) {
+    final id = task.ids[i];
+    final embeddingStr = task.embeddings[i];
+
+    // Fast parse directly to Float32List
+    final embeddingList = _fastParseVector(embeddingStr);
+
+    // Compute similarity
+    final score = _cosineSimilarityF32(task.queryEmbedding, embeddingList);
+    results.add(MapEntry(id, score));
+  }
+  return results;
+}
+
+/// Fast vector parser that avoids jsonDecode entirely.
+/// Parses "[0.123,0.456,...]" directly into a Float32List.
+Float32List _fastParseVector(String jsonStr) {
+  final inner = jsonStr.substring(1, jsonStr.length - 1);
+  final parts = inner.split(',');
+  final result = Float32List(parts.length);
+  for (var i = 0; i < parts.length; i++) {
+    result[i] = double.parse(parts[i]);
+  }
+  return result;
+}
+
+/// Inline cosine similarity optimized for Float32List.
+double _cosineSimilarityF32(List<double> a, Float32List b) {
+  if (a.length != b.length) return 0.0;
+  double dotProduct = 0.0;
+  double normA = 0.0;
+  double normB = 0.0;
+  for (int i = 0; i < a.length; i++) {
+    final ai = a[i];
+    final bi = b[i];
+    dotProduct += ai * bi;
+    normA += ai * ai;
+    normB += bi * bi;
+  }
+  final denom = math.sqrt(normA) * math.sqrt(normB);
+  return denom == 0 ? 0.0 : dotProduct / denom;
 }

@@ -4,8 +4,8 @@ import 'package:sift_app/core/storage/sift_database.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/collection_controller.dart';
 import '../controllers/knowledge_controller.dart';
 import 'package:desktop_drop/desktop_drop.dart';
-
 import 'package:intl/intl.dart';
+import '../widgets/document_viewer.dart';
 
 class DocumentsScreen extends ConsumerStatefulWidget {
   final bool autoOpenAddMenu;
@@ -39,6 +39,8 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
     final theme = Theme.of(context);
     final activeCollection = ref.watch(collectionProvider).activeCollection;
     final AsyncValue<List<Document>> documentsAsync = ref.watch(filteredDocumentsProvider);
+    final knowledgeState = ref.watch(knowledgeControllerProvider);
+    final isProcessingFolder = knowledgeState.totalFilesToProcess > 0;
 
     // Listen for errors from the knowledge controller
     ref.listen<KnowledgeState>(knowledgeControllerProvider, (previous, next) {
@@ -65,7 +67,9 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
         onDragExited: (details) => setState(() => _isDragging = false),
         onDragDone: (details) {
           final paths = details.files.map((f) => f.path).toList();
-          ref.read(knowledgeControllerProvider.notifier).uploadFiles(paths);
+          setState(() => _isDragging = false);
+          
+          ref.read(knowledgeControllerProvider.notifier).uploadItems(paths);
         },
         child: Stack(
           children: [
@@ -107,6 +111,45 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: theme.colorScheme.onPrimaryContainer,
                             fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (isProcessingFolder)
+              Positioned(
+                bottom: activeCollection != null ? 80 : 16, // avoid fab
+                left: 16,
+                right: 16,
+                child: Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Processing Folder...',
+                              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              '${knowledgeState.processedFilesCount} / ${knowledgeState.totalFilesToProcess}',
+                              style: theme.textTheme.labelMedium,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: knowledgeState.processedFilesCount / knowledgeState.totalFilesToProcess,
+                            minHeight: 8,
                           ),
                         ),
                       ],
@@ -356,6 +399,46 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       color: theme.colorScheme.surfaceContainer,
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) => Dialog(
+              backgroundColor: theme.colorScheme.surface,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 800, maxHeight: 800),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 16, 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              doc.title,
+                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: DocumentViewer(documentId: doc.id),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
         leading: _buildFileIcon(doc.type, theme),
         title: Text(
           doc.title,

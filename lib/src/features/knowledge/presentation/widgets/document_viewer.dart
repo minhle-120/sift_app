@@ -110,22 +110,105 @@ class _DocumentViewerState extends ConsumerState<DocumentViewer> {
               spans.add(TextSpan(text: fullText));
             }
 
-            return Container(
-              color: theme.colorScheme.surface,
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(32),
-                child: SelectionArea(
-                  child: Text.rich(
-                    TextSpan(
-                      children: spans,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        height: 1.8,
-                        letterSpacing: 0.2,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+            return DefaultTabController(
+              length: 2,
+              child: Container(
+                color: theme.colorScheme.surface,
+                child: Column(
+                  children: [
+                    TabBar(
+                      tabs: const [
+                        Tab(text: 'Parsed Text'),
+                        Tab(text: 'Chunks'),
+                      ],
+                      labelColor: theme.colorScheme.primary,
+                      unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+                      indicatorColor: theme.colorScheme.primary,
+                    ),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          // Tab 1: Full Parsed Text
+                          SingleChildScrollView(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.all(24),
+                            child: SelectionArea(
+                              child: Text.rich(
+                                TextSpan(
+                                  children: spans,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    height: 1.8,
+                                    letterSpacing: 0.2,
+                                    color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          
+                          // Tab 2: Chunks List
+                          chunks.isEmpty
+                              ? const Center(child: Text('No chunks available.'))
+                              : ListView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: chunks.length,
+                                  itemBuilder: (context, index) {
+                                    final chunk = chunks[index];
+                                    final isTarget = targetChunkIndex == index;
+                                    return Card(
+                                      elevation: isTarget ? 4 : 1,
+                                      color: isTarget 
+                                          ? theme.colorScheme.primaryContainer 
+                                          : theme.colorScheme.surfaceContainer,
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        side: isTarget 
+                                            ? BorderSide(color: theme.colorScheme.primary, width: 2)
+                                            : BorderSide.none,
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16.0),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: Text(
+                                                    'Chunk ${chunk.index}', // assuming chunk has index property, else just index
+                                                    style: theme.textTheme.labelMedium?.copyWith(
+                                                      color: theme.colorScheme.primary,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            SelectionArea(
+                                              child: Text(
+                                                chunk.content,
+                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                  height: 1.6,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ],
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             );
