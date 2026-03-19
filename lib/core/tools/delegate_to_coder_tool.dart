@@ -10,17 +10,17 @@ class DelegateToCoderTool {
           parameters: {
             'type': 'object',
             'properties': {
+              'codingGoal': {
+                'type': 'string',
+                'description': 'Describe exactly what code should be written (e.g., "Write a Python script to parse this JSON", "Implement a sorting algorithm").',
+              },
               'indices': {
                 'type': 'array',
                 'items': {'type': 'integer'},
                 'description': 'The indices of the chunks [[Chunk X]] providing necessary context, documentation, or examples for the code.',
               },
-              'codingGoal': {
-                'type': 'string',
-                'description': 'Describe exactly what code should be written (e.g., "Write a Python script to parse this JSON", "Implement a sorting algorithm").',
-              },
             },
-            'required': ['indices', 'codingGoal'],
+            'required': ['codingGoal', 'indices'],
           },
         ),
       );

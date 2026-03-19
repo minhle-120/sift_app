@@ -10,17 +10,17 @@ class DelegateToFlashcardsTool {
           parameters: {
             'type': 'object',
             'properties': {
+              'studyGoal': {
+                'type': 'string',
+                'description': 'What specifically the user wants to learn or the exam they are preparing for.',
+              },
               'indices': {
                 'type': 'array',
                 'items': {'type': 'integer'},
                 'description': 'The indices of the chunks to use for flashcard generation (e.g. [1, 3, 5])',
               },
-              'studyGoal': {
-                'type': 'string',
-                'description': 'What specifically the user wants to learn or the exam they are preparing for.',
-              },
             },
-            'required': ['indices', 'studyGoal'],
+            'required': ['studyGoal', 'indices'],
           },
         ),
       );

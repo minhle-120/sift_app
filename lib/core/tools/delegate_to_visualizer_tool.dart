@@ -10,17 +10,17 @@ class DelegateToVisualizerTool {
           parameters: {
             'type': 'object',
             'properties': {
+              'visualizationGoal': {
+                'type': 'string',
+                'description': 'Describe exactly what should be visualized (e.g., "Compare water usage between Google and Microsoft", "Show the hierarchy of LLM infrastructure").',
+              },
               'indices': {
                 'type': 'array',
                 'items': {'type': 'integer'},
                 'description': 'The indices of the chunks [[Chunk X]] containing the data to visualize.',
               },
-              'visualizationGoal': {
-                'type': 'string',
-                'description': 'Describe exactly what should be visualized (e.g., "Compare water usage between Google and Microsoft", "Show the hierarchy of LLM infrastructure").',
-              },
             },
-            'required': ['indices', 'visualizationGoal'],
+            'required': ['visualizationGoal', 'indices'],
           },
         ),
       );

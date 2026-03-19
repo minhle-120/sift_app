@@ -4,6 +4,7 @@ import '../../../../core/services/openai_service.dart';
 import '../../../../services/ai/i_ai_service.dart';
 import '../../../../core/services/document_processor.dart';
 import '../../../../src/features/chat/domain/entities/message.dart' as domain;
+import '../../chat/presentation/controllers/settings_controller.dart';
 import 'dart:io';
 import 'dart:convert';
 
@@ -42,8 +43,9 @@ class ChatOrchestrator {
       flashcardCount: flashcardCount,
     );
 
+    final settings = registry.ref.read(settingsProvider);
     final messages = [
-      ChatMessage(role: ChatRole.system, content: buildSystemPrompt()),
+      ChatMessage(role: ChatRole.system, content: buildSystemPrompt(settings)),
       ...conversation,
       ChatMessage(role: ChatRole.user, content: combinedUserMessage),
     ];
@@ -75,8 +77,9 @@ class ChatOrchestrator {
       flashcardCount: flashcardCount,
     );
 
+    final settings = registry.ref.read(settingsProvider);
     final messages = [
-      ChatMessage(role: ChatRole.system, content: buildSystemPrompt()),
+      ChatMessage(role: ChatRole.system, content: buildSystemPrompt(settings)),
       ...conversation,
       ChatMessage(role: ChatRole.user, content: combinedUserMessage),
     ];
@@ -157,8 +160,8 @@ class ChatOrchestrator {
     return history;
   }
 
-  String buildSystemPrompt() {
-    return r'''You are Sift, a helpful AI assistant. Your goal is to answer the user's question accurately using the provided background knowledge chunks.
+  String buildSystemPrompt(SettingsState settings) {
+    return '''You are Sift, a helpful AI assistant. Your goal is to answer the user's question accurately using the provided background knowledge chunks.
 
 ### Citation Rules:
 1. **Strict Format**: EVERY piece of information from the background context MUST be cited using exactly this format: [[Chunk X]] where X is the chunk number.
@@ -168,19 +171,13 @@ class ChatOrchestrator {
 
 ### Math Formatting:
 - **ALWAYS use LaTeX** for any mathematical expressions, formulas or equations (note: do not apply LaTeX for simple measurements like 1m, 1kg, etc.).
-- **Inline Math**: Use single dollar signs: $ E=mc^2 $.
-- **Block Math**: Use double dollar signs for complex or standalone equations: $$ P(A|B) = \frac{P(A \cap B)}{P(B)} $$.
-- **Consistency**: Do not mix LaTeX with plain text symbols (like using * instead of \times).
+- **Inline Math**: Use single dollar signs: \$ E=mc^2 \$.
+- **Block Math**: Use double dollar signs for complex or standalone equations: \$\$ P(A|B) = \\frac{P(A \\cap B)}{P(B)} \$\$.
+- **Consistency**: Do not mix LaTeX with plain text symbols (like using * instead of \\times).
 
 ### Instructions:
 - Answer the user's latest query accurately using the provided context.
-- **Explain Visuals & Code**: 
-  - If a RENDERED_CHART is provided, provide a textual explanation of the chart.
-  - If a WRITTEN_CODE is provided, provide a textual explanation of the code.
-- **NO Redundancy**: Do NOT attempt to redraw the chart or rewrite the entire code block in your response. Focus on synthesis and explanation.
-- **Study Support**: 
-  - If a FLASHCARD_DECK is mentioned in the message, acknowledge its creation (e.g., "I've created a study deck with X cards in the Memory tab").
-  - Encourage the user to use the cards for reinforcement.
+- **Synthesize Specialists**: If the input context contains artifacts like WRITTEN_CODE, RENDERED_CHART, or FLASHCARD_DECK, provide a textual explanation and acknowledge their creation. Do NOT redraw or rewrite them.
 - Be honest: If the context doesn't contain the answer, state that "The provided documents do not contain information about [topic]."
 - Maintain a professional, objective, and helpful tone.
 ''';
