@@ -2,17 +2,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/ai_models.dart';
 import '../../../../core/services/openai_service.dart';
 import '../../../../services/ai/i_ai_service.dart';
-import 'package:sift_app/src/features/chat/domain/entities/message.dart' as domain;
+import '../../../../core/services/document_processor.dart';
+import '../../../../src/features/chat/domain/entities/message.dart' as domain;
+import 'dart:io';
+import 'dart:convert';
 
 final chatOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
-  return ChatOrchestrator(aiService: aiService);
+  final processor = ref.watch(documentProcessorProvider);
+  return ChatOrchestrator(aiService: aiService, processor: processor);
 });
 
 class ChatOrchestrator {
   final IAiService aiService;
+  final DocumentProcessor processor;
 
-  ChatOrchestrator({required this.aiService});
+  ChatOrchestrator({required this.aiService, required this.processor});
 
   Future<ChatMessage> synthesize({
     required String originalQuery,
@@ -83,7 +88,7 @@ class ChatOrchestrator {
   /// Builds a clean user-visible history from domain messages.
   /// This excludes internal tool calls and internal research steps.
   /// Limits history to the last 4 turns (8 messages).
-  List<ChatMessage> buildHistory(List<domain.Message> domainMessages, {int? limit = 8}) {
+  Future<List<ChatMessage>> buildHistory(List<domain.Message> domainMessages, {int? limit = 8}) async {
     final List<ChatMessage> history = [];
 
     // History Pruning: only prune if limit is provided
@@ -96,18 +101,58 @@ class ChatOrchestrator {
         continue;
       }
 
-      String content = m.text;
+      String text = m.text;
       if (m.role == domain.MessageRole.assistant) {
-        if (content.trim().isEmpty) continue; // Skip empty assistant messages (placeholders)
+        if (text.trim().isEmpty) continue; // Skip empty assistant messages (placeholders)
         // Strip historical citations to avoid confusing the LLM with old chunk references
-        content = content.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '').trim();
+        text = text.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '').trim();
       }
 
-      history.add(ChatMessage(
-        role: m.role == domain.MessageRole.user ? ChatRole.user : ChatRole.assistant,
-        content: content,
-        reasoning: m.reasoning,
-      ));
+      // Handle Attachments for Multi-modal history (e.g. Brainstorm Mode)
+      if (m.role == domain.MessageRole.user && m.metadata != null && m.metadata!['attachments'] != null) {
+        final List<dynamic> attachmentData = m.metadata!['attachments'];
+        final parts = <ContentPart>[];
+        
+        for (final item in attachmentData) {
+          final path = item['path'] as String?;
+          if (path == null) continue;
+          
+          final file = File(path);
+          if (!await file.exists()) continue;
+
+          final name = item['name'] ?? 'file';
+          final extension = (item['extension'] as String? ?? '').toLowerCase();
+          final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(extension);
+
+          if (isImage) {
+            final bytes = await file.readAsBytes();
+            parts.add(ImagePart(base64Encode(bytes), mimeType: 'image/${extension == 'jpg' ? 'jpeg' : extension}'));
+          } else {
+            // Extract text from previous turn documents
+            final extracted = await processor.extractText(file, extension: extension);
+            if (extracted.isNotEmpty) {
+              parts.add(TextPart('--- Previous File: $name ---\n$extracted\n---\n\n'));
+            }
+          }
+        }
+
+        // Add the text last for prompt consistency (matching BrainstormOrchestrator)
+        if (text.isNotEmpty) {
+          parts.add(TextPart(text));
+        }
+
+        history.add(ChatMessage(
+          role: ChatRole.user,
+          content: parts.isNotEmpty ? parts : text,
+          reasoning: m.reasoning,
+        ));
+      } else {
+        history.add(ChatMessage(
+          role: m.role == domain.MessageRole.user ? ChatRole.user : ChatRole.assistant,
+          content: text,
+          reasoning: m.reasoning,
+        ));
+      }
     }
     return history;
   }

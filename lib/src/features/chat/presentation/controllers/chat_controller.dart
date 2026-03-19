@@ -458,7 +458,7 @@ class ChatController extends StateNotifier<ChatState> {
           )
           .toList();
 
-      final chatHistory = chatOrchestrator.buildHistory(
+      final chatHistory = await chatOrchestrator.buildHistory(
         effectiveHistory,
         limit: state.isBrainstormMode ? null : 8,
       );

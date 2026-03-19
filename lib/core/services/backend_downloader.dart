@@ -154,18 +154,20 @@ repeat-penalty = 1.0
 
 [Qwen3-Embedding-0.6B]
 model = $resolvedEmbeddingPath
+fit = off
 embedding = true
-fit-ctx = 2048
-ubatch-size = 2048
-batch-size = 2048
+ctx-size = 4096
+ubatch-size = 4096
+batch-size = 4096
 n-gpu-layers = 99
 
 [Qwen3-Reranker-0.6B]
 model = $resolvedRerankerPath
+fit = off
 reranking = true
-fit-ctx = 2048
-ubatch-size = 2048
-batch-size = 2048
+ctx-size = 4096
+ubatch-size = 4096
+batch-size = 4096
 n-gpu-layers = 99
 ''';
 
