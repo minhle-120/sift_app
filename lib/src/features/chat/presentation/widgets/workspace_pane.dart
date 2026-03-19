@@ -4,7 +4,7 @@ import '../../../../../core/models/ai_models.dart';
 import '../controllers/workbench_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../../../knowledge/presentation/widgets/document_viewer.dart';
-import 'visualization_viewer.dart';
+import 'chart_viewer.dart';
 import 'code_viewer.dart';
 import 'flashcard_viewer.dart';
 import 'control_panel.dart';
@@ -135,7 +135,7 @@ class WorkbenchPanel extends ConsumerWidget {
           initialChunkIndex: chunkIndex,
         );
       }
-    } else if (tab.type == WorkbenchTabType.visualization) {
+    } else if (tab.type == WorkbenchTabType.chart) {
       final meta = tab.metadata as Map<String, dynamic>?;
       var schemaStr = meta?['schema'] as String?;
       
@@ -147,12 +147,12 @@ class WorkbenchPanel extends ConsumerWidget {
 
         try {
           final schema = jsonDecode(schemaStr) as Map<String, dynamic>;
-          return VisualizationViewer(
+          return ChartViewer(
             key: ValueKey('${tab.id}_${meta?['currentIndex'] ?? 0}'),
             schema: schema,
           );
         } catch (e) {
-          return Center(child: Text('Invalid visualization data: $e'));
+          return Center(child: Text('Invalid chart data: $e'));
         }
       }
     } else if (tab.type == WorkbenchTabType.code) {

@@ -3,16 +3,16 @@ import 'package:graphview/GraphView.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/workbench_controller.dart';
 
-class VisualizationViewer extends ConsumerStatefulWidget {
+class ChartViewer extends ConsumerStatefulWidget {
   final Map<String, dynamic> schema;
 
-  const VisualizationViewer({super.key, required this.schema});
+  const ChartViewer({super.key, required this.schema});
 
   @override
-  ConsumerState<VisualizationViewer> createState() => _VisualizationViewerState();
+  ConsumerState<ChartViewer> createState() => _ChartViewerState();
 }
 
-class _VisualizationViewerState extends ConsumerState<VisualizationViewer> {
+class _ChartViewerState extends ConsumerState<ChartViewer> {
   final Graph graph = Graph();
   late final TransformationController _transformationController;
   late final GraphViewController controller;
@@ -30,7 +30,7 @@ class _VisualizationViewerState extends ConsumerState<VisualizationViewer> {
   }
 
   @override
-  void didUpdateWidget(VisualizationViewer oldWidget) {
+  void didUpdateWidget(ChartViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.schema != oldWidget.schema) {
       _setupGraph();
@@ -235,7 +235,7 @@ class _VisualizationViewerState extends ConsumerState<VisualizationViewer> {
     final workbench = ref.watch(workbenchProvider);
     final activeTab = workbench.activeTab;
     
-    if (activeTab == null || activeTab.type != WorkbenchTabType.visualization) {
+    if (activeTab == null || activeTab.type != WorkbenchTabType.chart) {
       return const SizedBox.shrink();
     }
 

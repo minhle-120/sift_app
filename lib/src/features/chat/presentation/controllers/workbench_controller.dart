@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/services/portable_settings.dart';
 
-enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, visualization, code, flashcards, controlPanel }
+enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, chart, code, flashcards, controlPanel }
 
 class WorkbenchTab {
   final String id;
@@ -113,13 +113,13 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
       return;
     }
 
-    // 2. Specialized Logic for Visualizations: Match by Title for Versioning
-    if (tab.type == WorkbenchTabType.visualization) {
+    // 2. Specialized Logic for Charts: Match by Title for Versioning
+    if (tab.type == WorkbenchTabType.chart) {
       final String? incomingSchema = tab.metadata?['schema'];
       if (incomingSchema != null) {
         // Try to find a tab with the same title
         final existingTabIndex = state.tabs.indexWhere(
-          (t) => t.type == WorkbenchTabType.visualization && t.title == tab.title
+          (t) => t.type == WorkbenchTabType.chart && t.title == tab.title
         );
 
         if (existingTabIndex != -1) {
@@ -155,7 +155,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
         }
       }
       
-      // If it's a new visualization, initialize the versioning structure
+      // If it's a new chart, initialize the versioning structure
       final newTab = WorkbenchTab(
         id: tab.id,
         title: tab.title,
@@ -228,7 +228,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
 
   void navigateVersion(String tabId, int index) {
     final newTabs = state.tabs.map((t) {
-      if (t.id == tabId && t.type == WorkbenchTabType.visualization) {
+      if (t.id == tabId && t.type == WorkbenchTabType.chart) {
         final List<dynamic>? versions = t.metadata?['versions'];
         if (versions != null && index >= 0 && index < versions.length) {
           return WorkbenchTab(

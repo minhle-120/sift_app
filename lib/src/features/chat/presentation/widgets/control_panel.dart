@@ -20,7 +20,7 @@ class ControlPanel extends ConsumerWidget {
           _buildSectionHeader(
             theme,
             title: 'AI Control Center',
-            subtitle: 'Fine-tune how your AI generates content and visualizations.',
+            subtitle: 'Fine-tune how your AI generates content and charts.',
           ),
           const SizedBox(height: 24),
 
@@ -34,11 +34,11 @@ class ControlPanel extends ConsumerWidget {
           
           _buildControlCard(
             context,
-            title: 'Chart',
-            icon: Icons.auto_awesome_mosaic_rounded,
-            description: _getVisualizerDescription(settings.visualizerMode),
+            title: 'Chart Generator',
+            icon: Icons.bar_chart_rounded,
+            description: _getChartGeneratorDescription(settings.chartGeneratorMode),
             isEnabled: !settings.isBrainstormMode,
-            child: _buildVisualizerToggles(settings, settingsNotifier, theme),
+            child: _buildChartGeneratorToggles(settings, settingsNotifier, theme),
           ),
           
           const SizedBox(height: 24),
@@ -200,24 +200,24 @@ class ControlPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildVisualizerToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
-    return SegmentedButton<VisualizerMode>(
+  Widget _buildChartGeneratorToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
+    return SegmentedButton<ChartGeneratorMode>(
       segments: const [
         ButtonSegment(
-          value: VisualizerMode.auto,
+          value: ChartGeneratorMode.auto,
           label: Text('Auto'),
         ),
         ButtonSegment(
-          value: VisualizerMode.on,
+          value: ChartGeneratorMode.on,
           label: Text('On'),
         ),
         ButtonSegment(
-          value: VisualizerMode.off,
+          value: ChartGeneratorMode.off,
           label: Text('Off'),
         ),
       ],
-      selected: {settings.visualizerMode},
-      onSelectionChanged: (value) => notifier.updateVisualizerMode(value.first),
+      selected: {settings.chartGeneratorMode},
+      onSelectionChanged: (value) => notifier.updateChartGeneratorMode(value.first),
       showSelectedIcon: false,
     );
   }
@@ -266,14 +266,14 @@ class ControlPanel extends ConsumerWidget {
     );
   }
 
-  String _getVisualizerDescription(VisualizerMode mode) {
+  String _getChartGeneratorDescription(ChartGeneratorMode mode) {
     switch (mode) {
-      case VisualizerMode.auto:
+      case ChartGeneratorMode.auto:
         return 'AI smartly chooses when to generate charts or diagrams based on your request context.';
-      case VisualizerMode.on:
-        return 'AI will attempt to visualize data points and structures whenever possible, even for simpler requests.';
-      case VisualizerMode.off:
-        return 'Disables code-based visualizations entirely for a faster, text-only conversational experience.';
+      case ChartGeneratorMode.on:
+        return 'AI will attempt to generate charts whenever possible, even for simpler requests.';
+      case ChartGeneratorMode.off:
+        return 'Disables chart generation entirely for a faster, text-only conversational experience.';
     }
   }
 

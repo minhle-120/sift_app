@@ -25,7 +25,7 @@ class ChatOrchestrator {
     required List<ChatMessage> conversation,
     required ResearchPackage package,
     required ChunkRegistry registry,
-    String? visualSchema,
+    String? chartSchema,
     String? codeSnippet,
     String? flashcardTitle,
     int? flashcardCount,
@@ -37,7 +37,7 @@ class ChatOrchestrator {
     final combinedUserMessage = buildCombinedMessage(
       resolvedChunks,
       originalQuery,
-      visualSchema: visualSchema,
+      chartSchema: chartSchema,
       codeSnippet: codeSnippet,
       flashcardTitle: flashcardTitle,
       flashcardCount: flashcardCount,
@@ -59,7 +59,7 @@ class ChatOrchestrator {
     required List<ChatMessage> conversation,
     required ResearchPackage package,
     required ChunkRegistry registry,
-    String? visualSchema,
+    String? chartSchema,
     String? codeSnippet,
     String? flashcardTitle,
     int? flashcardCount,
@@ -71,7 +71,7 @@ class ChatOrchestrator {
     final combinedUserMessage = buildCombinedMessage(
       resolvedChunks,
       originalQuery,
-      visualSchema: visualSchema,
+      chartSchema: chartSchema,
       codeSnippet: codeSnippet,
       flashcardTitle: flashcardTitle,
       flashcardCount: flashcardCount,
@@ -197,7 +197,7 @@ class ChatOrchestrator {
   String buildCombinedMessage(
     List<String> chunks, 
     String query, {
-    String? visualSchema, 
+    String? chartSchema, 
     String? codeSnippet,
     String? flashcardTitle,
     int? flashcardCount,
@@ -210,7 +210,7 @@ class ChatOrchestrator {
     return '''$historySection### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
-${visualSchema != null ? '### RENDERED_CHART\n$visualSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '### WRITTEN_CODE\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}${flashcardTitle != null ? '### FLASHCARD_DECK\nTitle: $flashcardTitle\nCount: $flashcardCount\n(Note: This study deck has been generated. Acknowledge this in your response.)\n\n' : ''}### User Query:
+${chartSchema != null ? '### RENDERED_CHART\n$chartSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '### WRITTEN_CODE\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}${flashcardTitle != null ? '### FLASHCARD_DECK\nTitle: $flashcardTitle\nCount: $flashcardCount\n(Note: This study deck has been generated. Acknowledge this in your response.)\n\n' : ''}### User Query:
 $query
 ''';
   }

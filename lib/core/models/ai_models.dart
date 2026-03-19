@@ -1,7 +1,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum VisualizerMode { auto, off, on }
+enum ChartGeneratorMode { auto, off, on }
 enum CoderMode { auto, off, on }
 enum FlashcardMode { auto, off, on }
 
@@ -18,9 +18,9 @@ class ResearchPackage {
 class ResearchResult {
   final ChatMessage? output;
   final ResearchPackage? package;
-  final VisualPackage? visualPackage;
-  final String? visualSchema;
-  final VisualizerMode? visualizerMode;
+  final ChartPackage? chartPackage;
+  final String? chartSchema;
+  final ChartGeneratorMode? chartGeneratorMode;
   final CodePackage? codePackage;
   final String? codeSnippet;
   final String? codeLanguage;
@@ -37,8 +37,8 @@ class ResearchResult {
   ResearchResult({
     this.output,
     this.package,
-    this.visualPackage,
-    this.visualSchema,
+    this.chartPackage,
+    this.chartSchema,
     this.codePackage,
     this.codeSnippet,
     this.codeLanguage,
@@ -47,7 +47,7 @@ class ResearchResult {
     this.flashcardResult,
     this.flashcardTitle,
     this.flashcardMode,
-    this.visualizerMode,
+    this.chartGeneratorMode,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
@@ -55,14 +55,14 @@ class ResearchResult {
   });
 }
 
-class VisualPackage {
+class ChartPackage {
   final List<int> indices;
-  final String visualizationGoal;
+  final String chartGoal;
 
-  VisualPackage({required this.indices, required this.visualizationGoal});
+  ChartPackage({required this.indices, required this.chartGoal});
 
   @override
-  String toString() => 'VisualPackage(indices: $indices, goal: $visualizationGoal)';
+  String toString() => 'ChartPackage(indices: $indices, goal: $chartGoal)';
 }
 
 class CodePackage {
@@ -85,12 +85,12 @@ class FlashcardPackage {
   String toString() => 'FlashcardPackage(indices: $indices, goal: $studyGoal)';
 }
 
-class VisualResult {
-  final VisualPackage package;
+class ChartResult {
+  final ChartPackage package;
   final String schema;
   final List<ChatMessage> steps;
 
-  VisualResult({required this.package, required this.schema, required this.steps});
+  ChartResult({required this.package, required this.schema, required this.steps});
 }
 
 class CodeResult {

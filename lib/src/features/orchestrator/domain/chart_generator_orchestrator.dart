@@ -3,21 +3,21 @@ import '../../../../core/models/ai_models.dart';
 import '../../../../core/services/openai_service.dart';
 import '../../../../services/ai/i_ai_service.dart';
 
-final visualOrchestratorProvider = Provider((ref) {
+final chartGeneratorOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
-  return VisualOrchestrator(aiService: aiService);
+  return ChartGeneratorOrchestrator(aiService: aiService);
 });
 
-class VisualOrchestrator {
+class ChartGeneratorOrchestrator {
   final IAiService aiService;
 
-  VisualOrchestrator({required this.aiService});
+  ChartGeneratorOrchestrator({required this.aiService});
 
-  Future<VisualResult> visualize({
-    required VisualPackage package,
+  Future<ChartResult> generateChart({
+    required ChartPackage package,
     required ChunkRegistry registry,
     String? fullContext,
-    String? currentSchema,
+    String? currentChartSchema,
   }) async {
     // 1. Resolve Chunks
     final List<String> resolvedChunks = [];
@@ -37,14 +37,14 @@ class VisualOrchestrator {
       contentBuffer.writeln();
     }
 
-    if (currentSchema != null) {
+    if (currentChartSchema != null) {
       contentBuffer.writeln('### CURRENT_CHART_SCHEMA');
-      contentBuffer.writeln(currentSchema);
+      contentBuffer.writeln(currentChartSchema);
       contentBuffer.writeln();
     }
 
-    contentBuffer.writeln('### TARGET VISUALIZATION');
-    contentBuffer.writeln('Goal: ${package.visualizationGoal}');
+    contentBuffer.writeln('### TARGET CHART');
+    contentBuffer.writeln('Goal: ${package.chartGoal}');
     contentBuffer.writeln();
     contentBuffer.writeln('### EVIDENCE CHUNKS');
     contentBuffer.writeln(resolvedChunks.join('\n\n'));
@@ -62,7 +62,7 @@ class VisualOrchestrator {
     final cleanContent = _extractJson(response.content);
 
     // 4. Return result with clean content
-    return VisualResult(
+    return ChartResult(
       package: package,
       schema: cleanContent,
       steps: [
@@ -93,17 +93,17 @@ class VisualOrchestrator {
   }
 
   String _buildSystemPrompt() {
-    return '''You are an Information Architect and Data Visualization Expert. Your task is to transform research evidence into a highly logical, structured JSON schema for GraphView visualization.
+    return '''You are an Information Architect and Chart Generator. Your task is to transform research evidence into a highly logical, structured JSON schema for Interactive Chart generation.
 
 ### GOAL:
-Create graphs that reveal the **structure** and **relationships** in the data. 
+Create charts that reveal the **structure** and **relationships** in the data. 
 Avoid "star" or "hub-and-spoke" diagrams where everything connects to one central node unless that is strictly the logical relationship (e.g., a simple list). Instead, look for:
 - **Causality**: A implies B implies C.
 - **Hierarchy**: A is a parent of B and C.
 - **Comparison**: A and B are both types of C.
 - **Process**: Step A -> Step B -> Step C.
 
-**Continuous Evolution**: You have the capability to **UPDATE** existing visualizations. If provided with a previous chart schema, you should add new nodes, remove outdated connections, or refactor the layout to incorporate new research evidence while maintaining continuity.
+**Continuous Evolution**: You have the capability to **UPDATE** existing charts. If provided with a previous chart schema, you should add new nodes, remove outdated connections, or refactor the layout to incorporate new research evidence while maintaining continuity.
 
 ### OUTPUT FORMAT:
 Output a valid JSON block with the following structure:
@@ -235,8 +235,8 @@ Output JSON:
 ```
 
 ### INSTRUCTIONS:
-1. **Title**: Always include a concise, descriptive "title" (2-4 words) for the visualization.
-2. **Stateful Updates**: If a `CURRENT_CHART_SCHEMA` is provided in the history, your goal is to **update** or **refactor** it based on the new `Target Visualization` and `Evidence Chunks`. 
+1. **Title**: Always include a concise, descriptive "title" (2-4 words) for the chart.
+2. **Stateful Updates**: If a `CURRENT_CHART_SCHEMA` is provided in the history, your goal is to **update** or **refactor** it based on the new `Target Chart` and `Evidence Chunks`. 
    - **Merge Strategy**: Integrate new evidence into the existing graph. Prefer adding to the current structure over completely replacing it, unless a full refactor is requested.
    - **Consistency**: Keep the `title` IDENTICAL if you intend to update the same chart series.
    - **Branching**: If the user's request is fundamentally a new topic, provide a new `title` to create a separate tab.
@@ -244,6 +244,6 @@ Output JSON:
 4. **Node Types**: Use "important" for primary actors/results and "normal" for supporting data.
 5. **Edges**: Always provide a descriptive label for edges to explain the connection.
 6. **Resilience**: Ensure all `id`s used in `edges` exist in the `nodes` list.
-''';
+    ''';
   }
 }

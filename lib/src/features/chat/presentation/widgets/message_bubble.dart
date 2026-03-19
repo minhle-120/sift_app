@@ -267,9 +267,9 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                       }).toList(),
                     ),
                   ],
-                  if (widget.message.metadata?['visual_schema'] != null) ...[
+                  if (widget.message.metadata?['chart_schema'] != null) ...[
                     const SizedBox(height: 12),
-                    _buildVisualTrigger(context, ref, theme),
+                    _buildChartTrigger(context, ref, theme),
                   ],
                   if (widget.message.metadata?['code_snippet'] != null) ...[
                     const SizedBox(height: 12),
@@ -415,10 +415,10 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
       );
   }
 
-  Widget _buildVisualTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
-    final schemaStr = widget.message.metadata?['visual_schema'] as String?;
-    String label = 'View Interactive Graph';
-    String tabTitle = 'Visualization';
+  Widget _buildChartTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
+    final schemaStr = widget.message.metadata?['chart_schema'] as String?;
+    String label = 'View Interactive Chart';
+    String tabTitle = 'Chart';
 
     if (schemaStr != null) {
       try {
@@ -437,15 +437,15 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         
         ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
-            id: 'viz_${widget.message.id}',
+            id: 'chart_${widget.message.id}',
             title: tabTitle,
-            icon: Icons.hub_outlined,
-            type: WorkbenchTabType.visualization,
+            icon: Icons.bar_chart_rounded,
+            type: WorkbenchTabType.chart,
             metadata: {'schema': schemaStr},
           ),
         );
       },
-      icon: const Icon(Icons.hub_outlined, size: 18),
+      icon: const Icon(Icons.bar_chart_rounded, size: 18),
       label: Text(label),
       style: ElevatedButton.styleFrom(
         backgroundColor: theme.colorScheme.secondaryContainer,

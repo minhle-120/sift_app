@@ -27,7 +27,7 @@ class SettingsState {
   final int chunkSize;
   final int chunkOverlap;
   final bool isSyncEnabled;
-  final VisualizerMode visualizerMode;
+  final ChartGeneratorMode chartGeneratorMode;
   final CoderMode coderMode;
   final FlashcardMode flashcardMode;
   final List<String> availableModels;
@@ -94,7 +94,7 @@ class SettingsState {
     this.chunkSize = 100,
     this.chunkOverlap = 50,
     this.isSyncEnabled = true,
-    this.visualizerMode = VisualizerMode.auto,
+    this.chartGeneratorMode = ChartGeneratorMode.auto,
     this.coderMode = CoderMode.auto,
     this.flashcardMode = FlashcardMode.auto,
     this.availableModels = const [],
@@ -167,7 +167,7 @@ class SettingsState {
     int? chunkSize,
     int? chunkOverlap,
     bool? isSyncEnabled,
-    VisualizerMode? visualizerMode,
+    ChartGeneratorMode? chartGeneratorMode,
     CoderMode? coderMode,
     FlashcardMode? flashcardMode,
     List<String>? availableModels,
@@ -228,7 +228,7 @@ class SettingsState {
       chunkSize: chunkSize ?? this.chunkSize,
       chunkOverlap: chunkOverlap ?? this.chunkOverlap,
       isSyncEnabled: isSyncEnabled ?? this.isSyncEnabled,
-      visualizerMode: visualizerMode ?? this.visualizerMode,
+      chartGeneratorMode: chartGeneratorMode ?? this.chartGeneratorMode,
       coderMode: coderMode ?? this.coderMode,
       flashcardMode: flashcardMode ?? this.flashcardMode,
       availableModels: availableModels ?? this.availableModels,
@@ -319,7 +319,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       chunkSize: prefs.getInt('chunkSize') ?? 100,
       chunkOverlap: prefs.getInt('chunkOverlap') ?? 50,
       isSyncEnabled: prefs.getBool('isSyncEnabled') ?? true,
-      visualizerMode: VisualizerMode.values[prefs.getInt('visualizerMode') ?? 0],
+      chartGeneratorMode: ChartGeneratorMode.values[prefs.getInt('chartGeneratorMode') ?? prefs.getInt('visualizerMode') ?? 0],
       coderMode: CoderMode.values[prefs.getInt('coderMode') ?? 0],
       flashcardMode: flashcardMode,
       backendType: BackendType.values[prefs.getInt('backendType') ?? 0],
@@ -838,10 +838,10 @@ class SettingsController extends StateNotifier<SettingsState> {
     state = state.copyWith(isBrainstormMode: value);
   }
 
-  Future<void> updateVisualizerMode(VisualizerMode mode) async {
+  Future<void> updateChartGeneratorMode(ChartGeneratorMode mode) async {
     final prefs = await PortableSettings.getInstance();
-    await prefs.setInt('visualizerMode', mode.index);
-    state = state.copyWith(visualizerMode: mode);
+    await prefs.setInt('chartGeneratorMode', mode.index);
+    state = state.copyWith(chartGeneratorMode: mode);
   }
 
   Future<void> updateCoderMode(CoderMode mode) async {

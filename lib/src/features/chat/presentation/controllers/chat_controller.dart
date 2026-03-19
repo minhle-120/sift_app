@@ -8,7 +8,7 @@ import 'package:sift_app/core/storage/database_provider.dart';
 import 'package:sift_app/src/features/orchestrator/domain/research_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/chat_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/brainstorm_orchestrator.dart';
-import 'package:sift_app/src/features/orchestrator/domain/visual_orchestrator.dart';
+import 'package:sift_app/src/features/orchestrator/domain/chart_generator_orchestrator.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/workbench_controller.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
 import 'package:sift_app/core/models/ai_models.dart' as ai;
@@ -512,7 +512,7 @@ class ChatController extends StateNotifier<ChatState> {
       // --- NEW: Context Sanitization for Workbench ---
       final workbench = _ref.read(workbenchProvider);
       final activeTab = workbench.activeTab;
-      String? currentVisualSchema;
+      String? currentChartSchema;
       String? currentCodeContext;
       String? currentCodeTitle;
       List<ai.Flashcard>? currentFlashcards;
@@ -522,8 +522,8 @@ class ChatController extends StateNotifier<ChatState> {
         if (activeTab.id.contains(placeholderMessage.uuid)) {
           debugPrint('Sifting isolation: Blocking stale workbench tab ${activeTab.id}');
         } else {
-          if (activeTab.type == WorkbenchTabType.visualization) {
-            currentVisualSchema = activeTab.metadata?['schema'];
+          if (activeTab.type == WorkbenchTabType.chart) {
+            currentChartSchema = activeTab.metadata?['schema'];
           } else if (activeTab.type == WorkbenchTabType.code) {
             currentCodeContext = activeTab.metadata?['code'];
             currentCodeTitle = activeTab.title;
@@ -541,7 +541,7 @@ class ChatController extends StateNotifier<ChatState> {
         collectionId: activeCollectionId!,
         historicalContext: researchHistory,
         userQuery: query,
-        currentSchema: currentVisualSchema,
+        currentChartSchema: currentChartSchema,
         currentCode: currentCodeContext,
         currentCodeTitle: currentCodeTitle,
         currentFlashcards: currentFlashcards,
@@ -575,25 +575,25 @@ class ChatController extends StateNotifier<ChatState> {
         return;
       }
 
-      if (researchResult.visualSchema != null) {
-      // --- NEW: Handle Visualization (from intermediate step) -----
-      final schemaStr = researchResult.visualSchema!;
+      if (researchResult.chartSchema != null) {
+      // --- NEW: Handle Chart Generation (from intermediate step) -----
+      final schemaStr = researchResult.chartSchema!;
       String? parsedTitle;
       
       try {
         final Map<String, dynamic> schema = jsonDecode(schemaStr);
         parsedTitle = schema['title'] as String?;
       } catch (e) {
-        debugPrint('Failed to parse visualization title: $e');
+        debugPrint('Failed to parse chart title: $e');
       }
 
       // Auto-open the tab
       _ref.read(workbenchProvider.notifier).addTab(
         WorkbenchTab(
-          id: 'viz_${placeholderMessage.uuid}',
-          title: parsedTitle ?? 'Visualization',
-          icon: Icons.hub_outlined,
-          type: WorkbenchTabType.visualization,
+          id: 'chart_${placeholderMessage.uuid}',
+          title: parsedTitle ?? 'Chart',
+          icon: Icons.bar_chart_rounded,
+          type: WorkbenchTabType.chart,
           metadata: {'schema': schemaStr},
         ),
       );
@@ -658,7 +658,7 @@ class ChatController extends StateNotifier<ChatState> {
           conversation: chatHistory,
           package: researchResult.package!,
           registry: researchOrchestrator.registry,
-          visualSchema: researchResult.visualSchema,
+          chartSchema: researchResult.chartSchema,
           codeSnippet: researchResult.codeSnippet,
           flashcardTitle: researchResult.flashcardTitle,
           flashcardCount: researchResult.flashcardResult?.length,
@@ -704,7 +704,7 @@ class ChatController extends StateNotifier<ChatState> {
 
         final metadata = <String, dynamic>{
           'research_steps': completeSteps.map((s) => s.toJson()).toList(),
-          if (researchResult.visualSchema != null) 'visual_schema': researchResult.visualSchema,
+          if (researchResult.chartSchema != null) 'chart_schema': researchResult.chartSchema,
           if (researchResult.codeSnippet != null) 'code_snippet': researchResult.codeSnippet,
           if (researchResult.codeTitle != null) 'code_title': researchResult.codeTitle,
         };
@@ -713,26 +713,26 @@ class ChatController extends StateNotifier<ChatState> {
           placeholderMessage.id, 
           metadata: jsonEncode(metadata),
         );
-      } else if (researchResult.visualPackage != null) {
+      } else if (researchResult.chartPackage != null) {
         // Fallback for legacy terminal visual calls (if any remain)
-        final visualOrchestrator = _ref.read(visualOrchestratorProvider);
-        final visualResult = await visualOrchestrator.visualize(
-          package: researchResult.visualPackage!,
+        final chartGeneratorOrchestrator = _ref.read(chartGeneratorOrchestratorProvider);
+        final chartResult = await chartGeneratorOrchestrator.generateChart(
+          package: researchResult.chartPackage!,
           registry: researchOrchestrator.registry,
         );
 
-        final schema = visualResult.schema;
-        String tabTitle = 'Visualization';
+        final schema = chartResult.schema;
+        String tabTitle = 'Chart';
         try {
           final Map<String, dynamic> parsed = jsonDecode(schema);
           final title = parsed['title'] as String?;
           if (title != null && title.isNotEmpty) tabTitle = title;
         } catch (_) {}
 
-        await _db.updateMessageContent(placeholderMessage.id, 'Visualization generated based on research data.');
+        await _db.updateMessageContent(placeholderMessage.id, 'Chart generated based on research data.');
         
         final metadata = <String, dynamic>{
-          'visual_schema': schema,
+          'chart_schema': schema,
           'research_steps': researchResult.steps?.map((s) => s.toJson()).toList() ?? [],
         };
         
@@ -740,10 +740,10 @@ class ChatController extends StateNotifier<ChatState> {
 
         _ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
-            id: 'viz_${placeholderMessage.uuid}',
+            id: 'chart_${placeholderMessage.uuid}',
             title: tabTitle,
-            icon: Icons.hub_outlined,
-            type: WorkbenchTabType.visualization,
+            icon: Icons.bar_chart_rounded,
+            type: WorkbenchTabType.chart,
             metadata: {'schema': schema},
           ),
         );

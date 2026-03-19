@@ -301,14 +301,14 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                     const SizedBox(width: 8),
                   ],
 
-                  // Visualizer Toggle (Hidden in Lite Mode or Brainstorm Mode)
+                  // Chart Generator Toggle (Hidden in Lite Mode or Brainstorm Mode)
                   if (!settings.isMobileInternal && !chatState.isBrainstormMode) ...[
                     _buildTrayAction(
                       context,
-                      icon: _getVisualizerIcon(settings.visualizerMode),
-                      label: 'Chart: ${_getVisualizerLabel(settings.visualizerMode)}',
-                      isHighlight: settings.visualizerMode != VisualizerMode.off,
-                      onPressed: () => _cycleVisualizerMode(settings, settingsNotifier),
+                      icon: _getChartGeneratorIcon(settings.chartGeneratorMode),
+                      label: 'Chart: ${_getChartGeneratorLabel(settings.chartGeneratorMode)}',
+                      isHighlight: settings.chartGeneratorMode != ChartGeneratorMode.off,
+                      onPressed: () => _cycleChartGeneratorMode(settings, settingsNotifier),
                     ),
                     const SizedBox(width: 8),
                     _buildTrayAction(
@@ -509,25 +509,25 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
   }
 
 
-  IconData _getVisualizerIcon(VisualizerMode mode) {
+  IconData _getChartGeneratorIcon(ChartGeneratorMode mode) {
     switch (mode) {
-      case VisualizerMode.auto: return Icons.auto_awesome_outlined;
-      case VisualizerMode.off: return Icons.visibility_off_outlined;
-      case VisualizerMode.on: return Icons.visibility_outlined;
+      case ChartGeneratorMode.auto: return Icons.auto_awesome_outlined;
+      case ChartGeneratorMode.off: return Icons.visibility_off_outlined;
+      case ChartGeneratorMode.on: return Icons.visibility_outlined;
     }
   }
 
-  String _getVisualizerLabel(VisualizerMode mode) {
+  String _getChartGeneratorLabel(ChartGeneratorMode mode) {
     switch (mode) {
-      case VisualizerMode.auto: return 'Auto';
-      case VisualizerMode.off: return 'Off';
-      case VisualizerMode.on: return 'On';
+      case ChartGeneratorMode.auto: return 'Auto';
+      case ChartGeneratorMode.off: return 'Off';
+      case ChartGeneratorMode.on: return 'On';
     }
   }
 
-  void _cycleVisualizerMode(SettingsState settings, SettingsController notifier) {
-    final nextIndex = (settings.visualizerMode.index + 1) % VisualizerMode.values.length;
-    notifier.updateVisualizerMode(VisualizerMode.values[nextIndex]);
+  void _cycleChartGeneratorMode(SettingsState settings, SettingsController notifier) {
+    final nextIndex = (settings.chartGeneratorMode.index + 1) % ChartGeneratorMode.values.length;
+    notifier.updateChartGeneratorMode(ChartGeneratorMode.values[nextIndex]);
   }
 
   IconData _getCoderIcon(CoderMode mode) {
