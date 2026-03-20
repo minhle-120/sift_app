@@ -58,90 +58,95 @@ class _DocumentViewerState extends ConsumerState<DocumentViewer> {
           return const Center(child: Text('Document not found.'));
         }
 
-        return FutureBuilder<List<DocumentChunk>>(
-          future: db.getDocumentChunks(widget.documentId),
-          builder: (context, chunksSnapshot) {
-            if (chunksSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+        final targetChunkIndex = widget.initialChunkIndex;
+        
+        // If we have no target chunk, we can just render the full text immediately
+        if (targetChunkIndex == null) {
+          return _buildTextContent(doc.content ?? '', null, theme);
+        }
+
+        // Only fetch the specific chunk content if we need to highlight it
+        return FutureBuilder<String?>(
+          future: db.getChunkContent(widget.documentId, targetChunkIndex),
+          builder: (context, chunkSnapshot) {
+            if (chunkSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
             }
             
             final fullText = doc.content ?? '';
-            final chunks = chunksSnapshot.data ?? [];
-            final targetChunkIndex = widget.initialChunkIndex;
+            final targetContent = chunkSnapshot.data;
             
             if (fullText.isEmpty) {
               return const Center(child: Text('Document has no content.'));
             }
 
-            // If we have a target chunk, search for it in the full text
-            String? targetContent;
-            if (targetChunkIndex != null && targetChunkIndex < chunks.length) {
-              targetContent = chunks[targetChunkIndex].content;
-            }
-
-            // Build the text segments
-            final List<TextSpan> spans = [];
-            if (targetContent != null) {
-              final startIndex = fullText.indexOf(targetContent);
-              if (startIndex != -1) {
-                _scrollToHighlight(); // Trigger scroll after build
-
-                spans.add(TextSpan(text: fullText.substring(0, startIndex)));
-                spans.add(TextSpan(
-                  children: [
-                    WidgetSpan(
-                      child: SizedBox.shrink(key: _highlightKey),
-                    ),
-                    TextSpan(
-                      text: targetContent,
-                      style: TextStyle(
-                        backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.3),
-                        color: theme.colorScheme.onSurface,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ));
-                spans.add(TextSpan(text: fullText.substring(startIndex + targetContent.length)));
-              } else {
-                spans.add(TextSpan(text: fullText));
-              }
-            } else {
-              spans.add(TextSpan(text: fullText));
-            }
-
-            return Container(
-              color: theme.colorScheme.surface,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: Scrollbar(
-                      controller: _scrollController,
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(24),
-                        child: SelectionArea(
-                          child: Text.rich(
-                            TextSpan(
-                              children: spans,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                height: 1.8,
-                                letterSpacing: 0.2,
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
+            return _buildTextContent(fullText, targetContent, theme);
           },
         );
       },
+    );
+  }
+
+  Widget _buildTextContent(String fullText, String? targetContent, ThemeData theme) {
+    // Build the text segments
+    final List<TextSpan> spans = [];
+    if (targetContent != null) {
+      final startIndex = fullText.indexOf(targetContent);
+      if (startIndex != -1) {
+        _scrollToHighlight(); // Trigger scroll after build
+
+        spans.add(TextSpan(text: fullText.substring(0, startIndex)));
+        spans.add(TextSpan(
+          children: [
+            WidgetSpan(
+              child: SizedBox.shrink(key: _highlightKey),
+            ),
+            TextSpan(
+              text: targetContent,
+              style: TextStyle(
+                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.3),
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ));
+        spans.add(TextSpan(text: fullText.substring(startIndex + targetContent.length)));
+      } else {
+        spans.add(TextSpan(text: fullText));
+      }
+    } else {
+      spans.add(TextSpan(text: fullText));
+    }
+
+    return Container(
+      color: theme.colorScheme.surface,
+      child: Column(
+        children: [
+          Expanded(
+            child: Scrollbar(
+              controller: _scrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(24),
+                child: SelectionArea(
+                  child: Text.rich(
+                    TextSpan(
+                      children: spans,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.8,
+                        letterSpacing: 0.2,
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -250,6 +250,16 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  /// Fetches only the content of a specific chunk by its index.
+  /// Used for memory-efficient document highlighting.
+  Future<String?> getChunkContent(int documentId, int index) async {
+    final query = selectOnly(documentChunks)
+      ..addColumns([documentChunks.content])
+      ..where(documentChunks.documentId.equals(documentId) & documentChunks.index.equals(index));
+    final row = await query.getSingleOrNull();
+    return row?.read(documentChunks.content);
+  }
+
   Future<int> deleteDocumentChunks(int documentId) {
     return (delete(documentChunks)..where((t) => t.documentId.equals(documentId))).go();
   }
@@ -271,25 +281,38 @@ class AppDatabase extends _$AppDatabase {
   }) async {
     // 1. Initial Selective Scan: Only pull IDs and embeddings
     final List<MapEntry<int, double>> topScores = [];
-    const batchSize = 1000;
+    final workerCount = Platform.numberOfProcessors;
+    final batchSize = workerCount * 1000;
     int offset = 0;
-    
-    // Determine worker count based on CPU cores (capped at 4 for overhead balance)
-    final workerCount = (Platform.numberOfProcessors / 2).clamp(1, 4).toInt();
 
-    while (true) {
+    // Helper to fetch a batch asynchronously
+    Future<List<TypedResult>> fetchBatch(int currentOffset) {
       final query = selectOnly(documentChunks)
         ..addColumns([documentChunks.id, documentChunks.embedding])
         ..join([
           innerJoin(documents, documents.id.equalsExp(documentChunks.documentId))
         ])
         ..where(documents.collectionId.equals(collectionId))
-        ..limit(batchSize, offset: offset);
+        ..limit(batchSize, offset: currentOffset);
+      return query.get();
+    }
 
-      final batch = await query.get();
+    // 1. Initial Selective Scan: Pre-start the first fetch
+    Future<List<TypedResult>>? nextBatchFuture = fetchBatch(offset);
+    
+    while (nextBatchFuture != null) {
+      final batch = await nextBatchFuture;
       if (batch.isEmpty) break;
 
-      // 2. Parallel Dispatch: Split the 1000-chunk page into sub-batches for Isolates
+      // START fetching the next batch immediately (Pipelining)
+      offset += batchSize;
+      if (batch.length == batchSize) {
+        nextBatchFuture = fetchBatch(offset);
+      } else {
+        nextBatchFuture = null;
+      }
+
+      // 2. Parallel Dispatch: Score the CURRENT batch while NEXT fetch is in progress
       final List<int> batchIds = [];
       final List<String> batchEmbeddings = [];
       for (final row in batch) {
@@ -325,11 +348,8 @@ class AppDatabase extends _$AppDatabase {
         topScores.removeRange(50, topScores.length);
       }
 
-      // Yield to let GC clean up
+      // Yield briefly
       await Future.delayed(Duration.zero);
-      
-      if (batch.length < batchSize) break;
-      offset += batchSize;
     }
 
     if (topScores.isEmpty) return [];
