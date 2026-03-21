@@ -275,6 +275,14 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                     const SizedBox(height: 12),
                     _buildCodeTrigger(context, ref, theme),
                   ],
+                  if (widget.message.metadata?['canvas_html'] != null) ...[
+                    const SizedBox(height: 12),
+                    _buildCanvasTrigger(context, ref, theme),
+                  ],
+                  if (widget.message.metadata?['cards'] != null) ...[
+                    const SizedBox(height: 12),
+                    _buildFlashcardTrigger(context, ref, theme),
+                  ],
                   if (!_isEditing) ...[
                     const SizedBox(height: 4),
                     isUser 
@@ -595,6 +603,97 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
             duration: const Duration(milliseconds: 200),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCanvasTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
+    return InkWell(
+      onTap: () {
+        ref.read(workbenchProvider.notifier).addTab(
+          WorkbenchTab(
+            id: 'canvas_${widget.message.id}',
+            title: 'Interactive Canvas',
+            icon: Icons.auto_awesome_mosaic_rounded,
+            type: WorkbenchTabType.interactiveCanvas,
+            metadata: {
+              'htmlContent': widget.message.metadata!['canvas_html'],
+            },
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.colorScheme.primary.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.auto_awesome_mosaic_rounded, 
+                 size: 20, 
+                 color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            Text(
+              'View Interactive Canvas',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFlashcardTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
+    final title = widget.message.metadata?['flashcard_title'] as String? ?? 'Study Deck';
+    return InkWell(
+      onTap: () {
+        ref.read(workbenchProvider.notifier).addTab(
+          WorkbenchTab(
+            id: 'cards_${widget.message.id}',
+            title: title,
+            icon: Icons.sports_esports_outlined,
+            type: WorkbenchTabType.flashcards,
+            metadata: {
+              'cards': widget.message.metadata!['cards'],
+            },
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.colorScheme.secondary.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.sports_esports_outlined, 
+                 size: 20, 
+                 color: theme.colorScheme.secondary),
+            const SizedBox(width: 12),
+            Text(
+              'View $title',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.secondary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

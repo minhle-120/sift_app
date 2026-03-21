@@ -7,13 +7,13 @@ class SiftTheme {
   static late final HighlighterTheme darkCodeTheme;
 
   // Cognition Specific Colors (Audit Result)
-  static const Color background = Color(0xFF131314);
-  static const Color surface = Color(0xFF1E1E20);
+  static const Color background = Color(0xFF0E0E0E);
+  static const Color surface = Color(0xFF171719);
   static const Color surfaceBright = Color(0xFF28292A);
   static const Color primary = Color(0xFFD0BCFF);
   static const Color secondary = Color(0xFFCCC2DC);
   static const Color outline = Color(0xFF444746);
-  static const Color outlineVariant = Color(0xFF303030);
+  static const Color outlineVariant = Color(0xFF252525);
 
   static ThemeData get darkTheme {
     return ThemeData(
