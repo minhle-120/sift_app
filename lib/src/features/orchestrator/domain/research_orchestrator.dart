@@ -65,7 +65,7 @@ class ResearchOrchestrator {
   static const String chartMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_chart_generator` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.';
   static const String codeMandate = '**CRITICAL MANDATE**: The user has requested to write or modify code. You MUST call `query_knowledge_base` first to gather context. After searching, you MUST call `delegate_to_coder` if the user wants code generation, script writing, or technical implementation. Do NOT write the code yourself; delegate it to the code specialist.';
   static const String flashcardMandate = '**CRITICAL MANDATE**: The user has requested flashcards or study materials. You MUST call `query_knowledge_base` first to gather factual context. After searching, you MUST call `delegate_to_flashcards` to transform that data into a high-quality study deck.';
-  static const String canvasMandate = '**CRITICAL MANDATE**: The user has requested a custom visual or interactive component. You MUST call `query_knowledge_base` first. After searching, you MUST call `delegate_to_interactive_canvas` to build the component using HTML/SVG.';
+  static const String canvasMandate = '**CRITICAL MANDATE**: The user has requested a custom visual display component. You MUST call `query_knowledge_base` first. After searching, you MUST call `delegate_to_interactive_canvas` to build the static visual component using HTML/SVG.';
 
   final IAiService aiService;
   final ChartGeneratorOrchestrator chartGeneratorOrchestrator;
@@ -339,7 +339,7 @@ class ResearchOrchestrator {
           ));
         } else if (toolCall.function.name == DelegateToInteractiveCanvasTool.name) {
           final args = _parseArgs(toolCall.function.arguments);
-          onStatusUpdate?.call('Designing interactive canvas for "${args['canvasGoal'] ?? 'component'}..."');
+          onStatusUpdate?.call('Designing visual layout for "${args['canvasGoal'] ?? 'component'}..."');
           
           final package = canvasTool.execute(args);
           

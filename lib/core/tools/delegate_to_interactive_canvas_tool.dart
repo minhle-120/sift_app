@@ -6,13 +6,13 @@ class DelegateToInteractiveCanvasTool {
   ToolDefinition get definition => ToolDefinition(
         function: FunctionDefinition(
           name: name,
-          description: 'Useful for generating highly custom, interactive visual representations of research data using HTML/CSS/SVG. Use this when a standard chart is not enough and you want to create a rich, structured, or interactive component (e.g., interactive diagrams, custom timelines, multi-column reports, SVG infographics).',
+          description: 'Useful for generating highly custom static visual representations of research data using HTML/CSS/SVG. Use this when a standard chart is not enough and you want to create a rich, structured visual display (e.g., custom timelines, multi-column reports, SVG infographics).',
           parameters: {
             'type': 'object',
             'properties': {
               'canvasGoal': {
                 'type': 'string',
-                'description': 'Describe exactly what should be rendered in the canvas (e.g., "An interactive SVG of the solar system", "A formatted HTML medical report with custom styling").',
+                'description': 'Describe exactly what should be rendered in the canvas (e.g., "A visual SVG of the solar system", "A formatted HTML medical report with custom styling").',
               },
               'indices': {
                 'type': 'array',

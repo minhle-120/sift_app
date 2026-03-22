@@ -96,8 +96,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final workbenchWidth = workbench.isCollapsed ? 0.0 : size.width * workbench.panelRatio;
       final availableChatWidth = size.width - workbenchWidth;
       
-      // Fixed width constraint: 900px, but scaled down if the window is smaller
-      final constraintWidth = 900.0.clamp(600.0, availableChatWidth * 0.95);
+      // Fixed width constraint: maximum 900px, smoothly scales down if window is very narrow
+      final constraintWidth = (availableChatWidth * 0.95).clamp(0.0, 900.0);
 
       return Scaffold(
         drawer: const ConversationDrawer(),

@@ -47,7 +47,7 @@ class FlashcardOrchestrator {
     contentBuffer.writeln('### FLASHCARD GOAL');
     contentBuffer.writeln(package.studyGoal);
     contentBuffer.writeln();
-    contentBuffer.writeln('### EVIDENCE CHUNKS');
+    contentBuffer.writeln('### INFORMATION CHUNKS');
     contentBuffer.writeln(resolvedChunks.join('\n\n'));
 
     final messages = [
@@ -125,7 +125,7 @@ class FlashcardOrchestrator {
 
 ### BEHAVIOR (Stateful Updates):
 You have the capability to **UPDATE** existing flashcard decks. 
-- If `EXISTING_FLASHCARDS` are provided, your goal is to add NEW cards based on the new `FLASHCARD GOAL` and `EVIDENCE CHUNKS`.
+- If `EXISTING_FLASHCARDS` are provided, your goal is to add NEW cards based on the new `FLASHCARD GOAL` and `INFORMATION CHUNKS`.
 - Do NOT repeat existing questions.
 - You can refactor or improve existing cards if the new evidence contradicts or adds significant clarity to them.
 - You MUST maintain the same `title` if you are updating an existing deck.

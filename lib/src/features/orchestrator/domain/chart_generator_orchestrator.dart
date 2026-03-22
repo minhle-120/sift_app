@@ -46,7 +46,7 @@ class ChartGeneratorOrchestrator {
     contentBuffer.writeln('### TARGET CHART');
     contentBuffer.writeln('Goal: ${package.chartGoal}');
     contentBuffer.writeln();
-    contentBuffer.writeln('### EVIDENCE CHUNKS');
+    contentBuffer.writeln('### INFORMATION CHUNKS');
     contentBuffer.writeln(resolvedChunks.join('\n\n'));
 
     final messages = [
@@ -236,7 +236,7 @@ Output JSON:
 
 ### INSTRUCTIONS:
 1. **Title**: Always include a concise, descriptive "title" (2-4 words) for the chart.
-2. **Stateful Updates**: If a `CURRENT_CHART_SCHEMA` is provided in the history, your goal is to **update** or **refactor** it based on the new `Target Chart` and `Evidence Chunks`. 
+2. **Stateful Updates**: If a `CURRENT_CHART_SCHEMA` is provided in the history, your goal is to **update** or **refactor** it based on the new `Target Chart` and `Information Chunks`. 
    - **Merge Strategy**: Integrate new evidence into the existing graph. Prefer adding to the current structure over completely replacing it, unless a full refactor is requested.
    - **Consistency**: Keep the `title` IDENTICAL if you intend to update the same chart series.
    - **Branching**: If the user's request is fundamentally a new topic, provide a new `title` to create a separate tab.
