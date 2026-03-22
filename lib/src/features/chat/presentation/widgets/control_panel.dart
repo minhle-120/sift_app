@@ -67,7 +67,7 @@ class ControlPanel extends ConsumerWidget {
 
           _buildControlCard(
             context,
-            title: 'Interactive Canvas',
+            title: 'Canvas',
             icon: Icons.auto_awesome_mosaic_rounded,
             description: _getInteractiveCanvasDescription(settings.interactiveCanvasMode),
             isEnabled: !settings.isBrainstormMode,

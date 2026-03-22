@@ -613,7 +613,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
             id: 'canvas_${widget.message.id}',
-            title: 'Interactive Canvas',
+            title: 'Canvas',
             icon: Icons.auto_awesome_mosaic_rounded,
             type: WorkbenchTabType.interactiveCanvas,
             metadata: {
@@ -640,7 +640,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                  color: theme.colorScheme.primary),
             const SizedBox(width: 12),
             Text(
-              'View Interactive Canvas',
+              'View Canvas',
               style: theme.textTheme.labelLarge?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.bold,
