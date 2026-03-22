@@ -27,7 +27,7 @@ class SettingsState {
   final int chunkSize;
   final int chunkOverlap;
   final bool isSyncEnabled;
-  final ChartGeneratorMode chartGeneratorMode;
+  final GraphGeneratorMode graphGeneratorMode;
   final CoderMode coderMode;
   final FlashcardMode flashcardMode;
   final InteractiveCanvasMode interactiveCanvasMode;
@@ -95,7 +95,7 @@ class SettingsState {
     this.chunkSize = 100,
     this.chunkOverlap = 50,
     this.isSyncEnabled = true,
-    this.chartGeneratorMode = ChartGeneratorMode.auto,
+    this.graphGeneratorMode = GraphGeneratorMode.auto,
     this.coderMode = CoderMode.auto,
     this.flashcardMode = FlashcardMode.auto,
     this.interactiveCanvasMode = InteractiveCanvasMode.auto,
@@ -169,7 +169,7 @@ class SettingsState {
     int? chunkSize,
     int? chunkOverlap,
     bool? isSyncEnabled,
-    ChartGeneratorMode? chartGeneratorMode,
+    GraphGeneratorMode? graphGeneratorMode,
     CoderMode? coderMode,
     FlashcardMode? flashcardMode,
     InteractiveCanvasMode? interactiveCanvasMode,
@@ -231,7 +231,7 @@ class SettingsState {
       chunkSize: chunkSize ?? this.chunkSize,
       chunkOverlap: chunkOverlap ?? this.chunkOverlap,
       isSyncEnabled: isSyncEnabled ?? this.isSyncEnabled,
-      chartGeneratorMode: chartGeneratorMode ?? this.chartGeneratorMode,
+      graphGeneratorMode: graphGeneratorMode ?? this.graphGeneratorMode,
       coderMode: coderMode ?? this.coderMode,
       flashcardMode: flashcardMode ?? this.flashcardMode,
       interactiveCanvasMode: interactiveCanvasMode ?? this.interactiveCanvasMode,
@@ -323,7 +323,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       chunkSize: prefs.getInt('chunkSize') ?? 100,
       chunkOverlap: prefs.getInt('chunkOverlap') ?? 50,
       isSyncEnabled: prefs.getBool('isSyncEnabled') ?? true,
-      chartGeneratorMode: ChartGeneratorMode.values[prefs.getInt('chartGeneratorMode') ?? prefs.getInt('visualizerMode') ?? 0],
+      graphGeneratorMode: GraphGeneratorMode.values[prefs.getInt('graphGeneratorMode') ?? prefs.getInt('chartGeneratorMode') ?? prefs.getInt('visualizerMode') ?? 0],
       coderMode: CoderMode.values[prefs.getInt('coderMode') ?? 0],
       flashcardMode: flashcardMode,
       interactiveCanvasMode: InteractiveCanvasMode.values[prefs.getInt('interactiveCanvasMode') ?? 0],
@@ -843,10 +843,10 @@ class SettingsController extends StateNotifier<SettingsState> {
     state = state.copyWith(isBrainstormMode: value);
   }
 
-  Future<void> updateChartGeneratorMode(ChartGeneratorMode mode) async {
+  Future<void> updateGraphGeneratorMode(GraphGeneratorMode mode) async {
     final prefs = await PortableSettings.getInstance();
-    await prefs.setInt('chartGeneratorMode', mode.index);
-    state = state.copyWith(chartGeneratorMode: mode);
+    await prefs.setInt('graphGeneratorMode', mode.index);
+    state = state.copyWith(graphGeneratorMode: mode);
   }
 
   Future<void> updateCoderMode(CoderMode mode) async {

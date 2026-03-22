@@ -25,7 +25,7 @@ class ChatOrchestrator {
     required List<ChatMessage> conversation,
     required ResearchPackage package,
     required ChunkRegistry registry,
-    String? chartSchema,
+    String? graphSchema,
     String? codeSnippet,
     String? flashcardTitle,
     int? flashcardCount,
@@ -38,7 +38,7 @@ class ChatOrchestrator {
     final combinedUserMessage = buildCombinedMessage(
       resolvedChunks,
       originalQuery,
-      chartSchema: chartSchema,
+      graphSchema: graphSchema,
       codeSnippet: codeSnippet,
       flashcardTitle: flashcardTitle,
       flashcardCount: flashcardCount,
@@ -61,7 +61,7 @@ class ChatOrchestrator {
     required List<ChatMessage> conversation,
     required ResearchPackage package,
     required ChunkRegistry registry,
-    String? chartSchema,
+    String? graphSchema,
     String? codeSnippet,
     String? flashcardTitle,
     int? flashcardCount,
@@ -74,7 +74,7 @@ class ChatOrchestrator {
     final combinedUserMessage = buildCombinedMessage(
       resolvedChunks,
       originalQuery,
-      chartSchema: chartSchema,
+      graphSchema: graphSchema,
       codeSnippet: codeSnippet,
       flashcardTitle: flashcardTitle,
       flashcardCount: flashcardCount,
@@ -180,7 +180,7 @@ class ChatOrchestrator {
 
 ### Instructions:
 - Answer the user's latest query accurately using the provided context.
-- **Synthesize Specialists**: If the input context contains artifacts like WRITTEN_CODE, RENDERED_CHART, INTERACTIVE_CANVAS, or FLASHCARD_DECK, provide a textual explanation and acknowledge their creation. Do NOT redraw or rewrite them.
+- **Synthesize Specialists**: If the input context contains artifacts like WRITTEN_CODE, RENDERED_GRAPH, INTERACTIVE_CANVAS, or FLASHCARD_DECK, provide a textual explanation and acknowledge their creation. Do NOT redraw or rewrite them.
 - Be honest: If the context doesn't contain the answer, state that "The provided documents do not contain information about [topic]."
 - Maintain a professional, objective, and helpful tone.
 ''';
@@ -200,7 +200,7 @@ class ChatOrchestrator {
   String buildCombinedMessage(
     List<String> chunks, 
     String query, {
-    String? chartSchema, 
+    String? graphSchema, 
     String? codeSnippet,
     String? flashcardTitle,
     int? flashcardCount,
@@ -214,7 +214,7 @@ class ChatOrchestrator {
     return '''$historySection### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
-${chartSchema != null ? '### RENDERED_CHART\n$chartSchema\n(Note: This chart has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '### WRITTEN_CODE\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}${canvasHtml != null ? '### INTERACTIVE_CANVAS\n$canvasHtml\n(Note: This interactive HTML/SVG component has been displayed in a separate tab. Acknowledge this in your response.)\n\n' : ''}${flashcardTitle != null ? '### FLASHCARD_DECK\nTitle: $flashcardTitle\nCount: $flashcardCount\n(Note: This study deck has been generated. Acknowledge this in your response.)\n\n' : ''}### User Query:
+${graphSchema != null ? '### RENDERED_GRAPH\n$graphSchema\n(Note: This graph has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '### WRITTEN_CODE\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}${canvasHtml != null ? '### INTERACTIVE_CANVAS\n$canvasHtml\n(Note: This interactive HTML/SVG component has been displayed in a separate tab. Acknowledge this in your response.)\n\n' : ''}${flashcardTitle != null ? '### FLASHCARD_DECK\nTitle: $flashcardTitle\nCount: $flashcardCount\n(Note: This study deck has been generated. Acknowledge this in your response.)\n\n' : ''}### User Query:
 $query
 ''';
   }

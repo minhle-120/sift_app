@@ -10,9 +10,9 @@ import '../../../../services/ai/i_ai_service.dart';
 import 'package:sift_app/src/features/chat/domain/entities/message.dart' as domain;
 import '../../../../core/tools/delegate_to_synthesizer_tool.dart';
 import '../../../../core/tools/no_info_found_tool.dart';
-import '../../../../core/tools/delegate_to_chart_generator_tool.dart';
+import '../../../../core/tools/delegate_to_graph_generator_tool.dart';
 import '../../../../core/tools/delegate_to_coder_tool.dart';
-import 'chart_generator_orchestrator.dart';
+import 'graph_generator_orchestrator.dart';
 import 'code_orchestrator.dart';
 import 'flashcard_orchestrator.dart';
 import '../../chat/presentation/controllers/settings_controller.dart';
@@ -22,7 +22,7 @@ import 'interactive_canvas_orchestrator.dart';
 
 final researchOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
-  final chartGeneratorOrchestrator = ref.watch(chartGeneratorOrchestratorProvider);
+  final graphGeneratorOrchestrator = ref.watch(graphGeneratorOrchestratorProvider);
   final codeOrchestrator = ref.watch(codeOrchestratorProvider);
   final flashcardOrchestrator = ref.watch(flashcardOrchestratorProvider);
   final interactiveCanvasOrchestrator = ref.watch(interactiveCanvasOrchestratorProvider);
@@ -39,20 +39,20 @@ final researchOrchestratorProvider = Provider((ref) {
 
   final delegateTool = DelegateToSynthesizerTool();
   final noInfoTool = NoInfoFoundTool();
-  final chartTool = DelegateToChartGeneratorTool();
+  final graphTool = DelegateToGraphGeneratorTool();
   final codeTool = DelegateToCoderTool();
   final flashcardTool = DelegateToFlashcardsTool();
   final canvasTool = DelegateToInteractiveCanvasTool();
   
   return ResearchOrchestrator(
     aiService: aiService,
-    chartGeneratorOrchestrator: chartGeneratorOrchestrator,
+    graphGeneratorOrchestrator: graphGeneratorOrchestrator,
     codeOrchestrator: codeOrchestrator,
     flashcardOrchestrator: flashcardOrchestrator,
     ragTool: ragTool,
     delegateTool: delegateTool,
     noInfoTool: noInfoTool,
-    chartTool: chartTool,
+    graphTool: graphTool,
     codeTool: codeTool,
     flashcardTool: flashcardTool,
     canvasTool: canvasTool,
@@ -62,19 +62,19 @@ final researchOrchestratorProvider = Provider((ref) {
 
 
 class ResearchOrchestrator {
-  static const String chartMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_chart_generator` if you find ANY relevant data to graph, even if it is simple. Prioritize finding a visual angle for your research.';
+  static const String graphMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_graph_generator` if you find ANY relevant data to visualize, even if it is simple. Prioritize finding a visual angle for your research.';
   static const String codeMandate = '**CRITICAL MANDATE**: The user has requested to write or modify code. You MUST call `query_knowledge_base` first to gather context. After searching, you MUST call `delegate_to_coder` if the user wants code generation, script writing, or technical implementation. Do NOT write the code yourself; delegate it to the code specialist.';
   static const String flashcardMandate = '**CRITICAL MANDATE**: The user has requested flashcards or study materials. You MUST call `query_knowledge_base` first to gather factual context. After searching, you MUST call `delegate_to_flashcards` to transform that data into a high-quality study deck.';
   static const String canvasMandate = '**CRITICAL MANDATE**: The user has requested a custom visual display component. You MUST call `query_knowledge_base` first. After searching, you MUST call `delegate_to_interactive_canvas` to build the static visual component using HTML/SVG.';
 
   final IAiService aiService;
-  final ChartGeneratorOrchestrator chartGeneratorOrchestrator;
+  final GraphGeneratorOrchestrator graphGeneratorOrchestrator;
   final CodeOrchestrator codeOrchestrator;
   final FlashcardOrchestrator flashcardOrchestrator;
   final RAGTool ragTool;
   final DelegateToSynthesizerTool delegateTool;
   final NoInfoFoundTool noInfoTool;
-  final DelegateToChartGeneratorTool chartTool;
+  final DelegateToGraphGeneratorTool graphTool;
   final DelegateToCoderTool codeTool;
   final DelegateToFlashcardsTool flashcardTool;
   final DelegateToInteractiveCanvasTool canvasTool;
@@ -84,13 +84,13 @@ class ResearchOrchestrator {
 
   ResearchOrchestrator({
     required this.aiService,
-    required this.chartGeneratorOrchestrator,
+    required this.graphGeneratorOrchestrator,
     required this.codeOrchestrator,
     required this.flashcardOrchestrator,
     required this.ragTool,
     required this.delegateTool,
     required this.noInfoTool,
-    required this.chartTool,
+    required this.graphTool,
     required this.codeTool,
     required this.flashcardTool,
     required this.canvasTool,
@@ -106,7 +106,7 @@ class ResearchOrchestrator {
     required int collectionId,
     required String historicalContext,
     required String userQuery,
-    String? currentChartSchema,
+    String? currentGraphSchema,
     String? currentCode,
     String? currentCodeTitle,
     List<Flashcard>? currentFlashcards,
@@ -125,15 +125,15 @@ class ResearchOrchestrator {
       ragTool.definition,
       delegateTool.definition,
       noInfoTool.definition,
-      if (settings.chartGeneratorMode != ChartGeneratorMode.off) chartTool.definition,
+      if (settings.graphGeneratorMode != GraphGeneratorMode.off) graphTool.definition,
       if (settings.coderMode != CoderMode.off) codeTool.definition,
       if (settings.flashcardMode != FlashcardMode.off) flashcardTool.definition,
       if (settings.interactiveCanvasMode != InteractiveCanvasMode.off) canvasTool.definition,
     ];
 
     String finalUserQuery = userQuery;
-    if (settings.chartGeneratorMode == ChartGeneratorMode.on) {
-      finalUserQuery = '$finalUserQuery\n\n$chartMandate';
+    if (settings.graphGeneratorMode == GraphGeneratorMode.on) {
+      finalUserQuery = '$finalUserQuery\n\n$graphMandate';
     }
     if (settings.coderMode == CoderMode.on) {
       finalUserQuery = '$finalUserQuery\n\n$codeMandate';
@@ -161,7 +161,7 @@ class ResearchOrchestrator {
     ];
 
     final int newStepsStartIndex = messages.length;
-    String? capturedChartSchema;
+    String? capturedGraphSchema;
     String? capturedCodeSnippet;
     String? capturedCodeLanguage;
     String? capturedCodeTitle;
@@ -230,7 +230,7 @@ class ResearchOrchestrator {
           final package = delegateTool.execute(args);
           return ResearchResult(
             package: package, 
-            chartSchema: capturedChartSchema,
+            graphSchema: capturedGraphSchema,
             codeSnippet: capturedCodeSnippet,
             codeLanguage: capturedCodeLanguage,
             codeTitle: capturedCodeTitle,
@@ -239,36 +239,36 @@ class ResearchOrchestrator {
             canvasHtml: capturedCanvasHtml,
             steps: messages.sublist(newStepsStartIndex),
           );
-        } else if (toolCall.function.name == DelegateToChartGeneratorTool.name) {
+        } else if (toolCall.function.name == DelegateToGraphGeneratorTool.name) {
           final args = _parseArgs(toolCall.function.arguments);
-          onStatusUpdate?.call('Generating chart for "${args['chartGoal'] ?? 'data'}..."');
+          onStatusUpdate?.call('Generating graph for "${args['graphGoal'] ?? 'data'}..."');
           
-          final package = chartTool.execute(args);
+          final package = graphTool.execute(args);
           
           // Clean the context for the generator (remove system mandates)
           final cleanContext = contextPrompt
-              .replaceAll(chartMandate, '')
+              .replaceAll(graphMandate, '')
               .replaceAll('\n\nUser Query: ', '\n')
               .replaceAll('Current query: \n', 'Current query: ')
               .trim();
-
-          final chartResult = await chartGeneratorOrchestrator.generateChart(
+          
+          final graphResult = await graphGeneratorOrchestrator.generateGraph(
             package: package, 
             registry: registry,
             fullContext: cleanContext,
-            currentChartSchema: currentChartSchema,
+            currentGraphSchema: currentGraphSchema,
           );
 
-          capturedChartSchema = chartResult.schema;
+          capturedGraphSchema = graphResult.schema;
 
           messages.add(ChatMessage(
             role: ChatRole.tool,
-            content: 'CHART_GENERATED: ${chartResult.schema}\n\n'
-                     'Assistant Note: The chart is now ready and will be displayed. '
+            content: 'GRAPH_GENERATED: ${graphResult.schema}\n\n'
+                     'Assistant Note: The graph is now ready and will be displayed. '
                      'You should now call delegate_to_synthesizer to provide a textual explanation of '
-                     'what the user is seeing in the chart and answer any remaining parts of their query.',
+                     'what the user is seeing in the graph and answer any remaining parts of their query.',
             toolCallId: toolCall.id,
-            name: DelegateToChartGeneratorTool.name,
+            name: DelegateToGraphGeneratorTool.name,
           ));
         } else if (toolCall.function.name == DelegateToCoderTool.name) {
           final args = _parseArgs(toolCall.function.arguments);
@@ -277,7 +277,7 @@ class ResearchOrchestrator {
           final package = codeTool.execute(args);
           
           final cleanContext = contextPrompt
-              .replaceAll(chartMandate, '')
+              .replaceAll(graphMandate, '')
               .replaceAll(codeMandate, '')
               .replaceAll('\n\nUser Query: ', '\n')
               .replaceAll('Current query: \n', 'Current query: ')
@@ -311,7 +311,7 @@ class ResearchOrchestrator {
           final package = flashcardTool.execute(args);
           
           final cleanContext = contextPrompt
-              .replaceAll(chartMandate, '')
+              .replaceAll(graphMandate, '')
               .replaceAll(codeMandate, '')
               .replaceAll(flashcardMandate, '')
               .replaceAll('\n\nUser Query: ', '\n')
@@ -344,7 +344,7 @@ class ResearchOrchestrator {
           final package = canvasTool.execute(args);
           
           final cleanContext = contextPrompt
-              .replaceAll(chartMandate, '')
+              .replaceAll(graphMandate, '')
               .replaceAll(codeMandate, '')
               .replaceAll(flashcardMandate, '')
               .replaceAll(canvasMandate, '')
@@ -395,7 +395,7 @@ class ResearchOrchestrator {
     if (allResults.isNotEmpty) {
       return ResearchResult(
         package: ResearchPackage(indices: allResults.map((r) => r.index).toList()),
-        chartSchema: capturedChartSchema,
+        graphSchema: capturedGraphSchema,
         codeSnippet: capturedCodeSnippet,
         codeLanguage: capturedCodeLanguage,
         codeTitle: capturedCodeTitle,
@@ -406,7 +406,7 @@ class ResearchOrchestrator {
           studyGoal: userQuery,
         ),
         flashcardMode: settings.flashcardMode,
-        chartGeneratorMode: settings.chartGeneratorMode,
+        graphGeneratorMode: settings.graphGeneratorMode,
         interactiveCanvasMode: settings.interactiveCanvasMode,
         canvasHtml: capturedCanvasHtml,
         steps: messages.sublist(newStepsStartIndex),
@@ -429,7 +429,7 @@ You have access to the conversation history. Use this context to resolve pronoun
 2. **Search**: Use `query_knowledge_base` to find relevant document chunks.
 3. **Reason & Refine**: After each search, analyze the chunks. If the information is incomplete, broaden your knowledge by calling `query_knowledge_base` again with different keywords. Repeat this cycle until you have a nuanced and complete understanding.
 4. **No Information Found**: If you have searched multiple times and found no relevant info, call `no_info_found`. **CRITICAL**: You MUST attempt at least one search first.
-5. **Specialized Delegation**: If the gathered info suits a specialized tool (e.g., chart generator, coding, flashcards), call that tool. Rely on each tool's name and description for its specific use-case.
+5. **Specialized Delegation**: If the gathered info suits a specialized tool (e.g., graph generator, coding, flashcards), call that tool. Rely on each tool's name and description for its specific use-case.
 6. **Synthesis Strategy**: Once research is complete (and any specialists called), you MUST provide a final textual overview via `finalize_research_response`.
 
 ### Rules:
@@ -470,7 +470,7 @@ You have access to the conversation history. Use this context to resolve pronoun
         if (buffer.isNotEmpty) buffer.write('\n\n');
         // Strip mandates from historical user queries to keep context clean
         final cleanQuery = m.text
-            .replaceAll(chartMandate, '')
+            .replaceAll(graphMandate, '')
             .replaceAll(codeMandate, '')
             .replaceAll(flashcardMandate, '')
             .replaceAll(canvasMandate, '')

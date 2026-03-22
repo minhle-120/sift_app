@@ -20,7 +20,7 @@ class ControlPanel extends ConsumerWidget {
           _buildSectionHeader(
             theme,
             title: 'AI Control Center',
-            subtitle: 'Fine-tune how your AI generates content and charts.',
+            subtitle: 'Fine-tune how your AI generates content and graphs.',
           ),
           const SizedBox(height: 24),
 
@@ -34,11 +34,11 @@ class ControlPanel extends ConsumerWidget {
           
           _buildControlCard(
             context,
-            title: 'Chart Generator',
-            icon: Icons.bar_chart_rounded,
-            description: _getChartGeneratorDescription(settings.chartGeneratorMode),
+            title: 'Graph Generator',
+            icon: Icons.hub_rounded,
+            description: _getGraphGeneratorDescription(settings.graphGeneratorMode),
             isEnabled: !settings.isBrainstormMode,
-            child: _buildChartGeneratorToggles(settings, settingsNotifier, theme),
+            child: _buildGraphGeneratorToggles(settings, settingsNotifier, theme),
           ),
           
           const SizedBox(height: 24),
@@ -211,24 +211,24 @@ class ControlPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildChartGeneratorToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
-    return SegmentedButton<ChartGeneratorMode>(
+  Widget _buildGraphGeneratorToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
+    return SegmentedButton<GraphGeneratorMode>(
       segments: const [
         ButtonSegment(
-          value: ChartGeneratorMode.auto,
+          value: GraphGeneratorMode.auto,
           label: Text('Auto'),
         ),
         ButtonSegment(
-          value: ChartGeneratorMode.on,
+          value: GraphGeneratorMode.on,
           label: Text('On'),
         ),
         ButtonSegment(
-          value: ChartGeneratorMode.off,
+          value: GraphGeneratorMode.off,
           label: Text('Off'),
         ),
       ],
-      selected: {settings.chartGeneratorMode},
-      onSelectionChanged: (value) => notifier.updateChartGeneratorMode(value.first),
+      selected: {settings.graphGeneratorMode},
+      onSelectionChanged: (value) => notifier.updateGraphGeneratorMode(value.first),
       showSelectedIcon: false,
     );
   }
@@ -299,14 +299,14 @@ class ControlPanel extends ConsumerWidget {
     );
   }
 
-  String _getChartGeneratorDescription(ChartGeneratorMode mode) {
+  String _getGraphGeneratorDescription(GraphGeneratorMode mode) {
     switch (mode) {
-      case ChartGeneratorMode.auto:
-        return 'AI smartly chooses when to generate charts or diagrams based on your request context.';
-      case ChartGeneratorMode.on:
-        return 'AI will attempt to generate charts whenever possible, even for simpler requests.';
-      case ChartGeneratorMode.off:
-        return 'Disables chart generation entirely for a faster, text-only conversational experience.';
+      case GraphGeneratorMode.auto:
+        return 'AI smartly chooses when to generate graphs or diagrams based on your request context.';
+      case GraphGeneratorMode.on:
+        return 'AI will attempt to generate graphs whenever possible, even for simpler requests.';
+      case GraphGeneratorMode.off:
+        return 'Disables graph generation entirely for a faster, text-only conversational experience.';
     }
   }
 
@@ -339,7 +339,7 @@ class ControlPanel extends ConsumerWidget {
       case InteractiveCanvasMode.on:
         return 'AI prioritizes building interactive canvases and structured reports for every research task.';
       case InteractiveCanvasMode.off:
-        return 'Disables interactive canvas generation for a strictly text and standard chart experience.';
+        return 'Disables interactive canvas generation for a strictly text and standard graph experience.';
     }
   }
 }

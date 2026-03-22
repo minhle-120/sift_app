@@ -267,9 +267,9 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                       }).toList(),
                     ),
                   ],
-                  if (widget.message.metadata?['chart_schema'] != null) ...[
+                  if (widget.message.metadata?['graph_schema'] != null) ...[
                     const SizedBox(height: 12),
-                    _buildChartTrigger(context, ref, theme),
+                    _buildGraphTrigger(context, ref, theme),
                   ],
                   if (widget.message.metadata?['code_snippet'] != null) ...[
                     const SizedBox(height: 12),
@@ -423,10 +423,10 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
       );
   }
 
-  Widget _buildChartTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
-    final schemaStr = widget.message.metadata?['chart_schema'] as String?;
-    String label = 'View Interactive Chart';
-    String tabTitle = 'Chart';
+  Widget _buildGraphTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
+    final schemaStr = widget.message.metadata?['graph_schema'] as String?;
+    String label = 'View Interactive Graph';
+    String tabTitle = 'Graph';
 
     if (schemaStr != null) {
       try {
@@ -445,15 +445,15 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         
         ref.read(workbenchProvider.notifier).addTab(
           WorkbenchTab(
-            id: 'chart_${widget.message.id}',
+            id: 'graph_${widget.message.id}',
             title: tabTitle,
-            icon: Icons.bar_chart_rounded,
-            type: WorkbenchTabType.chart,
+            icon: Icons.hub_rounded,
+            type: WorkbenchTabType.graph,
             metadata: {'schema': schemaStr},
           ),
         );
       },
-      icon: const Icon(Icons.bar_chart_rounded, size: 18),
+      icon: const Icon(Icons.hub_rounded, size: 18),
       label: Text(label),
       style: ElevatedButton.styleFrom(
         backgroundColor: theme.colorScheme.secondaryContainer,

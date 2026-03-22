@@ -3,21 +3,21 @@ import '../../../../core/models/ai_models.dart';
 import '../../../../core/services/openai_service.dart';
 import '../../../../services/ai/i_ai_service.dart';
 
-final chartGeneratorOrchestratorProvider = Provider((ref) {
+final graphGeneratorOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
-  return ChartGeneratorOrchestrator(aiService: aiService);
+  return GraphGeneratorOrchestrator(aiService: aiService);
 });
 
-class ChartGeneratorOrchestrator {
+class GraphGeneratorOrchestrator {
   final IAiService aiService;
 
-  ChartGeneratorOrchestrator({required this.aiService});
+  GraphGeneratorOrchestrator({required this.aiService});
 
-  Future<ChartResult> generateChart({
-    required ChartPackage package,
+  Future<GraphResult> generateGraph({
+    required GraphPackage package,
     required ChunkRegistry registry,
     String? fullContext,
-    String? currentChartSchema,
+    String? currentGraphSchema,
   }) async {
     // 1. Resolve Chunks
     final List<String> resolvedChunks = [];
@@ -37,14 +37,14 @@ class ChartGeneratorOrchestrator {
       contentBuffer.writeln();
     }
 
-    if (currentChartSchema != null) {
-      contentBuffer.writeln('### CURRENT_CHART_SCHEMA');
-      contentBuffer.writeln(currentChartSchema);
+    if (currentGraphSchema != null) {
+      contentBuffer.writeln('### CURRENT_GRAPH_SCHEMA');
+      contentBuffer.writeln(currentGraphSchema);
       contentBuffer.writeln();
     }
 
-    contentBuffer.writeln('### TARGET CHART');
-    contentBuffer.writeln('Goal: ${package.chartGoal}');
+    contentBuffer.writeln('### TARGET GRAPH');
+    contentBuffer.writeln('Goal: ${package.graphGoal}');
     contentBuffer.writeln();
     contentBuffer.writeln('### INFORMATION CHUNKS');
     contentBuffer.writeln(resolvedChunks.join('\n\n'));
@@ -62,7 +62,7 @@ class ChartGeneratorOrchestrator {
     final cleanContent = _extractJson(response.content);
 
     // 4. Return result with clean content
-    return ChartResult(
+    return GraphResult(
       package: package,
       schema: cleanContent,
       steps: [
@@ -93,24 +93,24 @@ class ChartGeneratorOrchestrator {
   }
 
   String _buildSystemPrompt() {
-    return '''You are an Information Architect and Chart Generator. Your task is to transform research evidence into a highly logical, structured JSON schema for Interactive Chart generation.
+    return '''You are an Information Architect and Graph Generator. Your task is to transform research evidence into a highly logical, structured JSON schema for Interactive Graph generation.
 
 ### GOAL:
-Create charts that reveal the **structure** and **relationships** in the data. 
+Create graphs that reveal the **structure** and **relationships** in the data. 
 Avoid "star" or "hub-and-spoke" diagrams where everything connects to one central node unless that is strictly the logical relationship (e.g., a simple list). Instead, look for:
 - **Causality**: A implies B implies C.
 - **Hierarchy**: A is a parent of B and C.
 - **Comparison**: A and B are both types of C.
 - **Process**: Step A -> Step B -> Step C.
 
-**Continuous Evolution**: You have the capability to **UPDATE** existing charts. If provided with a previous chart schema, you should add new nodes, remove outdated connections, or refactor the layout to incorporate new research evidence while maintaining continuity.
+**Continuous Evolution**: You have the capability to **UPDATE** existing graphs. If provided with a previous graph schema, you should add new nodes, remove outdated connections, or refactor the layout to incorporate new research evidence while maintaining continuity.
 
 ### OUTPUT FORMAT:
 Output a valid JSON block with the following structure:
 JSON Structure:
 ```json
 {
-  "title": "Concise Chart Title",
+  "title": "Concise Graph Title",
   "layoutType": "tree" | "directed" | "circular" | "balloon" | "radial" | "mindmap",
   "nodes": [
     {"id": "unique_id", "label": "Short Display Name", "type": "important" | "normal"}
@@ -235,10 +235,10 @@ Output JSON:
 ```
 
 ### INSTRUCTIONS:
-1. **Title**: Always include a concise, descriptive "title" (2-4 words) for the chart.
-2. **Stateful Updates**: If a `CURRENT_CHART_SCHEMA` is provided in the history, your goal is to **update** or **refactor** it based on the new `Target Chart` and `Information Chunks`. 
+1. **Title**: Always include a concise, descriptive "title" (2-4 words) for the graph.
+2. **Stateful Updates**: If a `CURRENT_GRAPH_SCHEMA` is provided in the history, your goal is to **update** or **refactor** it based on the new `Target Graph` and `Information Chunks`. 
    - **Merge Strategy**: Integrate new evidence into the existing graph. Prefer adding to the current structure over completely replacing it, unless a full refactor is requested.
-   - **Consistency**: Keep the `title` IDENTICAL if you intend to update the same chart series.
+   - **Consistency**: Keep the `title` IDENTICAL if you intend to update the same graph series.
    - **Branching**: If the user's request is fundamentally a new topic, provide a new `title` to create a separate tab.
 3. **Labels**: Keep labels very concise (2-4 words).
 4. **Node Types**: Use "important" for primary actors/results and "normal" for supporting data.

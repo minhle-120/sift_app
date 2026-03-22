@@ -3,16 +3,16 @@ import 'package:graphview/GraphView.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/workbench_controller.dart';
 
-class ChartViewer extends ConsumerStatefulWidget {
+class GraphViewer extends ConsumerStatefulWidget {
   final Map<String, dynamic> schema;
 
-  const ChartViewer({super.key, required this.schema});
+  const GraphViewer({super.key, required this.schema});
 
   @override
-  ConsumerState<ChartViewer> createState() => _ChartViewerState();
+  ConsumerState<GraphViewer> createState() => _GraphViewerState();
 }
 
-class _ChartViewerState extends ConsumerState<ChartViewer> {
+class _GraphViewerState extends ConsumerState<GraphViewer> {
   final Graph graph = Graph();
   late final TransformationController _transformationController;
   late final GraphViewController controller;
@@ -30,18 +30,15 @@ class _ChartViewerState extends ConsumerState<ChartViewer> {
   }
 
   @override
-  void didUpdateWidget(ChartViewer oldWidget) {
+  void didUpdateWidget(GraphViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.schema != oldWidget.schema) {
       _setupGraph();
     }
   }
-
+// ... (dispose and _setupGraph remain logic-identical, just renaming internal mentions if any)
   @override
   void dispose() {
-    // Note: GraphView internally disposes the transformationController
-    // if it's passed via GraphViewController. We don't dispose it here
-    // to avoid a 'used after disposed' error during unmounting.
     super.dispose();
   }
 
@@ -235,7 +232,7 @@ class _ChartViewerState extends ConsumerState<ChartViewer> {
     final workbench = ref.watch(workbenchProvider);
     final activeTab = workbench.activeTab;
     
-    if (activeTab == null || activeTab.type != WorkbenchTabType.chart) {
+    if (activeTab == null || activeTab.type != WorkbenchTabType.graph) {
       return const SizedBox.shrink();
     }
 
@@ -261,8 +258,8 @@ class _ChartViewerState extends ConsumerState<ChartViewer> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left, size: 20),
+                _buildVersionButton(
+                  icon: Icons.chevron_left,
                   onPressed: currentIndex > 0 
                     ? () => ref.read(workbenchProvider.notifier).navigateVersion(activeTab.id, currentIndex - 1)
                     : null,
@@ -278,8 +275,8 @@ class _ChartViewerState extends ConsumerState<ChartViewer> {
                     ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right, size: 20),
+                _buildVersionButton(
+                  icon: Icons.chevron_right,
                   onPressed: currentIndex < versions.length - 1
                     ? () => ref.read(workbenchProvider.notifier).navigateVersion(activeTab.id, currentIndex + 1)
                     : null,
@@ -290,6 +287,18 @@ class _ChartViewerState extends ConsumerState<ChartViewer> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildVersionButton({
+    required IconData icon,
+    required VoidCallback? onPressed,
+    required String tooltip,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      onPressed: onPressed,
+      tooltip: tooltip,
     );
   }
 

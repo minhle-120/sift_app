@@ -1,7 +1,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-enum ChartGeneratorMode { auto, off, on }
+enum GraphGeneratorMode { auto, off, on }
 enum CoderMode { auto, off, on }
 enum FlashcardMode { auto, off, on }
 enum InteractiveCanvasMode { auto, off, on }
@@ -19,9 +19,9 @@ class ResearchPackage {
 class ResearchResult {
   final ChatMessage? output;
   final ResearchPackage? package;
-  final ChartPackage? chartPackage;
-  final String? chartSchema;
-  final ChartGeneratorMode? chartGeneratorMode;
+  final GraphPackage? graphPackage;
+  final String? graphSchema;
+  final GraphGeneratorMode? graphGeneratorMode;
   final CodePackage? codePackage;
   final String? codeSnippet;
   final String? codeLanguage;
@@ -41,8 +41,8 @@ class ResearchResult {
   ResearchResult({
     this.output,
     this.package,
-    this.chartPackage,
-    this.chartSchema,
+    this.graphPackage,
+    this.graphSchema,
     this.codePackage,
     this.codeSnippet,
     this.codeLanguage,
@@ -51,7 +51,7 @@ class ResearchResult {
     this.flashcardResult,
     this.flashcardTitle,
     this.flashcardMode,
-    this.chartGeneratorMode,
+    this.graphGeneratorMode,
     this.canvasPackage,
     this.canvasHtml,
     this.interactiveCanvasMode,
@@ -62,14 +62,14 @@ class ResearchResult {
   });
 }
 
-class ChartPackage {
+class GraphPackage {
   final List<int> indices;
-  final String chartGoal;
+  final String graphGoal;
 
-  ChartPackage({required this.indices, required this.chartGoal});
+  GraphPackage({required this.indices, required this.graphGoal});
 
   @override
-  String toString() => 'ChartPackage(indices: $indices, goal: $chartGoal)';
+  String toString() => 'GraphPackage(indices: $indices, goal: $graphGoal)';
 }
 
 class CodePackage {
@@ -102,12 +102,12 @@ class InteractiveCanvasPackage {
   String toString() => 'InteractiveCanvasPackage(indices: $indices, goal: $canvasGoal)';
 }
 
-class ChartResult {
-  final ChartPackage package;
+class GraphResult {
+  final GraphPackage package;
   final String schema;
   final List<ChatMessage> steps;
 
-  ChartResult({required this.package, required this.schema, required this.steps});
+  GraphResult({required this.package, required this.schema, required this.steps});
 }
 
 class CodeResult {

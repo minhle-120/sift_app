@@ -191,11 +191,11 @@ Senior UI Designer. Your task is to generate premium, STATIC data components (Ca
 </div>
 ```
 
-#### EXAMPLE 5: MULTI-SEGMENT DONUT CHART (Inline SVG)
+#### EXAMPLE 5: MULTI-SEGMENT DONUT GRAPH (Inline SVG)
 ```html
 <div class="canvas-container" style="text-align: center; color: #FFFFFF;">
   <div class="card" style="border-radius: 24px; background: #171719; padding: 40px; color: #FFFFFF;">
-    <h3 style="color: #D0BCFF; margin-bottom: 24px;">[CHART_TITLE]</h3>
+    <h3 style="color: #D0BCFF; margin-bottom: 24px;">[GRAPH_TITLE]</h3>
     <svg width="240" height="240" viewBox="0 0 240 240">
       <!-- Background Circle -->
       <circle cx="120" cy="120" r="100" fill="none" stroke="#252525" stroke-width="20" />

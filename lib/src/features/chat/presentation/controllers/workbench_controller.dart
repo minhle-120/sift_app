@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/services/portable_settings.dart';
 
-enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, chart, code, flashcards, controlPanel, interactiveCanvas }
+enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, code, flashcards, controlPanel, interactiveCanvas }
 
 class WorkbenchTab {
   final String id;
@@ -23,6 +23,7 @@ class WorkbenchTab {
 }
 
 class WorkbenchState {
+// ... (panelRatio, isCollapsed, tabs - no changes needed here)
   final double panelRatio;
   final bool isCollapsed;
   final List<WorkbenchTab> tabs;
@@ -113,13 +114,13 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
       return;
     }
 
-    // 2. Specialized Logic for Charts: Match by Title for Versioning
-    if (tab.type == WorkbenchTabType.chart) {
+    // 2. Specialized Logic for Graphs: Match by Title for Versioning
+    if (tab.type == WorkbenchTabType.graph) {
       final String? incomingSchema = tab.metadata?['schema'];
       if (incomingSchema != null) {
         // Try to find a tab with the same title
         final existingTabIndex = state.tabs.indexWhere(
-          (t) => t.type == WorkbenchTabType.chart && t.title == tab.title
+          (t) => t.type == WorkbenchTabType.graph && t.title == tab.title
         );
 
         if (existingTabIndex != -1) {
@@ -155,7 +156,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
         }
       }
       
-      // If it's a new chart, initialize the versioning structure
+      // If it's a new graph, initialize the versioning structure
       final newTab = WorkbenchTab(
         id: tab.id,
         title: tab.title,
@@ -238,7 +239,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
 
   void navigateVersion(String tabId, int index) {
     final newTabs = state.tabs.map((t) {
-      if (t.id == tabId && t.type == WorkbenchTabType.chart) {
+      if (t.id == tabId && t.type == WorkbenchTabType.graph) {
         final List<dynamic>? versions = t.metadata?['versions'];
         if (versions != null && index >= 0 && index < versions.length) {
           const dataKey = 'schema';
