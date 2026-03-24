@@ -4,6 +4,17 @@
 
 ---
 
+## Getting Started
+
+Follow these steps to perform your first research cycle with Sift:
+
+1.  **Configure AI Backend**: On first launch, choose your preferred AI engine. You can connect to an **External Server** (e.g., LM Studio or llama.cpp) or use the **Internal Engine** for a fully local experience.
+2.  **Create a Collection**: Click the **+ (New Collection)** button. Collections are the high-level containers for your research projects.
+3.  **Import Documents**: Select your new collection and click **View Documents**. Import the PDFs, Markdown, or text files you want Sift to analyze. Sift will automatically chunk and embed these for high-performance retrieval (RAG).
+4.  **Start Researching**: Head back to the chat, ensure your collection is active, and ask your first question. Sift will iteratively search your documents to build a comprehensive answer.
+
+---
+
 ## Key Features
 
 ### Iterative Research Orchestrator
