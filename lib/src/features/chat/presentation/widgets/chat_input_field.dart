@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -182,18 +183,20 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
         onDragDone: _handleFilesDropped,
         onDragEntered: (_) => setState(() => _isDragging = true),
         onDragExited: (_) => setState(() => _isDragging = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          decoration: BoxDecoration(
-            color: _isDragging 
-                ? theme.colorScheme.primaryContainer.withAlpha(50) 
-                : Colors.transparent,
-            border: _isDragging 
-                ? Border.all(color: theme.colorScheme.primary, width: 2)
-                : null,
-            borderRadius: BorderRadius.circular(16),
-          ),
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              decoration: BoxDecoration(
+                color: _isDragging 
+                    ? theme.colorScheme.primaryContainer.withAlpha(50) 
+                    : theme.colorScheme.surface.withAlpha(180),
+                border: _isDragging 
+                    ? Border.all(color: theme.colorScheme.primary, width: 2)
+                    : Border(top: BorderSide(color: theme.colorScheme.outlineVariant.withAlpha(60))),
+              ),
           child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,7 +422,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                             ? 'Directly message Sift...'
                             : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...')),
                     filled: true,
-                    fillColor: theme.colorScheme.surfaceContainerHigh,
+                    fillColor: theme.colorScheme.surfaceContainerHigh.withAlpha(180),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(28),
                       borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
@@ -476,6 +479,8 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                 ),
               ),
             ],
+          ),
+        ),
           ),
         ),
       ),

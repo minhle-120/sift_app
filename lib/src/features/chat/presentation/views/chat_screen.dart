@@ -67,28 +67,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     });
 
-    final chatContent = Column(
+    final chatContent = Stack(
       children: [
-        Expanded(
-          child: Column(
-            children: [
-              if (!chatState.isConnectionValid)
-                _buildConnectionWarning(theme, chatState.connectionError),
-              Expanded(
-                child: SelectionArea(
-                  child: collectionState.activeCollection == null
-                      ? _buildLibraryView(context, ref, collectionState)
-                      : (chatState.messages.isEmpty && !chatState.isLoading
-                          ? _buildEmptyChatState(theme) 
-                          : _buildMessagesList(chatState)),
-                ),
+        Column(
+          children: [
+            if (!chatState.isConnectionValid)
+              _buildConnectionWarning(theme, chatState.connectionError),
+            Expanded(
+              child: SelectionArea(
+                child: collectionState.activeCollection == null
+                    ? _buildLibraryView(context, ref, collectionState)
+                    : (chatState.messages.isEmpty && !chatState.isLoading
+                        ? _buildEmptyChatState(theme) 
+                        : _buildMessagesList(chatState)),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
 
         if (collectionState.activeCollection != null)
-          const ChatInputField(),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ChatInputField(),
+          ),
       ],
     );
 
