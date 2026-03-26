@@ -62,7 +62,11 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
         backgroundColor: theme.colorScheme.surface,
         surfaceTintColor: Colors.transparent,
       ),
-      body: DropTarget(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: (MediaQuery.of(context).size.width * 0.95).clamp(0.0, 900.0),
+          child: DropTarget(
         onDragEntered: (details) => setState(() => _isDragging = true),
         onDragExited: (details) => setState(() => _isDragging = false),
         onDragDone: (details) {
@@ -158,6 +162,8 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
                 ),
               ),
           ],
+        ),
+      ),
         ),
       ),
       floatingActionButton: activeCollection != null ? FloatingActionButton.extended(

@@ -17,7 +17,11 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
         title: const Text('Local AI Executive'),
         centerTitle: true,
       ),
-      body: ListView(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: (MediaQuery.of(context).size.width * 0.95).clamp(0.0, 900.0),
+          child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           _buildStatusCard(context, theme, ref, settings),
@@ -55,6 +59,8 @@ class LocalEngineSettingsScreen extends ConsumerWidget {
             const SizedBox(height: 32),
           ],
         ],
+      ),
+        ),
       ),
     );
   }

@@ -24,7 +24,11 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
           const SizedBox(width: 8),
         ],
       ),
-      body: ListView(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: (MediaQuery.of(context).size.width * 0.95).clamp(0.0, 900.0),
+          child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           if (settings.mobileImportProgress > 0 && settings.mobileImportProgress < 1.0) ...[
@@ -146,6 +150,8 @@ class MobileEngineSettingsScreen extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+        ),
       ),
     );
   }

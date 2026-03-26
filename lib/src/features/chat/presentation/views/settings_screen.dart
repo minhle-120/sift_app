@@ -47,7 +47,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: const Text('Settings'),
         centerTitle: true,
       ),
-      body: ListView(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: (MediaQuery.of(context).size.width * 0.95).clamp(0.0, 900.0),
+          child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           // AI Backend
@@ -444,6 +448,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
