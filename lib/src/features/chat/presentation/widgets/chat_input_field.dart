@@ -442,14 +442,18 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                       ),
                     ),
                     suffixIcon: Padding(
-                      padding: const EdgeInsets.only(right: 4),
+                      padding: const EdgeInsets.only(right: 6),
                       child: chatState.isLoading 
                         ? IconButton(
                             icon: Icon(Icons.stop_circle, color: theme.colorScheme.error),
                             onPressed: _stopResponse,
+                            style: IconButton.styleFrom(
+                              minimumSize: const Size(40, 40),
+                              padding: EdgeInsets.zero,
+                            ),
                           )
                         : IconButton(
-                            icon: const Icon(Icons.arrow_upward_rounded),
+                            icon: const Icon(Icons.arrow_upward_rounded, size: 20),
                             style: IconButton.styleFrom(
                               backgroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) 
                                   ? theme.colorScheme.primary 
@@ -457,6 +461,10 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                               foregroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) 
                                   ? theme.colorScheme.onPrimary 
                                   : theme.colorScheme.onSurfaceVariant.withAlpha(100),
+                              minimumSize: const Size(40, 40),
+                              maximumSize: const Size(40, 40),
+                              padding: EdgeInsets.zero,
+                              shape: const CircleBorder(),
                             ),
                             onPressed: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) ? _sendMessage : null,
                           ),
