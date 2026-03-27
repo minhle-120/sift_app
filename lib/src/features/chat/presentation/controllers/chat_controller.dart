@@ -451,7 +451,7 @@ class ChatController extends StateNotifier<ChatState> {
       // Force Lite Mode (RAG) on mobile internal even if brainstorm is somehow true
       if (settings.aiMode == AiMode.brainstorm && !isMobileInternal) {
         final brainstormOrchestrator = _ref.read(brainstormOrchestratorProvider);
-        state = state.copyWith(researchStatus: 'Brainstorming...');
+        state = state.copyWith(researchStatus: null); // Was "Brainstorming..."
         
         String finalContent = '';
         String finalReasoning = '';
@@ -485,7 +485,7 @@ class ChatController extends StateNotifier<ChatState> {
       // --- BRANCH: RAG Research Mode ---
       final researchHistory = researchOrchestrator.buildHistory(effectiveHistory);
 
-      state = state.copyWith(researchStatus: isMobileInternal ? 'Searching...' : 'Initializing research...');
+      state = state.copyWith(researchStatus: null); // Was "Searching..." / "Initializing research..."
 
       // --- BRANCH: Lite-RAG vs Desktop Research Orchestrator ---
       if (isMobileInternal || settings.aiMode == AiMode.lite) {
@@ -653,8 +653,8 @@ class ChatController extends StateNotifier<ChatState> {
           citations: jsonEncode(citationData),
         );
 
-        state = state.copyWith(researchStatus: 'Synthesizing final answer...');
-        await _db.updateMessageContent(placeholderMessage.id, 'Synthesizing...');
+        state = state.copyWith(researchStatus: null); // Was "Synthesizing..."
+
         
         String finalContent = '';
         String finalReasoning = '';
@@ -792,12 +792,12 @@ class ChatController extends StateNotifier<ChatState> {
     try {      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
 
       // 1. Vector Search
-      state = state.copyWith(researchStatus: 'Generating embedding...');
+      state = state.copyWith(researchStatus: null); // Was "Generating embedding..."
       final embedService = _ref.read(embeddingServiceProvider);
       final List<List<double>> embeddingResult = await embedService.getEmbeddings([query]);
       final List<double> queryVector = embeddingResult.first;
 
-      state = state.copyWith(researchStatus: 'Searching database...');
+      state = state.copyWith(researchStatus: null); // Was "Searching database..."
       final searchResults = await _db.vectorSearch(
         collectionId: collectionId,
         queryEmbedding: queryVector,
@@ -850,7 +850,7 @@ class ChatController extends StateNotifier<ChatState> {
       debugPrint('USER PROMPT:\n$combinedUserMessage');
       debugPrint('================================');
 
-      state = state.copyWith(researchStatus: 'Generating answer...');
+      state = state.copyWith(researchStatus: null); // Was "Generating answer..."
       
       if (isMobileInternal) {
         // --- 4a. Native Generation (Mobile Internal) ---

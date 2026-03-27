@@ -145,7 +145,14 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                            (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) && 
                            chatState.isLoading && 
                            !isUser)
-                    _buildStatusIndicator(theme, chatState.researchStatus ?? 'Thinking...')
+                    if (chatState.researchStatus != null)
+                      _buildStatusIndicator(theme, chatState.researchStatus!)
+                    else
+                      const _TypingIndicator()
+
+
+
+
                   else if (widget.message.text.isEmpty && 
                            (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) && 
                            !chatState.isLoading && 
@@ -800,6 +807,72 @@ class CitationBuilder extends MarkdownElementBuilder {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator();
+
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (index) {
+          return AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final delay = index * 0.2;
+              double progress = (_controller.value - delay) % 1.0;
+              if (progress < 0) progress += 1.0;
+              
+              double opacity = 0.2;
+              if (progress < 0.5) {
+                opacity = 0.2 + (0.6 * (progress / 0.5));
+              } else {
+                opacity = 0.8 - (0.6 * ((progress - 0.5) / 0.5));
+              }
+
+              return Container(
+                width: 5,
+                height: 5,
+                margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: opacity),
+                  shape: BoxShape.circle,
+                ),
+              );
+            },
+          );
+        }),
       ),
     );
   }
