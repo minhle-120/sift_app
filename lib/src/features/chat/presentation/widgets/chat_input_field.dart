@@ -522,14 +522,15 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
   }
 
   void _cycleAiMode(SettingsState settings, SettingsController notifier) {
+    List<AiMode> modes = AiMode.values.toList();
     if (settings.isMobileInternal) {
-      notifier.updateAiMode(AiMode.lite);
-      return;
+      // Mobile internal supports Lite + Brainstorm, but not Research
+      modes = [AiMode.lite, AiMode.brainstorm];
     }
     
-    final modes = AiMode.values.toList();
     final currentIndex = modes.indexOf(settings.aiMode);
-    final nextIndex = (currentIndex + 1) % modes.length;
+    final safeIndex = currentIndex == -1 ? 0 : currentIndex;
+    final nextIndex = (safeIndex + 1) % modes.length;
     notifier.updateAiMode(modes[nextIndex]);
   }
 

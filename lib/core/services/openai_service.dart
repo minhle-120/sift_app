@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../core/models/ai_models.dart';
 import '../../src/features/chat/presentation/controllers/settings_controller.dart';
 import '../../services/ai/i_ai_service.dart';
+import '../../core/services/mobile_ai_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class OpenAiService implements IAiService {
@@ -74,7 +76,7 @@ class OpenAiService implements IAiService {
   }
 
   @override
-  Stream<ChatStreamChunk> streamChat(List<ChatMessage> messages) async* {
+  Stream<ChatStreamChunk> streamChat(List<ChatMessage> messages, {bool Function()? isCanceled}) async* {
     final settings = _ref.read(settingsProvider);
     final baseUrl = settings.llamaServerUrl;
     final model = settings.chatModel;
@@ -168,4 +170,11 @@ class OpenAiService implements IAiService {
   }
 }
 
-final aiServiceProvider = Provider<IAiService>((ref) => OpenAiService(ref));
+final aiServiceProvider = Provider<IAiService>((ref) {
+  final settings = ref.watch(settingsProvider);
+  final isMobileInternal = (Platform.isAndroid || Platform.isIOS) && settings.backendType == BackendType.internal;
+  if (isMobileInternal) {
+    return ref.watch(mobileAiServiceProvider);
+  }
+  return OpenAiService(ref);
+});

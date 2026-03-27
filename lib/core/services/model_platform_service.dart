@@ -68,6 +68,15 @@ class ModelPlatformService {
     }
   }
 
+  /// Cancels any in-progress generation by resetting the native conversation.
+  Future<void> cancelGeneration() async {
+    try {
+      await _commandChannel.invokeMethod('cancel');
+    } on PlatformException catch (e) {
+      debugPrint("[Native Error] Failed to cancel generation: '${e.message}'.");
+    }
+  }
+
   /// Sends a [prompt] to the native engine to generate a response.
   /// 
   /// [requestId] helps route the response back to the correct caller (UI or API).

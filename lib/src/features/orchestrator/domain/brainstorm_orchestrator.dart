@@ -24,6 +24,7 @@ class BrainstormOrchestrator {
     required List<ChatMessage> history,
     required String query,
     List<PlatformFile>? attachments,
+    bool Function()? isCanceled,
   }) async* {
     dynamic content;
 
@@ -62,7 +63,7 @@ class BrainstormOrchestrator {
       ChatMessage(role: ChatRole.user, content: content),
     ];
 
-    yield* aiService.streamChat(messages);
+    yield* aiService.streamChat(messages, isCanceled: isCanceled);
   }
 
   String _buildBrainstormSystemPrompt() {

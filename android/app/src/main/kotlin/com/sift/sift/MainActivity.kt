@@ -89,6 +89,10 @@ class MainActivity : FlutterFragmentActivity() {
                     modelManager.resetConversation()
                     result.success(null)
                 }
+                "cancel" -> {
+                    modelManager.cancelGeneration()
+                    result.success(null)
+                }
                 "generate" -> {
                     val prompt = call.argument<String>("prompt")
                     val requestId = call.argument<String>("requestId")

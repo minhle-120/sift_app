@@ -13,7 +13,6 @@ import 'package:sift_app/src/features/chat/presentation/controllers/workbench_co
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
 import 'package:sift_app/core/models/ai_models.dart' as ai;
 import 'package:sift_app/core/services/openai_service.dart';
-import 'package:sift_app/core/services/model_platform_service.dart';
 import 'package:sift_app/core/services/embedding_service.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
@@ -454,8 +453,8 @@ class ChatController extends StateNotifier<ChatState> {
         limit: settings.aiMode == AiMode.brainstorm ? null : 8,
       );
 
-      // Force Lite Mode (RAG) on mobile internal even if brainstorm is somehow true
-      if (settings.aiMode == AiMode.brainstorm && !isMobileInternal) {
+      // --- BRANCH: Brainstorm Mode (works on all platforms via unified aiService) ---
+      if (settings.aiMode == AiMode.brainstorm) {
         final brainstormOrchestrator = _ref.read(brainstormOrchestratorProvider);
         state = state.copyWith(clearResearchStatus: true); // Was "Brainstorming..."
         
@@ -465,6 +464,7 @@ class ChatController extends StateNotifier<ChatState> {
           history: chatHistory,
           query: query,
           attachments: attachments,
+          isCanceled: () => _isCanceled,
         );
 
         bool isFirstToken = true;
@@ -794,18 +794,17 @@ class ChatController extends StateNotifier<ChatState> {
     Message placeholderMessage,
     List<ai.ChatMessage> history,
   ) async {
-    final settings = _ref.read(settingsProvider);
-    final isMobileInternal = settings.isMobileInternal;
-    
-    try {      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
+    try {
+      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
+      final aiService = _ref.read(aiServiceProvider);
 
       // 1. Vector Search
-      state = state.copyWith(clearResearchStatus: true); // Was "Generating embedding..."
+      state = state.copyWith(clearResearchStatus: true);
       final embedService = _ref.read(embeddingServiceProvider);
       final List<List<double>> embeddingResult = await embedService.getEmbeddings([query]);
       final List<double> queryVector = embeddingResult.first;
 
-      state = state.copyWith(clearResearchStatus: true); // Was "Searching database..."
+      state = state.copyWith(clearResearchStatus: true);
       final searchResults = await _db.vectorSearch(
         collectionId: collectionId,
         queryEmbedding: queryVector,
@@ -841,85 +840,42 @@ class ChatController extends StateNotifier<ChatState> {
         citations: jsonEncode(citationData),
       );
 
-      // 3. Prompt Injection (Using simplified Lite prompt + Last Turn history)
+      // 3. Prompt Construction
       final systemPrompt = chatOrchestrator.buildLiteSystemPrompt();
-      
-      // We only take the last User/AI turn (2 messages) to keep context clean
       final lastTurn = history.length >= 2 ? history.sublist(history.length - 2) : history;
-      
       final combinedUserMessage = chatOrchestrator.buildCombinedMessage(
         contextChunks, 
         query,
         history: lastTurn,
       );
 
-      debugPrint('==== MOBILE LITE RAG PROMPT ====');
+      debugPrint('==== LITE RAG PROMPT ====');
       debugPrint('SYSTEM INSTRUCTION:\n$systemPrompt');
       debugPrint('USER PROMPT:\n$combinedUserMessage');
-      debugPrint('================================');
+      debugPrint('========================');
 
-      state = state.copyWith(clearResearchStatus: true); // Was "Generating answer..."
-      
-      if (isMobileInternal) {
-        // --- 4a. Native Generation (Mobile Internal) ---
-        final modelPlatform = _ref.read(modelPlatformServiceProvider);
-        // Reset first to ensure we don't have double-history (native + our injection)
-        await modelPlatform.resetConversation();
-        Completer<void> completer = Completer();
-        String finalContent = '';
-        
-        StreamSubscription? sub;
-        sub = modelPlatform.responseStream.listen((event) async {
-          final type = event['type'] as String?;
-          final text = event['text'] as String?;
-          
-          if (type == 'partial' && text != null) {
-            if (text.length > finalContent.length && text.startsWith(finalContent)) {
-              finalContent = text;
-            } else {
-              finalContent += text;
-            }
-            _db.updateMessageContent(placeholderMessage.id, finalContent);
-          } else if (type == 'done') {
-            sub?.cancel();
-            completer.complete();
-          } else if (type == 'error') {
-            sub?.cancel();
-            completer.completeError(event['error'] ?? 'Unknown native error');
-          }
-        });
+      state = state.copyWith(clearResearchStatus: true);
 
-        await modelPlatform.generateResponse(
-          combinedUserMessage,
-          systemInstruction: systemPrompt,
-        );
+      // 4. Unified AI Service Generation (works on both mobile and desktop)
+      final messages = [
+        ai.ChatMessage(role: ai.ChatRole.system, content: systemPrompt),
+        ...lastTurn,
+        ai.ChatMessage(role: ai.ChatRole.user, content: combinedUserMessage),
+      ];
 
-        await completer.future;
-      } else {
-        // --- 4b. AI Service Generation (Desktop / External) ---
-        final aiService = _ref.read(aiServiceProvider);
-        
-        final messages = [
-          ai.ChatMessage(role: ai.ChatRole.system, content: systemPrompt),
-          // For Lite Mode on powerful backends, we can afford a bit more history if available
-          ...history,
-          ai.ChatMessage(role: ai.ChatRole.user, content: combinedUserMessage),
-        ];
+      String finalContent = '';
+      String finalReasoning = '';
+      final stream = aiService.streamChat(messages, isCanceled: () => _isCanceled);
 
-        String finalContent = '';
-        String finalReasoning = '';
-        final stream = aiService.streamChat(messages);
-
-        await for (final chunk in stream) {
-          if (_isCanceled) break;
-          if (chunk.reasoningContent != null) {
-            finalReasoning += chunk.reasoningContent!;
-            _db.updateMessageReasoning(placeholderMessage.id, finalReasoning);
-          }
-          if (chunk.content != null) {
-            finalContent += chunk.content!;
-            _db.updateMessageContent(placeholderMessage.id, finalContent);
-          }
+      await for (final chunk in stream) {
+        if (_isCanceled) break;
+        if (chunk.reasoningContent != null) {
+          finalReasoning += chunk.reasoningContent!;
+          _db.updateMessageReasoning(placeholderMessage.id, finalReasoning);
+        }
+        if (chunk.content != null) {
+          finalContent += chunk.content!;
+          _db.updateMessageContent(placeholderMessage.id, finalContent);
         }
       }
     } catch (e) {

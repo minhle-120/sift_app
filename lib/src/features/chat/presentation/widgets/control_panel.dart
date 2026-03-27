@@ -131,13 +131,11 @@ class ControlPanel extends ConsumerWidget {
         _buildModeOption(
           context,
           title: 'Brainstorm Mode',
-          subtitle: settings.isMobileInternal 
-              ? 'Pure LLM knowledge base (Disabled on Mobile Internal AI).'
-              : 'Pure LLM knowledge base. Bypasses your local documents entirely. Best for creative unconstrained ideation.',
+          subtitle: 'Pure LLM knowledge base. Bypasses your local documents entirely. Best for creative unconstrained ideation.',
           icon: Icons.lightbulb_outline_rounded,
           value: AiMode.brainstorm,
           groupValue: settings.aiMode,
-          onChanged: settings.isMobileInternal ? null : (v) => notifier.updateAiMode(v!),
+          onChanged: (v) => notifier.updateAiMode(v!),
           theme: theme,
         ),
       ],

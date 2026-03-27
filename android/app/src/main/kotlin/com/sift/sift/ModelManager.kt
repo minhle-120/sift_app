@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.util.concurrent.CancellationException
 import io.flutter.plugin.common.EventChannel
 
 private const val TAG = "ModelManager"
@@ -172,7 +173,7 @@ class ModelManager(private val context: Context) {
             Contents.of(listOf(Content.Text(it))) 
         }
         
-        conversation = currentEngine.createConversation(
+    conversation = currentEngine.createConversation(
             ConversationConfig(
                 systemInstruction = systemContents,
                 samplerConfig = SamplerConfig(
@@ -182,6 +183,15 @@ class ModelManager(private val context: Context) {
                 )
             )
         )
+    }
+
+    /**
+     * Cancels any in-progress generation by resetting the conversation.
+     * This interrupts the native inference and silently discards any pending tokens.
+     */
+    fun cancelGeneration() {
+        Log.d(TAG, "Cancelling active generation via cancelProcess()")
+        conversation?.cancelProcess()
     }
 
     private fun updateSystemInstruction(newInstruction: String?) {
@@ -239,13 +249,24 @@ class ModelManager(private val context: Context) {
 
             override fun onError(throwable: Throwable) {
                 handler.post {
-                    Log.e(TAG, "Inference error", throwable)
-                    val data = mapOf(
-                        "type" to "error",
-                        "error" to (throwable.message ?: "Unknown native error"),
-                        "requestId" to requestId
-                    )
-                    sink?.success(data)
+                    if (throwable is CancellationException) {
+                        Log.i(TAG, "Native inference was cancelled.")
+                        val data = mapOf(
+                            "type" to "done",
+                            "text" to "",
+                            "done" to true,
+                            "requestId" to requestId
+                        )
+                        sink?.success(data)
+                    } else {
+                        Log.e(TAG, "Inference error", throwable)
+                        val data = mapOf(
+                            "type" to "error",
+                            "error" to (throwable.message ?: "Unknown native error"),
+                            "requestId" to requestId
+                        )
+                        sink?.success(data)
+                    }
                 }
             }
         })
