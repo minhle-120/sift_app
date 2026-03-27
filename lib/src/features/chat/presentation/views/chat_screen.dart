@@ -268,7 +268,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32.0),
+        padding: const EdgeInsets.fromLTRB(32, 32, 32, 160),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -407,6 +407,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               label: const Text('Upload Documents'),
             ),
           ],
+          const SizedBox(height: 160),
         ],
       ),
     );
@@ -422,7 +423,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       child: ListView.builder(
         controller: _scrollController,
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 200),
         itemCount: chatState.messages.length,
         itemBuilder: (context, index) {
           final message = chatState.messages[index];
