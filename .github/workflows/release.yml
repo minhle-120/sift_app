@@ -54,7 +54,14 @@ jobs:
         run: flutter pub get
 
       - name: Build Linux
-        run: flutter build linux --release
+        run: |
+          if [ "${{ needs.tagging.outputs.new_tag }}" != "" ]; then
+            TAG=${{ needs.tagging.outputs.new_tag }}
+          else
+            TAG=${GITHUB_REF#refs/tags/}
+          fi
+          VERSION=${TAG#v}
+          flutter build linux --release --build-name=$VERSION --build-number=${{ github.run_number }}
 
       - name: Prepare Linux Dist
         run: |
@@ -86,7 +93,14 @@ jobs:
         run: flutter pub get
 
       - name: Build Windows
-        run: flutter build windows --release
+        run: |
+          if ("${{ needs.tagging.outputs.new_tag }}" -ne "") {
+            $TAG = "${{ needs.tagging.outputs.new_tag }}"
+          } else {
+            $TAG = "${{ github.ref }}".Replace("refs/tags/", "")
+          }
+          $VERSION = $TAG.TrimStart("v")
+          flutter build windows --release --build-name=$VERSION --build-number=${{ github.run_number }}
 
       - name: Prepare Windows Dist
         run: |
@@ -123,7 +137,14 @@ jobs:
         run: flutter pub get
 
       - name: Build APK
-        run: flutter build apk --release
+        run: |
+          if [ "${{ needs.tagging.outputs.new_tag }}" != "" ]; then
+            TAG=${{ needs.tagging.outputs.new_tag }}
+          else
+            TAG=${GITHUB_REF#refs/tags/}
+          fi
+          VERSION=${TAG#v}
+          flutter build apk --release --build-name=$VERSION --build-number=${{ github.run_number }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
