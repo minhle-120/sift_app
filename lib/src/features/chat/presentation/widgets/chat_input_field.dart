@@ -292,20 +292,20 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                 ),
                   const SizedBox(width: 8),
                   
-                  // Brainstorm Mode Toggle (Hidden in Lite Mode)
-                  if (!settings.isMobileInternal) ...[
-                    _buildTrayAction(
-                      context,
-                      icon: chatState.isBrainstormMode ? Icons.psychology : Icons.psychology_outlined,
-                      label: chatState.isBrainstormMode ? 'Brainstorm: ON' : 'Brainstorm: OFF',
-                      isHighlight: chatState.isBrainstormMode,
-                      onPressed: () => ref.read(chatControllerProvider.notifier).toggleBrainstormMode(),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
+                  // Mode Indicator Button
+                  _buildTrayAction(
+                    context,
+                    icon: settings.aiMode == AiMode.brainstorm 
+                        ? Icons.lightbulb_outline_rounded 
+                        : (settings.aiMode == AiMode.lite ? Icons.flash_on_rounded : Icons.manage_search_rounded),
+                    label: '${settings.aiMode.name[0].toUpperCase()}${settings.aiMode.name.substring(1)}',
+                    isHighlight: false, // Keep non-highlighted always
+                    onPressed: () => _cycleAiMode(settings, settingsNotifier),
+                  ),
+                  const SizedBox(width: 8),
 
-                  // Graph Generator Toggle (Hidden in Lite Mode or Brainstorm Mode)
-                  if (!settings.isMobileInternal && !chatState.isBrainstormMode) ...[
+                  // Tool Toggles (Only in Research Mode)
+                  if (!settings.isMobileInternal && settings.aiMode == AiMode.research) ...[
                     _buildTrayAction(
                       context,
                       icon: _getGraphGeneratorIcon(settings.graphGeneratorMode),
@@ -340,15 +340,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                     const SizedBox(width: 8),
                   ],
 
-                  // Lite Mode Indicator
-                  if (settings.isMobileInternal)
-                    _buildTrayAction(
-                      context,
-                      icon: Icons.bolt_rounded,
-                      label: 'Lite Mode Enabled',
-                      isHighlight: true,
-                      onPressed: () {}, // Decorative for now
-                    ),
+
                   
                   // Future toggles go here
                   const SizedBox(width: 12),
@@ -359,7 +351,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
 
 
             // Guidance/Blocker if no documents (only if NOT in Brainstorm Mode)
-            if (!collectionState.hasDocuments && collectionState.activeCollection != null && !chatState.isBrainstormMode)
+            if (!collectionState.hasDocuments && collectionState.activeCollection != null && settings.aiMode != AiMode.brainstorm)
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(12),
@@ -393,7 +385,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                 const SingleActivator(LogicalKeyboardKey.keyV, meta: true): _handleClipboardPaste,
 
                 const SingleActivator(LogicalKeyboardKey.enter): () {
-                    if (!chatState.isLoading && (_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) {
+                    if (!chatState.isLoading && (_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || settings.aiMode == AiMode.brainstorm)) {
                       _sendMessage();
                     }
                   },
@@ -410,7 +402,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                 child: TextField(
                   controller: _controller,
                   focusNode: _focusNode,
-                  enabled: (collectionState.hasDocuments || chatState.isBrainstormMode),
+                  enabled: (collectionState.hasDocuments || settings.aiMode == AiMode.brainstorm),
                   readOnly: chatState.isLoading,
                   maxLines: 5,
                   minLines: 1,
@@ -418,7 +410,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                   decoration: InputDecoration(
                     hintText: chatState.isLoading 
                         ? 'Thinking...' 
-                        : (chatState.isBrainstormMode 
+                        : (settings.aiMode == AiMode.brainstorm 
                             ? 'Directly message Sift...'
                             : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...')),
                     filled: true,
@@ -458,10 +450,10 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                         : IconButton(
                             icon: const Icon(Icons.arrow_upward_rounded, size: 20),
                             style: IconButton.styleFrom(
-                              backgroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) 
+                              backgroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || settings.aiMode == AiMode.brainstorm)) 
                                   ? theme.colorScheme.primary 
                                   : Colors.transparent,
-                              foregroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) 
+                              foregroundColor: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || settings.aiMode == AiMode.brainstorm)) 
                                   ? theme.colorScheme.onPrimary 
                                   : theme.colorScheme.onSurfaceVariant.withAlpha(100),
                               minimumSize: const Size(40, 40),
@@ -469,12 +461,12 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                               padding: EdgeInsets.zero,
                               shape: const CircleBorder(),
                             ),
-                            onPressed: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || chatState.isBrainstormMode)) ? _sendMessage : null,
+                            onPressed: ((_hasText || _attachments.isNotEmpty) && (collectionState.hasDocuments || settings.aiMode == AiMode.brainstorm)) ? _sendMessage : null,
                           ),
                     ),
                   ),
                   onSubmitted: (_) {
-                    if (collectionState.hasDocuments || chatState.isBrainstormMode) _sendMessage();
+                    if (collectionState.hasDocuments || settings.aiMode == AiMode.brainstorm) _sendMessage();
                   },
                 ),
               ),
@@ -529,6 +521,19 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
     );
   }
 
+  void _cycleAiMode(SettingsState settings, SettingsController notifier) {
+    List<AiMode> modes = AiMode.values.toList();
+    if (settings.isMobileInternal) {
+      // Skip research mode on mobile internal
+      modes = AiMode.values.where((m) => m != AiMode.research).toList();
+    }
+    
+    final currentIndex = modes.indexOf(settings.aiMode);
+    // Fallback if current mode isn't in filtered list
+    final safeIndex = currentIndex == -1 ? 0 : currentIndex;
+    final nextIndex = (safeIndex + 1) % modes.length;
+    notifier.updateAiMode(modes[nextIndex]);
+  }
 
   IconData _getGraphGeneratorIcon(GraphGeneratorMode mode) {
     switch (mode) {

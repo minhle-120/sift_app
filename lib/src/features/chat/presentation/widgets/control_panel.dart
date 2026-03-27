@@ -24,11 +24,7 @@ class ControlPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          _buildBrainstormCard(
-            context,
-            settings.isBrainstormMode,
-            (value) => settingsNotifier.updateBrainstormMode(value),
-          ),
+          _buildAiModeSelector(context, settings, settingsNotifier),
 
           const SizedBox(height: 32),
           
@@ -37,7 +33,7 @@ class ControlPanel extends ConsumerWidget {
             title: 'Graph Generator',
             icon: Icons.hub_rounded,
             description: _getGraphGeneratorDescription(settings.graphGeneratorMode),
-            isEnabled: !settings.isBrainstormMode,
+            isEnabled: settings.aiMode == AiMode.research,
             child: _buildGraphGeneratorToggles(settings, settingsNotifier, theme),
           ),
           
@@ -48,7 +44,7 @@ class ControlPanel extends ConsumerWidget {
             title: 'Code',
             icon: Icons.terminal_rounded,
             description: _getCoderDescription(settings.coderMode),
-            isEnabled: !settings.isBrainstormMode,
+            isEnabled: settings.aiMode == AiMode.research,
             child: _buildCoderToggles(settings, settingsNotifier, theme),
           ),
           
@@ -59,7 +55,7 @@ class ControlPanel extends ConsumerWidget {
             title: 'Flashcard',
             icon: Icons.psychology_rounded,
             description: _getFlashcardDescription(settings.flashcardMode),
-            isEnabled: !settings.isBrainstormMode,
+            isEnabled: settings.aiMode == AiMode.research,
             child: _buildFlashcardToggles(settings, settingsNotifier, theme),
           ),
           
@@ -70,7 +66,7 @@ class ControlPanel extends ConsumerWidget {
             title: 'Canvas',
             icon: Icons.auto_awesome_mosaic_rounded,
             description: _getInteractiveCanvasDescription(settings.interactiveCanvasMode),
-            isEnabled: !settings.isBrainstormMode,
+            isEnabled: settings.aiMode == AiMode.research,
             child: _buildInteractiveCanvasToggles(settings, settingsNotifier, theme),
           ),
           
@@ -102,53 +98,140 @@ class ControlPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildBrainstormCard(
-    BuildContext context,
-    bool isEnabled,
-    ValueChanged<bool> onChanged,
-  ) {
+  Widget _buildAiModeSelector(BuildContext context, SettingsState settings, SettingsController notifier) {
     final theme = Theme.of(context);
     
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: isEnabled 
-            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.2) 
-            : theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isEnabled 
-              ? theme.colorScheme.primary.withValues(alpha: 0.3)
-              : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildModeOption(
+          context,
+          title: 'Research Mode',
+          subtitle: 'Exhaustive search and synthesis. Automatically coordinates specialized tools like Graph Generator and Coder.',
+          icon: Icons.manage_search_rounded,
+          value: AiMode.research,
+          groupValue: settings.aiMode,
+          onChanged: settings.isMobileInternal ? null : (v) => notifier.updateAiMode(v!),
+          theme: theme,
         ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Brainstorm Mode',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: isEnabled ? theme.colorScheme.primary : null,
-                  ),
-                ),
-                Text(
-                  'Prioritize creative ideation and exploration.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+        const SizedBox(height: 12),
+        _buildModeOption(
+          context,
+          title: 'Lite Mode',
+          subtitle: 'Direct and fast single-search RAG. Skips iterative reasoning and specialized tools.',
+          icon: Icons.flash_on_rounded,
+          value: AiMode.lite,
+          groupValue: settings.aiMode,
+          onChanged: (v) => notifier.updateAiMode(v!),
+          theme: theme,
+        ),
+        const SizedBox(height: 12),
+        _buildModeOption(
+          context,
+          title: 'Brainstorm Mode',
+          subtitle: 'Pure LLM knowledge base. Bypasses your local documents entirely. Best for creative unconstrained ideation.',
+          icon: Icons.lightbulb_outline_rounded,
+          value: AiMode.brainstorm,
+          groupValue: settings.aiMode,
+          onChanged: (v) => notifier.updateAiMode(v!),
+          theme: theme,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildModeOption(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required AiMode value,
+    required AiMode groupValue,
+    required ValueChanged<AiMode?>? onChanged,
+    required ThemeData theme,
+  }) {
+    final isSelected = value == groupValue;
+    final isDisabled = onChanged == null;
+    
+    return InkWell(
+      onTap: isDisabled ? null : () => onChanged(value),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.2)
+              : theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isDisabled 
+                  ? theme.disabledColor
+                  : (isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
+              size: 28,
             ),
-          ),
-          Switch(
-            value: isEnabled,
-            onChanged: onChanged,
-          ),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isDisabled 
+                          ? theme.disabledColor
+                          : (isSelected ? theme.colorScheme.primary : null),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isDisabled ? theme.disabledColor : theme.colorScheme.onSurfaceVariant,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected 
+                      ? theme.colorScheme.primary 
+                      : (isDisabled ? theme.disabledColor : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                  width: 2,
+                ),
+              ),
+              child: isSelected
+                  ? Center(
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+          ],
+        ),
       ),
     );
   }

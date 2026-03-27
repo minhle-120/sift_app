@@ -14,6 +14,7 @@ import '../../../../../core/services/embedding_platform_service.dart';
 
 enum BackendType { external, internal }
 enum ModelBundleSize { standard4B, fast2B }
+enum AiMode { research, lite, brainstorm }
 
 class SettingsState {
   final String llamaServerUrl;
@@ -82,7 +83,7 @@ class SettingsState {
   final double mobileBundleProgress;
   final String mobileBundleStatus;
   final bool isMobileBundleInstalled;
-  final bool isBrainstormMode;
+  final AiMode aiMode;
   final ModelBundleSize selectedBundleSize;
 
   const SettingsState({
@@ -144,7 +145,7 @@ class SettingsState {
     this.mobileBundleProgress = 0.0,
     this.mobileBundleStatus = '',
     this.isMobileBundleInstalled = false,
-    this.isBrainstormMode = false,
+    this.aiMode = AiMode.research,
     this.selectedBundleSize = ModelBundleSize.standard4B,
   });
 
@@ -218,7 +219,7 @@ class SettingsState {
     double? mobileBundleProgress,
     String? mobileBundleStatus,
     bool? isMobileBundleInstalled,
-    bool? isBrainstormMode,
+    AiMode? aiMode,
     ModelBundleSize? selectedBundleSize,
   }) {
     return SettingsState(
@@ -280,7 +281,7 @@ class SettingsState {
       mobileBundleProgress: mobileBundleProgress ?? this.mobileBundleProgress,
       mobileBundleStatus: mobileBundleStatus ?? this.mobileBundleStatus,
       isMobileBundleInstalled: isMobileBundleInstalled ?? this.isMobileBundleInstalled,
-      isBrainstormMode: isBrainstormMode ?? this.isBrainstormMode,
+      aiMode: aiMode ?? this.aiMode,
       selectedBundleSize: selectedBundleSize ?? this.selectedBundleSize,
     );
   }
@@ -342,7 +343,10 @@ class SettingsController extends StateNotifier<SettingsState> {
       mobileTokenizerPath: prefs.getString('mobileTokenizerPath') ?? '',
       mobileUseGpu: prefs.getBool('mobileUseGpu') ?? false,
       autoInitMobileEngine: prefs.getBool('autoInitMobileEngine') ?? true,
-      isBrainstormMode: prefs.getBool('isBrainstormMode') ?? false,
+      aiMode: AiMode.values.firstWhere(
+        (e) => e.toString() == (prefs.getString('aiMode') ?? 'AiMode.research'),
+        orElse: () => AiMode.research,
+      ),
       selectedBundleSize: ModelBundleSize.values[prefs.getInt('selectedBundleSize') ?? 0],
     );
     
@@ -837,10 +841,10 @@ class SettingsController extends StateNotifier<SettingsState> {
     state = state.copyWith(isSyncEnabled: enabled);
   }
 
-  Future<void> updateBrainstormMode(bool value) async {
+  Future<void> updateAiMode(AiMode mode) async {
     final prefs = await PortableSettings.getInstance();
-    await prefs.setBool('isBrainstormMode', value);
-    state = state.copyWith(isBrainstormMode: value);
+    await prefs.setString('aiMode', mode.toString());
+    state = state.copyWith(aiMode: mode);
   }
 
   Future<void> updateGraphGeneratorMode(GraphGeneratorMode mode) async {

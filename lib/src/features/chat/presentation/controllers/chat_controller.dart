@@ -14,7 +14,7 @@ import 'package:sift_app/src/features/chat/presentation/controllers/settings_con
 import 'package:sift_app/core/models/ai_models.dart' as ai;
 import 'package:sift_app/core/services/openai_service.dart';
 import 'package:sift_app/core/services/model_platform_service.dart';
-import 'package:sift_app/core/services/embedding_platform_service.dart';
+import 'package:sift_app/core/services/embedding_service.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
@@ -27,7 +27,7 @@ class ChatState {
   final String? researchStatus;
   final bool isConnectionValid;
   final String? connectionError;
-  final bool isBrainstormMode;
+
 
   const ChatState({
     this.isLoading = false,
@@ -37,7 +37,6 @@ class ChatState {
     this.researchStatus,
     this.isConnectionValid = true,
     this.connectionError,
-    this.isBrainstormMode = false,
   });
 
   ChatState copyWith({
@@ -59,7 +58,6 @@ class ChatState {
       researchStatus: researchStatus ?? this.researchStatus,
       isConnectionValid: isConnectionValid ?? this.isConnectionValid,
       connectionError: connectionError ?? this.connectionError,
-      isBrainstormMode: isBrainstormMode ?? this.isBrainstormMode,
     );
   }
 }
@@ -72,9 +70,7 @@ class ChatController extends StateNotifier<ChatState> {
   bool _isAiProcessing = false;
   bool _isCanceled = false;
 
-  ChatController(this._db, this._ref) : super(ChatState(
-    isBrainstormMode: _ref.read(settingsProvider).isBrainstormMode,
-  )) {
+  ChatController(this._db, this._ref) : super(const ChatState()) {
     // Initial check
     checkAiConnection();
     
@@ -84,21 +80,16 @@ class ChatController extends StateNotifier<ChatState> {
       final modelChanged = previous?.chatModel != next.chatModel;
       final serverStarted = previous?.isServerRunning == false && next.isServerRunning == true;
       final modelsLoaded = previous?.isLoadingModels == true && next.isLoadingModels == false;
-      final brainstormModeChanged = previous?.isBrainstormMode != next.isBrainstormMode;
 
       if (urlChanged || modelChanged || serverStarted || modelsLoaded) {
         checkAiConnection();
       }
 
-      if (brainstormModeChanged) {
-        state = state.copyWith(isBrainstormMode: next.isBrainstormMode);
-      }
-
-      // Safeguard: If we are on mobile internal, we must NOT be in brainstorm mode.
-      if (next.isMobileInternal && state.isBrainstormMode) {
+      // Safeguard: If we are on mobile internal, we must NOT be in research mode.
+      if (next.isMobileInternal && next.aiMode == AiMode.research) {
         // Use Future.microtask to avoid state mutation during the listener callback
         Future.microtask(() {
-          _ref.read(settingsProvider.notifier).updateBrainstormMode(false);
+          _ref.read(settingsProvider.notifier).updateAiMode(AiMode.lite);
         });
       }
     });
@@ -207,12 +198,6 @@ class ChatController extends StateNotifier<ChatState> {
     }
   }
 
-  Future<void> toggleBrainstormMode() async {
-    final newValue = !state.isBrainstormMode;
-    state = state.copyWith(isBrainstormMode: newValue);
-    // Update global settings
-    await _ref.read(settingsProvider.notifier).updateBrainstormMode(newValue);
-  }
 
   Future<void> deleteConversation(int id) async {
     await _db.deleteConversation(id);
@@ -460,12 +445,11 @@ class ChatController extends StateNotifier<ChatState> {
 
       final chatHistory = await chatOrchestrator.buildHistory(
         effectiveHistory,
-        limit: state.isBrainstormMode ? null : 8,
+        limit: settings.aiMode == AiMode.brainstorm ? null : 8,
       );
 
-      // --- BRANCH: Brainstorm Mode (Simple Mode) ---
       // Force Lite Mode (RAG) on mobile internal even if brainstorm is somehow true
-      if (state.isBrainstormMode && !isMobileInternal) {
+      if (settings.aiMode == AiMode.brainstorm && !isMobileInternal) {
         final brainstormOrchestrator = _ref.read(brainstormOrchestratorProvider);
         state = state.copyWith(researchStatus: 'Brainstorming...');
         
@@ -503,9 +487,9 @@ class ChatController extends StateNotifier<ChatState> {
 
       state = state.copyWith(researchStatus: isMobileInternal ? 'Searching...' : 'Initializing research...');
 
-      // --- BRANCH: Mobile Lite-RAG vs Desktop Orchestrator ---
-      if (isMobileInternal) {
-        await _handleMobileLiteRag(query, activeCollectionId!, placeholderMessage, chatHistory);
+      // --- BRANCH: Lite-RAG vs Desktop Research Orchestrator ---
+      if (isMobileInternal || settings.aiMode == AiMode.lite) {
+        await _handleLiteRag(query, activeCollectionId!, placeholderMessage, chatHistory);
         return;
       }
 
@@ -796,21 +780,22 @@ class ChatController extends StateNotifier<ChatState> {
   void copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
   }
-  Future<void> _handleMobileLiteRag(
+  Future<void> _handleLiteRag(
     String query,
     int collectionId,
     Message placeholderMessage,
     List<ai.ChatMessage> history,
   ) async {
-    try {
-      final embedPlatform = _ref.read(embeddingPlatformServiceProvider);
-      final modelPlatform = _ref.read(modelPlatformServiceProvider);
-      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
+    final settings = _ref.read(settingsProvider);
+    final isMobileInternal = settings.isMobileInternal;
+    
+    try {      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
 
       // 1. Vector Search
       state = state.copyWith(researchStatus: 'Generating embedding...');
-      final List<dynamic> embeddingResult = await embedPlatform.getEmbeddings(query);
-      final List<double> queryVector = embeddingResult.cast<double>();
+      final embedService = _ref.read(embeddingServiceProvider);
+      final List<List<double>> embeddingResult = await embedService.getEmbeddings([query]);
+      final List<double> queryVector = embeddingResult.first;
 
       state = state.copyWith(researchStatus: 'Searching database...');
       final searchResults = await _db.vectorSearch(
@@ -867,42 +852,68 @@ class ChatController extends StateNotifier<ChatState> {
 
       state = state.copyWith(researchStatus: 'Generating answer...');
       
-      // 4. Native Generation
-      // Reset first to ensure we don't have double-history (native + our injection)
-      await modelPlatform.resetConversation();
-      Completer<void> completer = Completer();
-      String finalContent = '';
-      
-      StreamSubscription? sub;
-      sub = modelPlatform.responseStream.listen((event) async {
-        final type = event['type'] as String?;
-        final text = event['text'] as String?;
+      if (isMobileInternal) {
+        // --- 4a. Native Generation (Mobile Internal) ---
+        final modelPlatform = _ref.read(modelPlatformServiceProvider);
+        // Reset first to ensure we don't have double-history (native + our injection)
+        await modelPlatform.resetConversation();
+        Completer<void> completer = Completer();
+        String finalContent = '';
         
-        if (type == 'partial' && text != null) {
-          // Robust token handling: If the native side sends the full accumulated response,
-          // we use it. If it sends deltas, we append. 
-          // (LiteRT LTM usually sends deltas, but some MediaPipe GenAI versions send full string)
-          if (text.length > finalContent.length && text.startsWith(finalContent)) {
-            finalContent = text;
-          } else {
-            finalContent += text;
+        StreamSubscription? sub;
+        sub = modelPlatform.responseStream.listen((event) async {
+          final type = event['type'] as String?;
+          final text = event['text'] as String?;
+          
+          if (type == 'partial' && text != null) {
+            if (text.length > finalContent.length && text.startsWith(finalContent)) {
+              finalContent = text;
+            } else {
+              finalContent += text;
+            }
+            _db.updateMessageContent(placeholderMessage.id, finalContent);
+          } else if (type == 'done') {
+            sub?.cancel();
+            completer.complete();
+          } else if (type == 'error') {
+            sub?.cancel();
+            completer.completeError(event['error'] ?? 'Unknown native error');
           }
-          _db.updateMessageContent(placeholderMessage.id, finalContent);
-        } else if (type == 'done') {
-          sub?.cancel();
-          completer.complete();
-        } else if (type == 'error') {
-          sub?.cancel();
-          completer.completeError(event['error'] ?? 'Unknown native error');
+        });
+
+        await modelPlatform.generateResponse(
+          combinedUserMessage,
+          systemInstruction: systemPrompt,
+        );
+
+        await completer.future;
+      } else {
+        // --- 4b. AI Service Generation (Desktop / External) ---
+        final aiService = _ref.read(aiServiceProvider);
+        
+        final messages = [
+          ai.ChatMessage(role: ai.ChatRole.system, content: systemPrompt),
+          // For Lite Mode on powerful backends, we can afford a bit more history if available
+          ...history,
+          ai.ChatMessage(role: ai.ChatRole.user, content: combinedUserMessage),
+        ];
+
+        String finalContent = '';
+        String finalReasoning = '';
+        final stream = aiService.streamChat(messages);
+
+        await for (final chunk in stream) {
+          if (_isCanceled) break;
+          if (chunk.reasoningContent != null) {
+            finalReasoning += chunk.reasoningContent!;
+            _db.updateMessageReasoning(placeholderMessage.id, finalReasoning);
+          }
+          if (chunk.content != null) {
+            finalContent += chunk.content!;
+            _db.updateMessageContent(placeholderMessage.id, finalContent);
+          }
         }
-      });
-
-      await modelPlatform.generateResponse(
-        combinedUserMessage,
-        systemInstruction: systemPrompt,
-      );
-
-      await completer.future;
+      }
     } catch (e) {
       _db.updateMessageContent(placeholderMessage.id, "Error: $e");
       rethrow;
