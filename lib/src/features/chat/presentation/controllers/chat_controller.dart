@@ -714,6 +714,8 @@ class ChatController extends StateNotifier<ChatState> {
           if (researchResult.codeSnippet != null) 'code_snippet': researchResult.codeSnippet,
           if (researchResult.codeTitle != null) 'code_title': researchResult.codeTitle,
           if (researchResult.canvasHtml != null) 'canvas_html': researchResult.canvasHtml,
+          if (researchResult.flashcardResult != null) 'cards': researchResult.flashcardResult,
+          if (researchResult.flashcardTitle != null) 'flashcard_title': researchResult.flashcardTitle,
         };
 
         await _db.updateMessageMetadata(
