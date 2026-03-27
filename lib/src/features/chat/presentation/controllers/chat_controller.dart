@@ -49,13 +49,14 @@ class ChatState {
     String? connectionError,
     bool? isBrainstormMode,
     bool clearConversationId = false,
+    bool clearResearchStatus = false,
   }) {
     return ChatState(
       isLoading: isLoading ?? this.isLoading,
       messages: messages ?? this.messages,
       error: error,
       conversationId: clearConversationId ? null : (conversationId ?? this.conversationId),
-      researchStatus: researchStatus ?? this.researchStatus,
+      researchStatus: clearResearchStatus ? null : (researchStatus ?? this.researchStatus),
       isConnectionValid: isConnectionValid ?? this.isConnectionValid,
       connectionError: connectionError ?? this.connectionError,
     );
@@ -154,6 +155,7 @@ class ChatController extends StateNotifier<ChatState> {
     _messagesSubscription?.cancel();
     state = state.copyWith(
       clearConversationId: true,
+      clearResearchStatus: true,
       messages: [],
       error: null,
     );
@@ -161,7 +163,11 @@ class ChatController extends StateNotifier<ChatState> {
 
   Future<void> loadConversation(int conversationId) async {
     _messagesSubscription?.cancel();
-    state = state.copyWith(isLoading: true, conversationId: conversationId);
+    state = state.copyWith(
+      isLoading: true, 
+      conversationId: conversationId,
+      clearResearchStatus: true,
+    );
     
     try {
       // 1. Load conversation metadata to restore mode
@@ -318,7 +324,7 @@ class ChatController extends StateNotifier<ChatState> {
        state = state.copyWith(isLoading: false, error: "Regeneration failed: $e");
     } finally {
       _isAiProcessing = false;
-      state = state.copyWith(isLoading: false, researchStatus: null);
+      state = state.copyWith(isLoading: false, clearResearchStatus: true);
     }
   }
 
@@ -400,10 +406,10 @@ class ChatController extends StateNotifier<ChatState> {
       );
 
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: "Failed to process research: $e", researchStatus: null);
+      state = state.copyWith(isLoading: false, error: "Failed to process research: $e", clearResearchStatus: true);
     } finally {
       _isAiProcessing = false;
-      state = state.copyWith(isLoading: false, researchStatus: null);
+      state = state.copyWith(isLoading: false, clearResearchStatus: true);
     }
   }
 
@@ -451,7 +457,7 @@ class ChatController extends StateNotifier<ChatState> {
       // Force Lite Mode (RAG) on mobile internal even if brainstorm is somehow true
       if (settings.aiMode == AiMode.brainstorm && !isMobileInternal) {
         final brainstormOrchestrator = _ref.read(brainstormOrchestratorProvider);
-        state = state.copyWith(researchStatus: null); // Was "Brainstorming..."
+        state = state.copyWith(clearResearchStatus: true); // Was "Brainstorming..."
         
         String finalContent = '';
         String finalReasoning = '';
@@ -478,14 +484,14 @@ class ChatController extends StateNotifier<ChatState> {
           }
         }
 
-        state = state.copyWith(isLoading: false, researchStatus: null);
+        state = state.copyWith(isLoading: false, clearResearchStatus: true);
         return;
       }
 
       // --- BRANCH: RAG Research Mode ---
       final researchHistory = researchOrchestrator.buildHistory(effectiveHistory);
 
-      state = state.copyWith(researchStatus: null); // Was "Searching..." / "Initializing research..."
+      state = state.copyWith(clearResearchStatus: true); // Was "Searching..." / "Initializing research..."
 
       // --- BRANCH: Lite-RAG vs Desktop Research Orchestrator ---
       if (isMobileInternal || settings.aiMode == AiMode.lite) {
@@ -561,7 +567,7 @@ class ChatController extends StateNotifier<ChatState> {
         await _db.updateMessageContent(placeholderMessage.id, reason);
         await _db.updateMessageMetadata(placeholderMessage.id, metadata: jsonEncode(metadata));
 
-        state = state.copyWith(isLoading: false, researchStatus: null);
+        state = state.copyWith(isLoading: false, clearResearchStatus: true);
         return;
       }
 
@@ -653,7 +659,7 @@ class ChatController extends StateNotifier<ChatState> {
           citations: jsonEncode(citationData),
         );
 
-        state = state.copyWith(researchStatus: null); // Was "Synthesizing..."
+        state = state.copyWith(clearResearchStatus: true); // Was "Synthesizing..."
 
         
         String finalContent = '';
@@ -765,10 +771,10 @@ class ChatController extends StateNotifier<ChatState> {
         }
       }
 
-      state = state.copyWith(isLoading: false, researchStatus: null);
+      state = state.copyWith(isLoading: false, clearResearchStatus: true);
       
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: "Failed to process research: $e", researchStatus: null);
+      state = state.copyWith(isLoading: false, error: "Failed to process research: $e", clearResearchStatus: true);
     } finally {
       _isAiProcessing = false;
     }
@@ -794,12 +800,12 @@ class ChatController extends StateNotifier<ChatState> {
     try {      final chatOrchestrator = _ref.read(chatOrchestratorProvider);
 
       // 1. Vector Search
-      state = state.copyWith(researchStatus: null); // Was "Generating embedding..."
+      state = state.copyWith(clearResearchStatus: true); // Was "Generating embedding..."
       final embedService = _ref.read(embeddingServiceProvider);
       final List<List<double>> embeddingResult = await embedService.getEmbeddings([query]);
       final List<double> queryVector = embeddingResult.first;
 
-      state = state.copyWith(researchStatus: null); // Was "Searching database..."
+      state = state.copyWith(clearResearchStatus: true); // Was "Searching database..."
       final searchResults = await _db.vectorSearch(
         collectionId: collectionId,
         queryEmbedding: queryVector,
@@ -852,7 +858,7 @@ class ChatController extends StateNotifier<ChatState> {
       debugPrint('USER PROMPT:\n$combinedUserMessage');
       debugPrint('================================');
 
-      state = state.copyWith(researchStatus: null); // Was "Generating answer..."
+      state = state.copyWith(clearResearchStatus: true); // Was "Generating answer..."
       
       if (isMobileInternal) {
         // --- 4a. Native Generation (Mobile Internal) ---

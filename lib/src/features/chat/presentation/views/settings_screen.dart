@@ -72,7 +72,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               ButtonSegment<BackendType>(
                 value: BackendType.internal,
-                label: Text('Internal (Bundled)'),
+                label: Text('Internal'),
                 icon: Icon(Icons.memory),
               ),
             ],

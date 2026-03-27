@@ -65,7 +65,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 _buildOptionCard(
                   theme: theme,
                   icon: Icons.memory,
-                  title: (Platform.isAndroid || Platform.isIOS) ? 'Native Mobile AI' : 'Internal (Bundled)',
+                  title: (Platform.isAndroid || Platform.isIOS) ? 'Native Mobile AI' : 'Internal',
                   description: (Platform.isAndroid || Platform.isIOS) 
                     ? 'Run AI locally using LiteRT and MediaPipe. High performance, zero data leaving device.'
                     : 'Download and run llama.cpp locally. Everything stays on your device.',

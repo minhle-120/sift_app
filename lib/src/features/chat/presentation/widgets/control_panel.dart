@@ -107,7 +107,9 @@ class ControlPanel extends ConsumerWidget {
         _buildModeOption(
           context,
           title: 'Research Mode',
-          subtitle: 'Exhaustive search and synthesis. Automatically coordinates specialized tools like Graph Generator and Coder.',
+          subtitle: settings.isMobileInternal 
+              ? 'Exhaustive research is currently not supported for the internal Mobile AI engine.'
+              : 'Exhaustive search and synthesis. Automatically coordinates specialized tools like Graph Generator and Coder.',
           icon: Icons.manage_search_rounded,
           value: AiMode.research,
           groupValue: settings.aiMode,
@@ -129,11 +131,13 @@ class ControlPanel extends ConsumerWidget {
         _buildModeOption(
           context,
           title: 'Brainstorm Mode',
-          subtitle: 'Pure LLM knowledge base. Bypasses your local documents entirely. Best for creative unconstrained ideation.',
+          subtitle: settings.isMobileInternal 
+              ? 'Pure LLM knowledge base (Disabled on Mobile Internal AI).'
+              : 'Pure LLM knowledge base. Bypasses your local documents entirely. Best for creative unconstrained ideation.',
           icon: Icons.lightbulb_outline_rounded,
           value: AiMode.brainstorm,
           groupValue: settings.aiMode,
-          onChanged: (v) => notifier.updateAiMode(v!),
+          onChanged: settings.isMobileInternal ? null : (v) => notifier.updateAiMode(v!),
           theme: theme,
         ),
       ],
