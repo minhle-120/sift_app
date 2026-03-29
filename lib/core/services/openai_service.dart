@@ -80,60 +80,78 @@ class OpenAiService implements IAiService {
     final settings = _ref.read(settingsProvider);
     final baseUrl = settings.llamaServerUrl;
     final model = settings.chatModel;
+    final cancelToken = CancelToken();
 
-    final response = await _dio.post(
-      '$baseUrl/v1/chat/completions',
-      data: {
-        'model': model,
-        'messages': messages.map((m) => m.toJson()).toList(),
-        'stream': true,
-      },
-      options: Options(
-        responseType: ResponseType.stream,
-        receiveTimeout: const Duration(minutes: 5),
-        sendTimeout: const Duration(seconds: 30),
-      ),
-    );
+    try {
+      final response = await _dio.post(
+        '$baseUrl/v1/chat/completions',
+        data: {
+          'model': model,
+          'messages': messages.map((m) => m.toJson()).toList(),
+          'stream': true,
+        },
+        options: Options(
+          responseType: ResponseType.stream,
+          receiveTimeout: const Duration(minutes: 5),
+          sendTimeout: const Duration(seconds: 30),
+        ),
+        cancelToken: cancelToken,
+      );
 
-    if (response.statusCode == 200) {
-      final Stream<List<int>> stream = response.data.stream;
-      String buffer = '';
+      if (response.statusCode == 200) {
+        final Stream<List<int>> stream = response.data.stream;
+        String buffer = '';
 
-      // Use bind and cast to avoid Uint8List vs List<int> type conflicts in transform()
-      final decodedStream = utf8.decoder.bind(stream.cast<List<int>>());
+        // Use bind and cast to avoid Uint8List vs List<int> type conflicts in transform()
+        final decodedStream = utf8.decoder.bind(stream.cast<List<int>>());
 
-      await for (final text in decodedStream) {
-        buffer += text;
+        await for (final text in decodedStream) {
+          // Check for cancellation from UI (e.g. Stop button)
+          if (isCanceled != null && isCanceled()) {
+            cancelToken.cancel('User canceled');
+            break;
+          }
 
-        while (buffer.contains('\n')) {
-          final index = buffer.indexOf('\n');
-          final line = buffer.substring(0, index).trim();
-          buffer = buffer.substring(index + 1);
+          buffer += text;
 
-          if (line.startsWith('data: ')) {
-            final data = line.substring(6);
-            if (data == '[DONE]') break;
+          while (buffer.contains('\n')) {
+            final index = buffer.indexOf('\n');
+            final line = buffer.substring(0, index).trim();
+            buffer = buffer.substring(index + 1);
 
-            try {
-              final json = jsonDecode(data);
-              final delta = json['choices'][0]['delta'];
-              final content = delta['content'] as String?;
-              final reasoningContent = delta['reasoning_content'] as String?;
-              
-              if ((content != null && content.isNotEmpty) || (reasoningContent != null && reasoningContent.isNotEmpty)) {
-                yield ChatStreamChunk(
-                  content: content,
-                  reasoningContent: reasoningContent,
-                );
+            if (line.startsWith('data: ')) {
+              final data = line.substring(6);
+              if (data == '[DONE]') break;
+
+              try {
+                final json = jsonDecode(data);
+                final delta = json['choices'][0]['delta'];
+                final content = delta['content'] as String?;
+                final reasoningContent = delta['reasoning_content'] as String?;
+                
+                if ((content != null && content.isNotEmpty) || (reasoningContent != null && reasoningContent.isNotEmpty)) {
+                  yield ChatStreamChunk(
+                    content: content,
+                    reasoningContent: reasoningContent,
+                  );
+                }
+              } catch (e) {
+                // Ignore invalid JSON chunks (often headers or partial chunks)
               }
-            } catch (e) {
-              // Ignore invalid JSON chunks (often headers or partial chunks)
             }
           }
         }
+      } else {
+        throw Exception('OpenAI Streaming Service Error: ${response.statusCode}');
       }
-    } else {
-      throw Exception('OpenAI Streaming Service Error: ${response.statusCode}');
+    } on DioException catch (e) {
+      if (CancelToken.isCancel(e)) {
+        // Silently close the stream on cancellation
+        return;
+      }
+      rethrow;
+    } catch (e) {
+      rethrow;
     }
   }
 
