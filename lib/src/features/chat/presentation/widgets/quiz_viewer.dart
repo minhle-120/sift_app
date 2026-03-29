@@ -313,7 +313,6 @@ class _QuizViewerState extends State<QuizViewer> {
     
     Color backgroundColor = theme.colorScheme.surfaceContainerLow;
     Color borderColor = theme.colorScheme.outlineVariant.withValues(alpha: 0.5);
-    Color textColor = theme.colorScheme.onSurface;
     IconData? icon;
 
     if (hasAnswered) {

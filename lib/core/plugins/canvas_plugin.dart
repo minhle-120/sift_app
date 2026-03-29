@@ -66,7 +66,6 @@ class CanvasPlugin extends AgentPlugin {
     required String userQuery,
     required String fullContext,
     required ChunkRegistry registry,
-    Map<String, dynamic>? currentTabMetadata,
   }) async {
     final indices = List<int>.from(toolArgs['indices'] ?? []);
     final goal = toolArgs['canvasGoal'] as String? ?? 'Generate interactive canvas';
@@ -87,9 +86,16 @@ class CanvasPlugin extends AgentPlugin {
   }
 
   @override
-  String getSynthesisInjection(PluginResult result) {
-    if (result.resultData == null) return '';
-    return '### INTERACTIVE_CANVAS\n${result.resultData}\n(Note: This interactive HTML/SVG component has been displayed in a separate tab. Acknowledge this in your response.)\n\n';
+  ArtifactContent getArtifactContent(PluginResult result) {
+    final html = result.resultData as String?;
+    if (html == null || html.isEmpty) {
+      return ArtifactContent(type: 'INTERACTIVE_CANVAS', body: 'No content generated.');
+    }
+
+    return ArtifactContent(
+      type: 'INTERACTIVE_CANVAS',
+      body: html,
+    );
   }
 
   @override

@@ -42,8 +42,6 @@ class CodeOrchestrator {
     required CodePackage package,
     required ChunkRegistry registry,
     String? fullContext,
-    String? currentCode,
-    String? currentCodeTitle,
   }) async {
     // 1. Resolve Chunks
     final List<String> resolvedChunks = [];
@@ -60,17 +58,6 @@ class CodeOrchestrator {
     if (fullContext != null) {
       contentBuffer.writeln('### CONVERSATION HISTORY');
       contentBuffer.writeln(fullContext);
-      contentBuffer.writeln();
-    }
-
-    if (currentCode != null) {
-      if (currentCodeTitle != null) {
-        contentBuffer.writeln('### FILE TO UPDATE');
-        contentBuffer.writeln('Title: $currentCodeTitle');
-        contentBuffer.writeln();
-      }
-      contentBuffer.writeln('### CURRENT_CODE');
-      contentBuffer.writeln(currentCode);
       contentBuffer.writeln();
     }
 

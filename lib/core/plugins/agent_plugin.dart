@@ -17,6 +17,13 @@ class PluginResult {
   });
 }
 
+class ArtifactContent {
+  final String type;
+  final String body;
+
+  ArtifactContent({required this.type, required this.body});
+}
+
 abstract class AgentPlugin {
   String get id;
   String get name;
@@ -36,10 +43,9 @@ abstract class AgentPlugin {
     required String userQuery,
     required String fullContext,
     required ChunkRegistry registry,
-    Map<String, dynamic>? currentTabMetadata,
   });
 
-  String getSynthesisInjection(PluginResult result);
+  ArtifactContent getArtifactContent(PluginResult result);
 
   void onResult(PluginResult result, String messageId, Ref ref);
 

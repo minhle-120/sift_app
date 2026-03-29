@@ -61,7 +61,6 @@ class ResearchOrchestrator {
     required int collectionId,
     required String historicalContext,
     required String userQuery,
-    Map<String, dynamic>? currentTabMetadata,
     void Function(String status)? onStatusUpdate,
     bool Function()? isCanceled,
   }) async {
@@ -82,7 +81,9 @@ class ResearchOrchestrator {
 
     String finalUserQuery = userQuery;
     for (final plugin in activePlugins) {
-      finalUserQuery = '$finalUserQuery\n\n${plugin.mandate}';
+      if (settings.pluginModes[plugin.id] == PluginMode.on) {
+        finalUserQuery = '$finalUserQuery\n\n${plugin.mandate}';
+      }
     }
 
     final contextPrompt = historicalContext.isEmpty 
@@ -197,7 +198,6 @@ class ResearchOrchestrator {
               userQuery: userQuery,
               fullContext: cleanContext,
               registry: registry,
-              currentTabMetadata: currentTabMetadata,
             );
 
             pluginResults[plugin.toolName] = result;

@@ -72,7 +72,6 @@ class FlashcardOrchestrator {
     required FlashcardPackage package,
     required ChunkRegistry registry,
     String? fullContext,
-    List<Flashcard>? currentCards,
   }) async {
     // 1. Resolve Chunks
     final List<String> resolvedChunks = [];
@@ -89,12 +88,6 @@ class FlashcardOrchestrator {
     if (fullContext != null) {
       contentBuffer.writeln('### CONVERSATION HISTORY');
       contentBuffer.writeln(fullContext);
-      contentBuffer.writeln();
-    }
-
-    if (currentCards != null && currentCards.isNotEmpty) {
-      contentBuffer.writeln('### EXISTING FLASHCARDS');
-      contentBuffer.writeln(jsonEncode(currentCards.map((c) => c.toJson()).toList()));
       contentBuffer.writeln();
     }
 

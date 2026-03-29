@@ -193,7 +193,12 @@ class ChatOrchestrator {
       for (final entry in pluginResults.entries) {
         try {
           final plugin = plugins.firstWhere((p) => p.toolName == entry.key);
-          pluginInjections.write(plugin.getSynthesisInjection(entry.value));
+          final artifact = plugin.getArtifactContent(entry.value);
+          
+          pluginInjections.writeln('### ARTIFACT_CONTENT: ${artifact.type}');
+          pluginInjections.writeln(artifact.body);
+          pluginInjections.writeln('(Note: This artifact has been rendered and displayed to the user. Acknowledge its creation and synthesize the content above into your explanation. Do NOT reproduce the source data directly unless asked.)');
+          pluginInjections.writeln();
         } catch (_) {}
       }
     }

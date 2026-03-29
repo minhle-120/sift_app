@@ -66,24 +66,16 @@ class FlashcardPlugin extends AgentPlugin {
     required String userQuery,
     required String fullContext,
     required ChunkRegistry registry,
-    Map<String, dynamic>? currentTabMetadata,
   }) async {
     final List<dynamic> indicesRaw = toolArgs['indices'] ?? [];
     final List<int> indices = indicesRaw.map((e) => e as int).toList();
     final String studyGoal = toolArgs['studyGoal'] ?? 'General study';
     final package = FlashcardPackage(indices: indices, studyGoal: studyGoal);
 
-    List<Flashcard>? currentCards;
-    final dynamic cardsRaw = currentTabMetadata?['cards'];
-    if (cardsRaw is List) {
-      currentCards = cardsRaw.map((c) => Flashcard.fromJson(c as Map<String, dynamic>)).toList();
-    }
-
     final result = await _orchestrator.generateFlashcards(
       package: package,
       registry: registry,
       fullContext: fullContext,
-      currentCards: currentCards,
     );
 
     return PluginResult(
@@ -94,12 +86,25 @@ class FlashcardPlugin extends AgentPlugin {
       resultData: result,
     );
   }
-
   @override
-  String getSynthesisInjection(PluginResult result) {
+  ArtifactContent getArtifactContent(PluginResult result) {
     final data = result.resultData as FlashcardResult?;
-    if (data == null) return '';
-    return '### FLASHCARD_DECK\nTitle: ${data.title}\nCount: ${data.cards.length}\n(Note: This study deck has been generated. Acknowledge this in your response.)\n\n';
+    if (data == null || data.cards.isEmpty) {
+      return ArtifactContent(type: 'FLASHCARD_DECK', body: 'No flashcards generated.');
+    }
+
+    final buffer = StringBuffer();
+    buffer.writeln('Topic: ${data.title}');
+    for (int i = 0; i < data.cards.length; i++) {
+      final card = data.cards[i];
+      buffer.writeln('${i + 1}. Question: ${card.question}');
+      buffer.writeln('   Answer: ${card.answer}');
+    }
+
+    return ArtifactContent(
+      type: 'FLASHCARD_DECK',
+      body: buffer.toString().trim(),
+    );
   }
 
   @override
@@ -107,25 +112,8 @@ class FlashcardPlugin extends AgentPlugin {
     final data = result.resultData as FlashcardResult?;
     if (data == null) return;
 
-    final wb = ref.read(workbenchProvider);
-    final existingIndex = wb.tabs.indexWhere((t) => t.type == 'flashcards' && t.title == data.title);
-
     List<dynamic> finalCards = data.cards.map((c) => c.toJson()).toList();
     String targetId = 'cards_$messageId';
-
-    if (existingIndex != -1) {
-      final existingTab = wb.tabs[existingIndex];
-      targetId = existingTab.id;
-      final List<dynamic> currentCards = List.from(existingTab.metadata?['cards'] ?? []);
-      
-      final existingIds = currentCards.map((c) => c['id']).toSet();
-      for (final card in finalCards) {
-        if (!existingIds.contains(card['id'])) {
-          currentCards.add(card);
-        }
-      }
-      finalCards = currentCards;
-    }
 
     ref.read(workbenchProvider.notifier).addTab(
       WorkbenchTab(
@@ -135,6 +123,7 @@ class FlashcardPlugin extends AgentPlugin {
         type: 'flashcards',
         metadata: {
           'cards': finalCards,
+          'flashcard_title': data.title,
         },
       ),
     );

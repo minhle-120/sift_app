@@ -66,7 +66,6 @@ class CodePlugin extends AgentPlugin {
     required String userQuery,
     required String fullContext,
     required ChunkRegistry registry,
-    Map<String, dynamic>? currentTabMetadata,
   }) async {
     final indices = List<int>.from(toolArgs['indices'] ?? []);
     final goal = toolArgs['codingGoal'] as String? ?? 'Write code';
@@ -76,8 +75,6 @@ class CodePlugin extends AgentPlugin {
       package: package,
       registry: registry,
       fullContext: fullContext,
-      currentCode: currentTabMetadata?['code'],
-      currentCodeTitle: currentTabMetadata?['title'], // CodeOrchestrator uses currentCodeTitle
     );
 
     return PluginResult(
@@ -90,10 +87,16 @@ class CodePlugin extends AgentPlugin {
   }
 
   @override
-  String getSynthesisInjection(PluginResult result) {
+  ArtifactContent getArtifactContent(PluginResult result) {
     final data = result.resultData as CodeResult?;
-    if (data == null || data.codeSnippet.isEmpty) return '';
-    return '### WRITTEN_CODE\n${data.codeSnippet}\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n';
+    if (data == null || data.codeSnippet.isEmpty) {
+      return ArtifactContent(type: 'WRITTEN_CODE', body: 'No code generated.');
+    }
+
+    return ArtifactContent(
+      type: 'WRITTEN_CODE',
+      body: 'Title: ${data.title ?? "Generated Code"}\nCode:\n${data.codeSnippet}',
+    );
   }
 
   @override

@@ -332,17 +332,17 @@ class _GraphViewerState extends ConsumerState<GraphViewer> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         constraints: const BoxConstraints(maxWidth: 180),
         decoration: BoxDecoration(
-          color: isImportant ? theme.colorScheme.primaryContainer : theme.colorScheme.surface,
+          color: isImportant ? theme.colorScheme.primaryContainer : theme.colorScheme.secondaryContainer,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isImportant ? theme.colorScheme.primary : theme.colorScheme.outlineVariant,
+            color: isImportant ? theme.colorScheme.primary : theme.colorScheme.outline,
             width: isImportant ? 2 : 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -352,8 +352,8 @@ class _GraphViewerState extends ConsumerState<GraphViewer> {
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: isImportant ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSurface,
-            fontWeight: isImportant ? FontWeight.bold : FontWeight.w500,
+            color: isImportant ? theme.colorScheme.onPrimaryContainer : theme.colorScheme.onSecondaryContainer,
+            fontWeight: isImportant ? FontWeight.bold : FontWeight.w600,
             fontSize: 13,
           ),
         ),

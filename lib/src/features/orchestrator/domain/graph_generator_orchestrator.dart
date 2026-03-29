@@ -38,7 +38,6 @@ class GraphGeneratorOrchestrator {
     required GraphPackage package,
     required ChunkRegistry registry,
     String? fullContext,
-    String? currentGraphSchema,
   }) async {
     // 1. Resolve Chunks
     final List<String> resolvedChunks = [];
@@ -55,12 +54,6 @@ class GraphGeneratorOrchestrator {
     if (fullContext != null) {
       contentBuffer.writeln('### CONVERSATION HISTORY');
       contentBuffer.writeln(fullContext);
-      contentBuffer.writeln();
-    }
-
-    if (currentGraphSchema != null) {
-      contentBuffer.writeln('### CURRENT_GRAPH_SCHEMA');
-      contentBuffer.writeln(currentGraphSchema);
       contentBuffer.writeln();
     }
 

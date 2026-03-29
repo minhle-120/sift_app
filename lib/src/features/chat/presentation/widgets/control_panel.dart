@@ -31,22 +31,35 @@ class ControlPanel extends ConsumerWidget {
 
           const SizedBox(height: 32),
           
-          ...plugins.map((plugin) {
-            final mode = settings.pluginModes[plugin.id] ?? PluginMode.auto;
-            return Column(
+          _buildControlCard(
+            context,
+            title: 'Specialized Capabilities',
+            icon: Icons.extension_rounded,
+            isEnabled: settings.aiMode == AiMode.research,
+            child: Column(
               children: [
-                _buildControlCard(
-                  context,
-                  title: plugin.name,
-                  icon: plugin.icon,
-                  description: _getModeDescription(plugin, mode),
-                  isEnabled: settings.aiMode == AiMode.research,
-                  child: _buildPluginToggles(plugin, mode, settingsNotifier, theme),
-                ),
-                const SizedBox(height: 24),
+                ...plugins.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final plugin = entry.value;
+                  final mode = settings.pluginModes[plugin.id] ?? PluginMode.auto;
+                  
+                  return Column(
+                    children: [
+                      _buildPluginRow(context, plugin, mode, settingsNotifier, theme),
+                      if (index < plugins.length - 1)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(
+                            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+                            thickness: 0.5,
+                          ),
+                        ),
+                    ],
+                  );
+                }),
               ],
-            );
-          }),
+            ),
+          ),
           
           const SizedBox(height: 12),
         ],
@@ -87,7 +100,7 @@ class ControlPanel extends ConsumerWidget {
           title: 'Research Mode',
           subtitle: settings.isMobileInternal 
               ? 'Exhaustive research is currently not supported for the internal Mobile AI engine.'
-              : 'Exhaustive search and synthesis. Automatically coordinates specialized tools like Graph Generator and Coder.',
+              : 'Exhaustive search and synthesis. Automatically coordinates specialized tools like Graph and Coder.',
           icon: Icons.manage_search_rounded,
           value: AiMode.research,
           groupValue: settings.aiMode,
@@ -220,7 +233,6 @@ class ControlPanel extends ConsumerWidget {
     BuildContext context, {
     required String title,
     required IconData icon,
-    required String description,
     required Widget child,
     bool isEnabled = true,
   }) {
@@ -251,22 +263,6 @@ class ControlPanel extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               child,
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  description,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
-                    height: 1.4,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -274,27 +270,79 @@ class ControlPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildPluginToggles(AgentPlugin plugin, PluginMode currentMode, SettingsController notifier, ThemeData theme) {
-    return SegmentedButton<PluginMode>(
-      segments: const [
-        ButtonSegment(value: PluginMode.auto, label: Text('Auto')),
-        ButtonSegment(value: PluginMode.on, label: Text('On')),
-        ButtonSegment(value: PluginMode.off, label: Text('Off')),
+  Widget _buildPluginRow(
+    BuildContext context, 
+    AgentPlugin plugin, 
+    PluginMode currentMode, 
+    SettingsController notifier,
+    ThemeData theme,
+  ) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            plugin.icon,
+            size: 20,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            plugin.name,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        _buildPluginToggles(plugin, currentMode, notifier, theme),
       ],
-      selected: {currentMode},
-      onSelectionChanged: (value) => notifier.setPluginMode(plugin.id, value.first),
-      showSelectedIcon: false,
     );
   }
 
-  String _getModeDescription(AgentPlugin plugin, PluginMode mode) {
-    switch (mode) {
-      case PluginMode.auto:
-        return 'AI will automatically decide when to use the ${plugin.name} feature based on the context of your request.';
-      case PluginMode.on:
-        return 'AI will prioritize using the ${plugin.name} feature whenever possible.';
-      case PluginMode.off:
-        return 'The ${plugin.name} feature is completely disabled for this conversation.';
-    }
+  Widget _buildPluginToggles(AgentPlugin plugin, PluginMode currentMode, SettingsController notifier, ThemeData theme) {
+    return SizedBox(
+      height: 32,
+      child: SegmentedButton<PluginMode>(
+        segments: const [
+          ButtonSegment(
+            value: PluginMode.auto, 
+            label: Text('Auto', style: TextStyle(fontSize: 12)),
+          ),
+          ButtonSegment(
+            value: PluginMode.on, 
+            label: Text('On', style: TextStyle(fontSize: 12)),
+          ),
+          ButtonSegment(
+            value: PluginMode.off, 
+            label: Text('Off', style: TextStyle(fontSize: 12)),
+          ),
+        ],
+        selected: {currentMode},
+        onSelectionChanged: (value) => notifier.setPluginMode(plugin.id, value.first),
+        showSelectedIcon: false,
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 8)),
+          backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+            if (states.contains(WidgetState.selected)) {
+              return theme.colorScheme.primaryContainer;
+            }
+            return null;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+            if (states.contains(WidgetState.selected)) {
+              return theme.colorScheme.onPrimaryContainer;
+            }
+            return theme.colorScheme.onSurfaceVariant;
+          }),
+        ),
+      ),
+    );
   }
 }

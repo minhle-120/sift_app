@@ -396,7 +396,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
                     hintText: chatState.isLoading 
                         ? 'Thinking...' 
                         : (settings.aiMode == AiMode.brainstorm 
-                            ? 'Directly message Sift...'
+                            ? 'Message Sift...'
                             : (!collectionState.hasDocuments ? 'Upload documents to chat' : 'Message Sift...')),
                     filled: true,
                     fillColor: theme.colorScheme.surfaceContainerHigh.withAlpha(180),

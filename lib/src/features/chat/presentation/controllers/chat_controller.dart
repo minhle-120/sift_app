@@ -8,7 +8,6 @@ import 'package:sift_app/core/storage/database_provider.dart';
 import 'package:sift_app/src/features/orchestrator/domain/research_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/chat_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/brainstorm_orchestrator.dart';
-import 'package:sift_app/src/features/chat/presentation/controllers/workbench_controller.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
 import 'package:sift_app/core/models/ai_models.dart' as ai;
 import 'package:sift_app/core/plugins/plugins_provider.dart';
@@ -499,30 +498,11 @@ class ChatController extends StateNotifier<ChatState> {
         return;
       }
 
-      // --- NEW: Context Sanitization for Workbench ---
-      final workbench = _ref.read(workbenchProvider);
-      final activeTab = workbench.activeTab;
-      
-      Map<String, dynamic>? currentTabMetadata;
-      if (activeTab != null) {
-        // Block "Stale" context: If the active tab belongs to the message we are regenerating
-        if (activeTab.id.contains(placeholderMessage.uuid)) {
-          debugPrint('Sifting isolation: Blocking stale workbench tab ${activeTab.id}');
-        } else {
-          currentTabMetadata = {
-            ...?activeTab.metadata as Map<String, dynamic>?,
-            'title': activeTab.title,
-            'type': activeTab.type,
-          };
-        }
-      }
-
       // 5. Research AI Step
       final researchResult = await researchOrchestrator.research(
         collectionId: activeCollectionId!,
         historicalContext: researchHistory,
         userQuery: query,
-        currentTabMetadata: currentTabMetadata,
         onStatusUpdate: (status) => state = state.copyWith(researchStatus: status),
         isCanceled: () => _isCanceled,
       );

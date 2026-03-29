@@ -18,7 +18,7 @@ class GraphPlugin extends AgentPlugin {
   String get id => 'graph';
 
   @override
-  String get name => 'Graph Generator';
+  String get name => 'Graph';
 
   @override
   IconData get icon => Icons.hub_rounded;
@@ -50,7 +50,7 @@ class GraphPlugin extends AgentPlugin {
   );
 
   @override
-  String get mandate => '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_graph_generator` if you find ANY relevant data to visualize, even if it is simple. Prioritize finding a visual angle for your research.';
+  String get mandate => '**CRITICAL MANDATE**: The user has requested a graph. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_graph_generator` if you find ANY relevant data to visualize, even if it is simple. Prioritize finding a visual angle for your research.';
 
   @override
   String getStatusMessage(Map<String, dynamic> toolArgs) {
@@ -67,7 +67,6 @@ class GraphPlugin extends AgentPlugin {
     required String userQuery,
     required String fullContext,
     required ChunkRegistry registry,
-    Map<String, dynamic>? currentTabMetadata,
   }) async {
     final indices = List<int>.from(toolArgs['indices'] ?? []);
     final goal = toolArgs['graphGoal'] as String? ?? 'Generate graph';
@@ -77,7 +76,6 @@ class GraphPlugin extends AgentPlugin {
       package: package,
       registry: registry,
       fullContext: fullContext,
-      currentGraphSchema: currentTabMetadata?['schema'],
     );
 
     return PluginResult(
@@ -87,9 +85,16 @@ class GraphPlugin extends AgentPlugin {
   }
 
   @override
-  String getSynthesisInjection(PluginResult result) {
-    if (result.resultData == null) return '';
-    return '### RENDERED_GRAPH\n${result.resultData}\n(Note: This graph has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n';
+  ArtifactContent getArtifactContent(PluginResult result) {
+    final schema = result.resultData as String?;
+    if (schema == null || schema.isEmpty) {
+      return ArtifactContent(type: 'RENDERED_GRAPH', body: 'No graph schema generated.');
+    }
+
+    return ArtifactContent(
+      type: 'RENDERED_GRAPH',
+      body: schema,
+    );
   }
 
   @override

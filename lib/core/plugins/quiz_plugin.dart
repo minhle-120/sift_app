@@ -66,7 +66,6 @@ class QuizPlugin extends AgentPlugin {
     required String userQuery,
     required String fullContext,
     required ChunkRegistry registry,
-    Map<String, dynamic>? currentTabMetadata,
   }) async {
     final List<dynamic> indicesRaw = toolArgs['indices'] ?? [];
     final List<int> indices = indicesRaw.map((e) => e as int).toList();
@@ -89,10 +88,25 @@ class QuizPlugin extends AgentPlugin {
   }
 
   @override
-  String getSynthesisInjection(PluginResult result) {
+  ArtifactContent getArtifactContent(PluginResult result) {
     final data = result.resultData as QuizResult?;
-    if (data == null || data.questions.isEmpty) return '';
-    return '### QUIZ_GENERATED\nTitle: ${data.title}\nQuestions: ${data.questions.length}\n(Note: This interactive quiz has been displayed in a separate tab. Acknowledge this and invite the user to take the quiz.)\n\n';
+    if (data == null || data.questions.isEmpty) {
+      return ArtifactContent(type: 'QUIZ', body: 'No questions generated.');
+    }
+    
+    final buffer = StringBuffer();
+    buffer.writeln('Title: ${data.title}');
+    for (int i = 0; i < data.questions.length; i++) {
+      final q = data.questions[i];
+      buffer.writeln('${i + 1}. Question: ${q.question}');
+      buffer.writeln('   Options: ${q.options.join(', ')}');
+      buffer.writeln('   Explanation: ${q.explanation}');
+    }
+
+    return ArtifactContent(
+      type: 'QUIZ',
+      body: buffer.toString().trim(),
+    );
   }
 
   @override
