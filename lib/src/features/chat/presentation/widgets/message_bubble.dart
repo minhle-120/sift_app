@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_markdown_latex/flutter_markdown_latex.dart';
 import 'package:markdown/markdown.dart' as md;
-import 'dart:convert';
 import 'dart:io';
 import '../../domain/entities/message.dart';
 import '../controllers/workbench_controller.dart';
 import '../controllers/collection_controller.dart';
 import '../controllers/chat_controller.dart';
+import '../../../../../core/plugins/plugins_provider.dart';
 
 class MessageBubble extends ConsumerStatefulWidget {
   final Message message;
@@ -274,22 +274,13 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                       }).toList(),
                     ),
                   ],
-                  if (widget.message.metadata?['graph_schema'] != null) ...[
-                    const SizedBox(height: 12),
-                    _buildGraphTrigger(context, ref, theme),
-                  ],
-                  if (widget.message.metadata?['code_snippet'] != null) ...[
-                    const SizedBox(height: 12),
-                    _buildCodeTrigger(context, ref, theme),
-                  ],
-                  if (widget.message.metadata?['canvas_html'] != null) ...[
-                    const SizedBox(height: 12),
-                    _buildCanvasTrigger(context, ref, theme),
-                  ],
-                  if (widget.message.metadata?['cards'] != null) ...[
-                    const SizedBox(height: 12),
-                    _buildFlashcardTrigger(context, ref, theme),
-                  ],
+                  ...ref.watch(pluginsProvider).expand((plugin) {
+                    final trigger = plugin.buildMessageActionTrigger(context, ref, widget.message);
+                    if (trigger != null) {
+                      return [const SizedBox(height: 12), trigger];
+                    }
+                    return <Widget>[];
+                  }),
                   if (!_isEditing) ...[
                     const SizedBox(height: 4),
                     isUser 
@@ -430,98 +421,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
       );
   }
 
-  Widget _buildGraphTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
-    final schemaStr = widget.message.metadata?['graph_schema'] as String?;
-    String label = 'View Interactive Graph';
-    String tabTitle = 'Graph';
 
-    if (schemaStr != null) {
-      try {
-        final Map<String, dynamic> schema = jsonDecode(schemaStr);
-        final title = schema['title'] as String?;
-        if (title != null && title.isNotEmpty) {
-          label = 'View $title';
-          tabTitle = title;
-        }
-      } catch (_) {}
-    }
-
-    return ElevatedButton.icon(
-      onPressed: () {
-        if (schemaStr == null) return;
-        
-        ref.read(workbenchProvider.notifier).addTab(
-          WorkbenchTab(
-            id: 'graph_${widget.message.id}',
-            title: tabTitle,
-            icon: Icons.hub_rounded,
-            type: WorkbenchTabType.graph,
-            metadata: {'schema': schemaStr},
-          ),
-        );
-      },
-      icon: const Icon(Icons.hub_rounded, size: 18),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: theme.colorScheme.secondaryContainer,
-        foregroundColor: theme.colorScheme.onSecondaryContainer,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: theme.textTheme.labelMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCodeTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
-    final code = widget.message.metadata?['code_snippet'] as String?;
-    final title = widget.message.metadata?['code_title'] as String?;
-    
-    return ElevatedButton.icon(
-      onPressed: () {
-        if (code == null) return;
-        
-        ref.read(workbenchProvider.notifier).addTab(
-          WorkbenchTab(
-            id: 'code_${widget.message.id}',
-            title: title ?? 'Generated Code',
-            icon: Icons.code_rounded,
-            type: WorkbenchTabType.code,
-            metadata: {
-              'code': code,
-              'language': _detectLanguage(code),
-            },
-          ),
-        );
-      },
-      icon: const Icon(Icons.terminal_rounded, size: 18),
-      label: Text(title != null ? 'View $title' : 'View Implementation'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: theme.colorScheme.primaryContainer,
-        foregroundColor: theme.colorScheme.onPrimaryContainer,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: theme.textTheme.labelMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-
-  String _detectLanguage(String code) {
-    final lowerCode = code.toLowerCase();
-    if (lowerCode.contains('import') && lowerCode.contains('package:')) return 'dart';
-    if (lowerCode.contains('def ') || lowerCode.contains('import os')) return 'python';
-    if (lowerCode.contains('function') || lowerCode.contains('const ')) return 'javascript';
-    if (lowerCode.contains('<html>')) return 'html';
-    if (lowerCode.contains('select ') && lowerCode.contains('from')) return 'sql';
-    return 'plaintext';
-  }
 
   Widget _buildAvatar(ThemeData theme, bool isUser) {
     return Container(
@@ -614,96 +514,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
     );
   }
 
-  Widget _buildCanvasTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
-    return InkWell(
-      onTap: () {
-        ref.read(workbenchProvider.notifier).addTab(
-          WorkbenchTab(
-            id: 'canvas_${widget.message.id}',
-            title: 'Canvas',
-            icon: Icons.auto_awesome_mosaic_rounded,
-            type: WorkbenchTabType.interactiveCanvas,
-            metadata: {
-              'htmlContent': widget.message.metadata!['canvas_html'],
-            },
-          ),
-        );
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: theme.colorScheme.primary.withValues(alpha: 0.2),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.auto_awesome_mosaic_rounded, 
-                 size: 20, 
-                 color: theme.colorScheme.primary),
-            const SizedBox(width: 12),
-            Text(
-              'View Canvas',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildFlashcardTrigger(BuildContext context, WidgetRef ref, ThemeData theme) {
-    final title = widget.message.metadata?['flashcard_title'] as String? ?? 'Study Deck';
-    return InkWell(
-      onTap: () {
-        ref.read(workbenchProvider.notifier).addTab(
-          WorkbenchTab(
-            id: 'cards_${widget.message.id}',
-            title: title,
-            icon: Icons.sports_esports_outlined,
-            type: WorkbenchTabType.flashcards,
-            metadata: {
-              'cards': widget.message.metadata!['cards'],
-            },
-          ),
-        );
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: theme.colorScheme.secondary.withValues(alpha: 0.2),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.sports_esports_outlined, 
-                 size: 20, 
-                 color: theme.colorScheme.secondary),
-            const SizedBox(width: 12),
-            Text(
-              'View $title',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.secondary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ActionButton extends StatelessWidget {

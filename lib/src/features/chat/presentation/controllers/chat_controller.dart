@@ -8,10 +8,10 @@ import 'package:sift_app/core/storage/database_provider.dart';
 import 'package:sift_app/src/features/orchestrator/domain/research_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/chat_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/brainstorm_orchestrator.dart';
-import 'package:sift_app/src/features/orchestrator/domain/graph_generator_orchestrator.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/workbench_controller.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
 import 'package:sift_app/core/models/ai_models.dart' as ai;
+import 'package:sift_app/core/plugins/plugins_provider.dart';
 import 'package:sift_app/core/services/openai_service.dart';
 import 'package:sift_app/core/services/embedding_service.dart';
 import 'package:flutter/services.dart';
@@ -502,33 +502,19 @@ class ChatController extends StateNotifier<ChatState> {
       // --- NEW: Context Sanitization for Workbench ---
       final workbench = _ref.read(workbenchProvider);
       final activeTab = workbench.activeTab;
-      String? currentGraphSchema;
-      String? currentCodeContext;
-      String? currentCodeTitle;
-      List<ai.Flashcard>? currentFlashcards;
       
+      Map<String, dynamic>? currentTabMetadata;
       if (activeTab != null) {
         // Block "Stale" context: If the active tab belongs to the message we are regenerating
         if (activeTab.id.contains(placeholderMessage.uuid)) {
           debugPrint('Sifting isolation: Blocking stale workbench tab ${activeTab.id}');
         } else {
-          if (activeTab.type == WorkbenchTabType.graph) {
-            currentGraphSchema = activeTab.metadata?['schema'];
-          } else if (activeTab.type == WorkbenchTabType.code) {
-            currentCodeContext = activeTab.metadata?['code'];
-            currentCodeTitle = activeTab.title;
-          } else if (activeTab.type == WorkbenchTabType.flashcards) {
-            final dynamic cardsRaw = activeTab.metadata?['cards'];
-            if (cardsRaw is List) {
-              currentFlashcards = cardsRaw.map((c) => ai.Flashcard.fromJson(c as Map<String, dynamic>)).toList();
-            }
-          }
+          currentTabMetadata = {
+            ...?activeTab.metadata as Map<String, dynamic>?,
+            'title': activeTab.title,
+            'type': activeTab.type.name,
+          };
         }
-      }
-
-      String? currentCanvasHtml;
-      if (activeTab?.type == WorkbenchTabType.interactiveCanvas) {
-        currentCanvasHtml = activeTab?.metadata?['htmlContent'] as String?;
       }
 
       // 5. Research AI Step
@@ -536,11 +522,7 @@ class ChatController extends StateNotifier<ChatState> {
         collectionId: activeCollectionId!,
         historicalContext: researchHistory,
         userQuery: query,
-        currentGraphSchema: currentGraphSchema,
-        currentCode: currentCodeContext,
-        currentCodeTitle: currentCodeTitle,
-        currentFlashcards: currentFlashcards,
-        currentCanvasHtml: currentCanvasHtml,
+        currentTabMetadata: currentTabMetadata,
         onStatusUpdate: (status) => state = state.copyWith(researchStatus: status),
         isCanceled: () => _isCanceled,
       );
@@ -571,75 +553,17 @@ class ChatController extends StateNotifier<ChatState> {
         return;
       }
 
-      if (researchResult.graphSchema != null) {
-      // --- NEW: Handle Graph Generation (from intermediate step) -----
-      final schemaStr = researchResult.graphSchema!;
-      String? parsedTitle;
-      
-      try {
-        final Map<String, dynamic> schema = jsonDecode(schemaStr);
-        parsedTitle = schema['title'] as String?;
-      } catch (e) {
-        debugPrint('Failed to parse graph title: $e');
+      final plugins = _ref.read(pluginsProvider);
+      if (researchResult.pluginResults != null) {
+        for (final entry in researchResult.pluginResults!.entries) {
+          try {
+            final plugin = plugins.firstWhere((p) => p.toolName == entry.key);
+            plugin.onResult(entry.value, placeholderMessage.uuid, _ref);
+          } catch (e) {
+            debugPrint('Error triggering plugin onResult: $e');
+          }
+        }
       }
-
-      // Auto-open the tab
-      _ref.read(workbenchProvider.notifier).addTab(
-        WorkbenchTab(
-          id: 'graph_${placeholderMessage.uuid}',
-          title: parsedTitle ?? 'Graph',
-          icon: Icons.hub_rounded,
-          type: WorkbenchTabType.graph,
-          metadata: {'schema': schemaStr},
-        ),
-      );
-    }
-
-    if (researchResult.codeSnippet != null) {
-      // Auto-open the code tab
-      _ref.read(workbenchProvider.notifier).addTab(
-        WorkbenchTab(
-          id: 'code_${placeholderMessage.uuid}',
-          title: researchResult.codeTitle ?? 'Generated Code',
-          icon: Icons.code_rounded,
-          type: WorkbenchTabType.code,
-          metadata: {
-            'code': researchResult.codeSnippet,
-            'language': researchResult.codeLanguage ?? 'plaintext',
-          },
-        ),
-      );
-    }
-
-    if (researchResult.flashcardResult != null) {
-      // Auto-open the flashcard tab
-      _ref.read(workbenchProvider.notifier).addTab(
-        WorkbenchTab(
-          id: 'cards_${placeholderMessage.uuid}',
-          title: researchResult.flashcardTitle ?? 'Study Deck',
-          icon: Icons.sports_esports_outlined,
-          type: WorkbenchTabType.flashcards,
-          metadata: {
-            'cards': researchResult.flashcardResult!.map((c) => c.toJson()).toList(),
-          },
-        ),
-      );
-    }
-
-    if (researchResult.canvasHtml != null) {
-      // Auto-open the interactive canvas tab
-      _ref.read(workbenchProvider.notifier).addTab(
-        WorkbenchTab(
-          id: 'canvas_${placeholderMessage.uuid}',
-          title: 'Interactive Canvas',
-          icon: Icons.auto_awesome_mosaic_rounded,
-          type: WorkbenchTabType.interactiveCanvas,
-          metadata: {
-            'htmlContent': researchResult.canvasHtml,
-          },
-        ),
-      );
-    }
       if (researchResult.package != null) {
         // 1. Build Citation Metadata Early (so citations work DURING streaming)
         final citationData = <String, dynamic>{};
@@ -669,11 +593,7 @@ class ChatController extends StateNotifier<ChatState> {
           conversation: chatHistory,
           package: researchResult.package!,
           registry: researchOrchestrator.registry,
-          graphSchema: researchResult.graphSchema,
-          codeSnippet: researchResult.codeSnippet,
-          flashcardTitle: researchResult.flashcardTitle,
-          flashcardCount: researchResult.flashcardResult?.length,
-          canvasHtml: researchResult.canvasHtml,
+          pluginResults: researchResult.pluginResults,
         );
 
         bool isFirstToken = true;
@@ -714,53 +634,19 @@ class ChatController extends StateNotifier<ChatState> {
           ));
         } catch (e) { /* skip */ }
 
-        final metadata = <String, dynamic>{
+        final Map<String, dynamic> metadata = {
           'research_steps': completeSteps.map((s) => s.toJson()).toList(),
-          if (researchResult.graphSchema != null) 'graph_schema': researchResult.graphSchema,
-          if (researchResult.codeSnippet != null) 'code_snippet': researchResult.codeSnippet,
-          if (researchResult.codeTitle != null) 'code_title': researchResult.codeTitle,
-          if (researchResult.canvasHtml != null) 'canvas_html': researchResult.canvasHtml,
-          if (researchResult.flashcardResult != null) 'cards': researchResult.flashcardResult,
-          if (researchResult.flashcardTitle != null) 'flashcard_title': researchResult.flashcardTitle,
         };
+
+        if (researchResult.pluginResults != null) {
+          for (final result in researchResult.pluginResults!.values) {
+            metadata.addAll(result.metadataToPersist);
+          }
+        }
 
         await _db.updateMessageMetadata(
           placeholderMessage.id, 
           metadata: jsonEncode(metadata),
-        );
-      } else if (researchResult.graphPackage != null) {
-        // Fallback for legacy terminal visual calls (if any remain)
-        final graphGeneratorOrchestrator = _ref.read(graphGeneratorOrchestratorProvider);
-        final graphResult = await graphGeneratorOrchestrator.generateGraph(
-          package: researchResult.graphPackage!,
-          registry: researchOrchestrator.registry,
-        );
-
-        final schema = graphResult.schema;
-        String tabTitle = 'Graph';
-        try {
-          final Map<String, dynamic> parsed = jsonDecode(schema);
-          final title = parsed['title'] as String?;
-          if (title != null && title.isNotEmpty) tabTitle = title;
-        } catch (_) {}
-
-        await _db.updateMessageContent(placeholderMessage.id, 'Graph generated based on research data.');
-        
-        final metadata = <String, dynamic>{
-          'graph_schema': schema,
-          'research_steps': researchResult.steps?.map((s) => s.toJson()).toList() ?? [],
-        };
-        
-        await _db.updateMessageMetadata(placeholderMessage.id, metadata: jsonEncode(metadata));
-
-        _ref.read(workbenchProvider.notifier).addTab(
-          WorkbenchTab(
-            id: 'graph_${placeholderMessage.uuid}',
-            title: tabTitle,
-            icon: Icons.hub_rounded,
-            type: WorkbenchTabType.graph,
-            metadata: {'schema': schema},
-          ),
         );
       } else {
         // Case: No synthesizer AND no visualizer (maybe Research AI just chatted)

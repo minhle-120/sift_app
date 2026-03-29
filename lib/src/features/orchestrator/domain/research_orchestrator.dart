@@ -2,34 +2,25 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/ai_models.dart';
 import '../../../../core/tools/rag_tool.dart';
-import '../../../../core/services/openai_service.dart';
 import '../../../../core/services/embedding_service.dart';
 import '../../../../core/services/rerank_service.dart';
 import '../../../../core/storage/sift_database.dart';
 import '../../../../services/ai/i_ai_service.dart';
+import '../../../../core/services/openai_service.dart';
 import 'package:sift_app/src/features/chat/domain/entities/message.dart' as domain;
 import '../../../../core/tools/delegate_to_synthesizer_tool.dart';
 import '../../../../core/tools/no_info_found_tool.dart';
-import '../../../../core/tools/delegate_to_graph_generator_tool.dart';
-import '../../../../core/tools/delegate_to_coder_tool.dart';
-import 'graph_generator_orchestrator.dart';
-import 'code_orchestrator.dart';
-import 'flashcard_orchestrator.dart';
 import '../../chat/presentation/controllers/settings_controller.dart';
-import '../../../../core/tools/delegate_to_flashcards_tool.dart';
-import '../../../../core/tools/delegate_to_interactive_canvas_tool.dart';
-import 'interactive_canvas_orchestrator.dart';
+import '../../../../core/plugins/agent_plugin.dart';
+import '../../../../core/plugins/plugins_provider.dart';
 
 final researchOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
-  final graphGeneratorOrchestrator = ref.watch(graphGeneratorOrchestratorProvider);
-  final codeOrchestrator = ref.watch(codeOrchestratorProvider);
-  final flashcardOrchestrator = ref.watch(flashcardOrchestratorProvider);
-  final interactiveCanvasOrchestrator = ref.watch(interactiveCanvasOrchestratorProvider);
   final database = AppDatabase.instance;
   final embeddingService = ref.watch(embeddingServiceProvider);
   final rerankService = ref.watch(rerankServiceProvider);
-  
+  final plugins = ref.watch(pluginsProvider);
+
   final ragTool = RAGTool(
     database: database,
     embeddingService: embeddingService,
@@ -39,78 +30,38 @@ final researchOrchestratorProvider = Provider((ref) {
 
   final delegateTool = DelegateToSynthesizerTool();
   final noInfoTool = NoInfoFoundTool();
-  final graphTool = DelegateToGraphGeneratorTool();
-  final codeTool = DelegateToCoderTool();
-  final flashcardTool = DelegateToFlashcardsTool();
-  final canvasTool = DelegateToInteractiveCanvasTool();
   
   return ResearchOrchestrator(
     aiService: aiService,
-    graphGeneratorOrchestrator: graphGeneratorOrchestrator,
-    codeOrchestrator: codeOrchestrator,
-    flashcardOrchestrator: flashcardOrchestrator,
+    plugins: plugins,
     ragTool: ragTool,
     delegateTool: delegateTool,
     noInfoTool: noInfoTool,
-    graphTool: graphTool,
-    codeTool: codeTool,
-    flashcardTool: flashcardTool,
-    canvasTool: canvasTool,
-    interactiveCanvasOrchestrator: interactiveCanvasOrchestrator,
   );
 });
 
-
 class ResearchOrchestrator {
-  static const String graphMandate = '**CRITICAL MANDATE**: The user has requested a visual representation. You MUST call `query_knowledge_base` first to gather data. After searching, you MUST call `delegate_to_graph_generator` if you find ANY relevant data to visualize, even if it is simple. Prioritize finding a visual angle for your research.';
-  static const String codeMandate = '**CRITICAL MANDATE**: The user has requested to write or modify code. You MUST call `query_knowledge_base` first to gather context. After searching, you MUST call `delegate_to_coder` if the user wants code generation, script writing, or technical implementation. Do NOT write the code yourself; delegate it to the code specialist.';
-  static const String flashcardMandate = '**CRITICAL MANDATE**: The user has requested flashcards or study materials. You MUST call `query_knowledge_base` first to gather factual context. After searching, you MUST call `delegate_to_flashcards` to transform that data into a high-quality study deck.';
-  static const String canvasMandate = '**CRITICAL MANDATE**: The user has requested a custom visual display component. You MUST call `query_knowledge_base` first. After searching, you MUST call `delegate_to_interactive_canvas` to build the static visual component using HTML/SVG.';
-
   final IAiService aiService;
-  final GraphGeneratorOrchestrator graphGeneratorOrchestrator;
-  final CodeOrchestrator codeOrchestrator;
-  final FlashcardOrchestrator flashcardOrchestrator;
+  final List<AgentPlugin> plugins;
   final RAGTool ragTool;
   final DelegateToSynthesizerTool delegateTool;
   final NoInfoFoundTool noInfoTool;
-  final DelegateToGraphGeneratorTool graphTool;
-  final DelegateToCoderTool codeTool;
-  final DelegateToFlashcardsTool flashcardTool;
-  final DelegateToInteractiveCanvasTool canvasTool;
-  final InteractiveCanvasOrchestrator interactiveCanvasOrchestrator;
 
   ChunkRegistry get registry => ragTool.registry;
 
   ResearchOrchestrator({
     required this.aiService,
-    required this.graphGeneratorOrchestrator,
-    required this.codeOrchestrator,
-    required this.flashcardOrchestrator,
+    required this.plugins,
     required this.ragTool,
     required this.delegateTool,
     required this.noInfoTool,
-    required this.graphTool,
-    required this.codeTool,
-    required this.flashcardTool,
-    required this.canvasTool,
-    required this.interactiveCanvasOrchestrator,
   });
 
-  /// Starts a research session for a given query and context.
-  /// [collectionId] is the local library to search.
-  /// [historicalContext] is the formatted string of previous turns.
-  /// [userQuery] is the specific question to answer.
-  /// [onStatusUpdate] is called as the AI moves through the research steps.
   Future<ResearchResult> research({
     required int collectionId,
     required String historicalContext,
     required String userQuery,
-    String? currentGraphSchema,
-    String? currentCode,
-    String? currentCodeTitle,
-    List<Flashcard>? currentFlashcards,
-    String? currentCanvasHtml,
+    Map<String, dynamic>? currentTabMetadata,
     void Function(String status)? onStatusUpdate,
     bool Function()? isCanceled,
   }) async {
@@ -118,31 +69,20 @@ class ResearchOrchestrator {
     onStatusUpdate?.call('Starting research...');
 
     final settings = registry.ref.read(settingsProvider);
-
     String systemPrompt = _buildSystemPrompt(settings);
     
+    final activePlugins = plugins.where((p) => p.isEnabled(settings)).toList();
+
     final List<ToolDefinition> tools = [
       ragTool.definition,
       delegateTool.definition,
       noInfoTool.definition,
-      if (settings.graphGeneratorMode != GraphGeneratorMode.off) graphTool.definition,
-      if (settings.coderMode != CoderMode.off) codeTool.definition,
-      if (settings.flashcardMode != FlashcardMode.off) flashcardTool.definition,
-      if (settings.interactiveCanvasMode != InteractiveCanvasMode.off) canvasTool.definition,
+      ...activePlugins.map((p) => p.toolDefinition),
     ];
 
     String finalUserQuery = userQuery;
-    if (settings.graphGeneratorMode == GraphGeneratorMode.on) {
-      finalUserQuery = '$finalUserQuery\n\n$graphMandate';
-    }
-    if (settings.coderMode == CoderMode.on) {
-      finalUserQuery = '$finalUserQuery\n\n$codeMandate';
-    }
-    if (settings.flashcardMode == FlashcardMode.on) {
-      finalUserQuery = '$finalUserQuery\n\n$flashcardMandate';
-    }
-    if (settings.interactiveCanvasMode == InteractiveCanvasMode.on) {
-      finalUserQuery = '$finalUserQuery\n\n$canvasMandate';
+    for (final plugin in activePlugins) {
+      finalUserQuery = '$finalUserQuery\n\n${plugin.mandate}';
     }
 
     final contextPrompt = historicalContext.isEmpty 
@@ -161,13 +101,7 @@ class ResearchOrchestrator {
     ];
 
     final int newStepsStartIndex = messages.length;
-    String? capturedGraphSchema;
-    String? capturedCodeSnippet;
-    String? capturedCodeLanguage;
-    String? capturedCodeTitle;
-    List<Flashcard>? capturedFlashcards;
-    String? capturedFlashcardTitle;
-    String? capturedCanvasHtml;
+    final Map<String, PluginResult> pluginResults = {};
 
     // 2. ReAct Loop
     int iterations = 0;
@@ -184,17 +118,17 @@ class ResearchOrchestrator {
       
       final response = await aiService.chat(
         messages,
-        tools: tools, // Use the conditionally built tools list
+        tools: tools,
         toolChoice: 'required',
       );
 
       messages.add(response);
 
       if (response.toolCalls == null || response.toolCalls!.isEmpty) {
-        // AI returned a final message (or choice to not use tools)
         return ResearchResult(
           output: response,
           steps: messages.sublist(newStepsStartIndex),
+          pluginResults: pluginResults,
         );
       }
 
@@ -203,7 +137,6 @@ class ResearchOrchestrator {
         final isQuery = toolCall.function.name == RAGTool.name;
         
         if (!hasQueried && !isQuery) {
-          // Enforcement error
           messages.add(ChatMessage(
             role: ChatRole.tool,
             content: 'ERROR: You must call `query_knowledge_base` first to gather information from the library before using other tools. Please call `query_knowledge_base` now.',
@@ -230,162 +163,61 @@ class ResearchOrchestrator {
           final package = delegateTool.execute(args);
           return ResearchResult(
             package: package, 
-            graphSchema: capturedGraphSchema,
-            codeSnippet: capturedCodeSnippet,
-            codeLanguage: capturedCodeLanguage,
-            codeTitle: capturedCodeTitle,
-            flashcardResult: capturedFlashcards,
-            flashcardTitle: capturedFlashcardTitle,
-            canvasHtml: capturedCanvasHtml,
+            pluginResults: pluginResults,
             steps: messages.sublist(newStepsStartIndex),
           );
-        } else if (toolCall.function.name == DelegateToGraphGeneratorTool.name) {
-          final args = _parseArgs(toolCall.function.arguments);
-          onStatusUpdate?.call('Generating graph for "${args['graphGoal'] ?? 'data'}..."');
-          
-          final package = graphTool.execute(args);
-          
-          // Clean the context for the generator (remove system mandates)
-          final cleanContext = contextPrompt
-              .replaceAll(graphMandate, '')
-              .replaceAll('\n\nUser Query: ', '\n')
-              .replaceAll('Current query: \n', 'Current query: ')
-              .trim();
-          
-          final graphResult = await graphGeneratorOrchestrator.generateGraph(
-            package: package, 
-            registry: registry,
-            fullContext: cleanContext,
-            currentGraphSchema: currentGraphSchema,
-          );
-
-          capturedGraphSchema = graphResult.schema;
-
-          messages.add(ChatMessage(
-            role: ChatRole.tool,
-            content: 'GRAPH_GENERATED: ${graphResult.schema}\n\n'
-                     'Assistant Note: The graph is now ready and will be displayed. '
-                     'You should now call delegate_to_synthesizer to provide a textual explanation of '
-                     'what the user is seeing in the graph and answer any remaining parts of their query.',
-            toolCallId: toolCall.id,
-            name: DelegateToGraphGeneratorTool.name,
-          ));
-        } else if (toolCall.function.name == DelegateToCoderTool.name) {
-          final args = _parseArgs(toolCall.function.arguments);
-          onStatusUpdate?.call('Generating code for "${args['codingGoal'] ?? 'task'}..."');
-          
-          final package = codeTool.execute(args);
-          
-          final cleanContext = contextPrompt
-              .replaceAll(graphMandate, '')
-              .replaceAll(codeMandate, '')
-              .replaceAll('\n\nUser Query: ', '\n')
-              .replaceAll('Current query: \n', 'Current query: ')
-              .trim();
-
-          final codeResult = await codeOrchestrator.generateCode(
-            package: package, 
-            registry: registry,
-            fullContext: cleanContext,
-            currentCode: currentCode,
-            currentCodeTitle: currentCodeTitle,
-          );
-
-          capturedCodeSnippet = codeResult.codeSnippet;
-          capturedCodeLanguage = codeResult.language;
-          capturedCodeTitle = codeResult.title;
-
-          messages.add(ChatMessage(
-            role: ChatRole.tool,
-            content: 'CODE_GENERATED:\n${codeResult.codeSnippet}\n\n'
-                     'Assistant Note: The code has been generated and will be displayed in the workspace. '
-                     'You should now call delegate_to_synthesizer to explain the implementation and '
-                     'provide any additional context or instructions to the user.',
-            toolCallId: toolCall.id,
-            name: DelegateToCoderTool.name,
-          ));
-        } else if (toolCall.function.name == DelegateToFlashcardsTool.name) {
-          final args = _parseArgs(toolCall.function.arguments);
-          onStatusUpdate?.call('Designing study deck for "${args['studyGoal'] ?? 'topic'}..."');
-          
-          final package = flashcardTool.execute(args);
-          
-          final cleanContext = contextPrompt
-              .replaceAll(graphMandate, '')
-              .replaceAll(codeMandate, '')
-              .replaceAll(flashcardMandate, '')
-              .replaceAll('\n\nUser Query: ', '\n')
-              .replaceAll('Current query: \n', 'Current query: ')
-              .trim();
-
-          final flashcardResult = await flashcardOrchestrator.generateFlashcards(
-            package: package, 
-            registry: registry,
-            fullContext: cleanContext,
-            currentCards: currentFlashcards,
-          );
-
-          capturedFlashcards = flashcardResult.cards;
-          capturedFlashcardTitle = flashcardResult.title;
-
-          messages.add(ChatMessage(
-            role: ChatRole.tool,
-            content: 'FLASHCARDS_GENERATED: ${flashcardResult.cards.length} cards in deck "${flashcardResult.title}"\n\n'
-                     'Assistant Note: The study deck has been generated and added to the workspace. '
-                     'You should now call delegate_to_synthesizer to explain the key concepts covered in the flashcards '
-                     'and encourage the user to test their knowledge.',
-            toolCallId: toolCall.id,
-            name: DelegateToFlashcardsTool.name,
-          ));
-        } else if (toolCall.function.name == DelegateToInteractiveCanvasTool.name) {
-          final args = _parseArgs(toolCall.function.arguments);
-          onStatusUpdate?.call('Designing visual layout for "${args['canvasGoal'] ?? 'component'}..."');
-          
-          final package = canvasTool.execute(args);
-          
-          final cleanContext = contextPrompt
-              .replaceAll(graphMandate, '')
-              .replaceAll(codeMandate, '')
-              .replaceAll(flashcardMandate, '')
-              .replaceAll(canvasMandate, '')
-              .replaceAll('\n\nUser Query: ', '\n')
-              .replaceAll('Current query: \n', 'Current query: ')
-              .trim();
-
-          final canvasResult = await interactiveCanvasOrchestrator.generateCanvas(
-            package: package, 
-            registry: registry,
-            fullContext: cleanContext,
-          );
-
-          capturedCanvasHtml = canvasResult.htmlContent;
-
-          messages.add(ChatMessage(
-            role: ChatRole.tool,
-            content: 'CANVAS_GENERATED:\n${canvasResult.htmlContent.substring(0, canvasResult.htmlContent.length > 200 ? 200 : canvasResult.htmlContent.length)}...\n\n'
-                     'Assistant Note: The interactive canvas has been generated and will be displayed in the workspace. '
-                     'You should now call delegate_to_synthesizer to explain how the user can interact with this component '
-                     'and summarize its key takeaways.',
-            toolCallId: toolCall.id,
-            name: DelegateToInteractiveCanvasTool.name,
-          ));
         } else if (toolCall.function.name == NoInfoFoundTool.name) {
-          // AI specifically said no info found
           final args = _parseArgs(toolCall.function.arguments);
           final reason = args['reason'] as String?;
           return ResearchResult(
             noInfoFound: true, 
             noInfoReason: reason,
             steps: messages.sublist(newStepsStartIndex),
+            pluginResults: pluginResults,
           );
         } else {
-          // Handle other tools or error
-          messages.add(ChatMessage(
-            role: ChatRole.tool,
-            content: 'Error: Unknown tool ${toolCall.function.name}',
-            toolCallId: toolCall.id,
-            name: toolCall.function.name,
-          ));
+          // Dynamic Plugin Execution
+          try {
+            final plugin = plugins.firstWhere((p) => p.toolName == toolCall.function.name);
+            final args = _parseArgs(toolCall.function.arguments);
+            
+            onStatusUpdate?.call(plugin.getStatusMessage(args));
+            
+            String cleanContext = contextPrompt;
+            for (final p in plugins) {
+              cleanContext = cleanContext.replaceAll(p.mandate, '');
+            }
+            cleanContext = cleanContext
+                .replaceAll('\n\nUser Query: ', '\n')
+                .replaceAll('Current query: \n', 'Current query: ')
+                .trim();
+
+            final result = await plugin.execute(
+              toolArgs: args,
+              userQuery: userQuery,
+              fullContext: cleanContext,
+              registry: registry,
+              currentTabMetadata: currentTabMetadata,
+            );
+
+            pluginResults[plugin.toolName] = result;
+
+            messages.add(ChatMessage(
+              role: ChatRole.tool,
+              content: 'PLUGIN_EXECUTED: ${plugin.name} completed successfully.\n\n'
+                       'Assistant Note: The plugin output has been captured and displayed to the user. '
+                       'You should now call delegate_to_synthesizer to provide a textual explanation and answer any remaining parts of their query.',
+              toolCallId: toolCall.id,
+              name: toolCall.function.name,
+            ));
+          } catch (e) {
+            messages.add(ChatMessage(
+              role: ChatRole.tool,
+              content: 'Error: Unknown tool ${toolCall.function.name} or execution failed ($e)',
+              toolCallId: toolCall.id,
+              name: toolCall.function.name,
+            ));
+          }
         }
       }
     }
@@ -395,20 +227,7 @@ class ResearchOrchestrator {
     if (allResults.isNotEmpty) {
       return ResearchResult(
         package: ResearchPackage(indices: allResults.map((r) => r.index).toList()),
-        graphSchema: capturedGraphSchema,
-        codeSnippet: capturedCodeSnippet,
-        codeLanguage: capturedCodeLanguage,
-        codeTitle: capturedCodeTitle,
-        flashcardResult: capturedFlashcards,
-        flashcardTitle: capturedFlashcardTitle,
-        flashcardPackage: FlashcardPackage(
-          indices: allResults.map((r) => r.index).toList(),
-          studyGoal: userQuery,
-        ),
-        flashcardMode: settings.flashcardMode,
-        graphGeneratorMode: settings.graphGeneratorMode,
-        interactiveCanvasMode: settings.interactiveCanvasMode,
-        canvasHtml: capturedCanvasHtml,
+        pluginResults: pluginResults,
         steps: messages.sublist(newStepsStartIndex),
       );
     }
@@ -417,6 +236,7 @@ class ResearchOrchestrator {
       noInfoFound: true,
       noInfoReason: 'I have reached the maximum research depth without finding specific details in the library to answer your query.',
       steps: messages.sublist(newStepsStartIndex),
+      pluginResults: pluginResults,
     );
   }
 
@@ -446,13 +266,9 @@ You have access to the conversation history. Use this context to resolve pronoun
 ''';
   }
 
-  /// Builds a clean user-assistant chat history string from domain messages.
-  /// This excludes all internal research steps and tool traces.
-  /// Limits history to the last 4 turns (8 messages).
   String buildHistory(List<domain.Message> domainMessages) {
     final StringBuffer buffer = StringBuffer();
     
-    // History Pruning: Only keep the last 4 turns (8 messages)
     final prunedMessages = domainMessages.length > 8 
         ? domainMessages.sublist(domainMessages.length - 8) 
         : domainMessages;
@@ -461,26 +277,23 @@ You have access to the conversation history. Use this context to resolve pronoun
       final m = prunedMessages[i];
       final metadata = m.metadata;
 
-      // Skip messages that are explicitly marked for exclusion (e.g., pruned 'no info' turns)
       if (metadata != null && metadata['exclude_from_history'] == true) {
         continue;
       }
 
       if (m.role == domain.MessageRole.user) {
         if (buffer.isNotEmpty) buffer.write('\n\n');
-        // Strip mandates from historical user queries to keep context clean
-        final cleanQuery = m.text
-            .replaceAll(graphMandate, '')
-            .replaceAll(codeMandate, '')
-            .replaceAll(flashcardMandate, '')
-            .replaceAll(canvasMandate, '')
+        String cleanQuery = m.text;
+        for (final p in plugins) {
+          cleanQuery = cleanQuery.replaceAll(p.mandate, '');
+        }
+        cleanQuery = cleanQuery
             .replaceAll('\n\nUser Query: ', '')
             .trim();
         buffer.write('Query: $cleanQuery');
       } else if (m.role == domain.MessageRole.assistant) {
-        if (m.text.trim().isEmpty) continue; // Skip empty assistant messages (placeholders)
+        if (m.text.trim().isEmpty) continue;
         if (buffer.isNotEmpty) buffer.write('\n');
-        // Strip Citations: Remove [[Chunk X]] markers to keep history clean for the researcher
         final cleanAnswer = m.text.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '');
         buffer.write('Synthesizer answer: ${cleanAnswer.trim()}');
       }
@@ -491,7 +304,6 @@ You have access to the conversation history. Use this context to resolve pronoun
 
   Map<String, dynamic> _parseArgs(String arguments) {
     try {
-      // Basic JSON parsing
       return jsonDecode(arguments);
     } catch (e) {
       return {};

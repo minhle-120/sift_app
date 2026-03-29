@@ -5,31 +5,31 @@ import '../../../../services/ai/i_ai_service.dart';
 import '../../../../core/services/document_processor.dart';
 import '../../../../src/features/chat/domain/entities/message.dart' as domain;
 import '../../chat/presentation/controllers/settings_controller.dart';
+import '../../../../core/plugins/agent_plugin.dart';
+import '../../../../core/plugins/plugins_provider.dart';
 import 'dart:io';
 import 'dart:convert';
 
 final chatOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
   final processor = ref.watch(documentProcessorProvider);
-  return ChatOrchestrator(aiService: aiService, processor: processor);
+  final plugins = ref.watch(pluginsProvider);
+  return ChatOrchestrator(aiService: aiService, processor: processor, plugins: plugins);
 });
 
 class ChatOrchestrator {
   final IAiService aiService;
   final DocumentProcessor processor;
+  final List<AgentPlugin> plugins;
 
-  ChatOrchestrator({required this.aiService, required this.processor});
+  ChatOrchestrator({required this.aiService, required this.processor, required this.plugins});
 
   Future<ChatMessage> synthesize({
     required String originalQuery,
     required List<ChatMessage> conversation,
     required ResearchPackage package,
     required ChunkRegistry registry,
-    String? graphSchema,
-    String? codeSnippet,
-    String? flashcardTitle,
-    int? flashcardCount,
-    String? canvasHtml,
+    Map<String, PluginResult>? pluginResults,
   }) async {
     // 1. Resolve and Sort Chunks
     final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
@@ -38,11 +38,7 @@ class ChatOrchestrator {
     final combinedUserMessage = buildCombinedMessage(
       resolvedChunks,
       originalQuery,
-      graphSchema: graphSchema,
-      codeSnippet: codeSnippet,
-      flashcardTitle: flashcardTitle,
-      flashcardCount: flashcardCount,
-      canvasHtml: canvasHtml,
+      pluginResults: pluginResults,
     );
 
     final settings = registry.ref.read(settingsProvider);
@@ -61,11 +57,7 @@ class ChatOrchestrator {
     required List<ChatMessage> conversation,
     required ResearchPackage package,
     required ChunkRegistry registry,
-    String? graphSchema,
-    String? codeSnippet,
-    String? flashcardTitle,
-    int? flashcardCount,
-    String? canvasHtml,
+    Map<String, PluginResult>? pluginResults,
   }) async* {
     // 1. Resolve and Sort Chunks
     final List<String> resolvedChunks = _resolveSortedChunks(package, registry);
@@ -74,10 +66,7 @@ class ChatOrchestrator {
     final combinedUserMessage = buildCombinedMessage(
       resolvedChunks,
       originalQuery,
-      graphSchema: graphSchema,
-      codeSnippet: codeSnippet,
-      flashcardTitle: flashcardTitle,
-      flashcardCount: flashcardCount,
+      pluginResults: pluginResults,
     );
 
     final settings = registry.ref.read(settingsProvider);
@@ -91,13 +80,9 @@ class ChatOrchestrator {
     yield* aiService.streamChat(messages);
   }
 
-  /// Builds a clean user-visible history from domain messages.
-  /// This excludes internal tool calls and internal research steps.
-  /// Limits history to the last 4 turns (8 messages).
   Future<List<ChatMessage>> buildHistory(List<domain.Message> domainMessages, {int? limit = 8}) async {
     final List<ChatMessage> history = [];
 
-    // History Pruning: only prune if limit is provided
     final prunedMessages = (limit != null && domainMessages.length > limit)
         ? domainMessages.sublist(domainMessages.length - limit)
         : domainMessages;
@@ -109,12 +94,10 @@ class ChatOrchestrator {
 
       String text = m.text;
       if (m.role == domain.MessageRole.assistant) {
-        if (text.trim().isEmpty) continue; // Skip empty assistant messages (placeholders)
-        // Strip historical citations to avoid confusing the LLM with old chunk references
+        if (text.trim().isEmpty) continue;
         text = text.replaceAll(RegExp(r'\[\[Chunk \d+\]\]'), '').trim();
       }
 
-      // Handle Attachments for Multi-modal history (e.g. Brainstorm Mode)
       if (m.role == domain.MessageRole.user && m.metadata != null && m.metadata!['attachments'] != null) {
         final List<dynamic> attachmentData = m.metadata!['attachments'];
         final parts = <ContentPart>[];
@@ -134,7 +117,6 @@ class ChatOrchestrator {
             final bytes = await file.readAsBytes();
             parts.add(ImagePart(base64Encode(bytes), mimeType: 'image/${extension == 'jpg' ? 'jpeg' : extension}'));
           } else {
-            // Extract text from previous turn documents
             final extracted = await processor.extractText(file, extension: extension);
             if (extracted.isNotEmpty) {
               parts.add(TextPart('--- Previous File: $name ---\n$extracted\n---\n\n'));
@@ -142,7 +124,6 @@ class ChatOrchestrator {
           }
         }
 
-        // Add the text last for prompt consistency (matching BrainstormOrchestrator)
         if (text.isNotEmpty) {
           parts.add(TextPart(text));
         }
@@ -200,21 +181,27 @@ class ChatOrchestrator {
   String buildCombinedMessage(
     List<String> chunks, 
     String query, {
-    String? graphSchema, 
-    String? codeSnippet,
-    String? flashcardTitle,
-    int? flashcardCount,
-    String? canvasHtml,
+    Map<String, PluginResult>? pluginResults,
     List<ChatMessage>? history,
   }) {
     final historySection = (history != null && history.isNotEmpty)
         ? '### Background History (Last Turn):\n${history.map((m) => '${m.role == ChatRole.user ? 'User' : 'Assistant'}: ${m.content}').join('\n')}\n\n'
         : '';
 
+    final pluginInjections = StringBuffer();
+    if (pluginResults != null) {
+      for (final entry in pluginResults.entries) {
+        try {
+          final plugin = plugins.firstWhere((p) => p.toolName == entry.key);
+          pluginInjections.write(plugin.getSynthesisInjection(entry.value));
+        } catch (_) {}
+      }
+    }
+
     return '''$historySection### Knowledge Chunks:
 ${chunks.join('\n\n')}
 
-${graphSchema != null ? '### RENDERED_GRAPH\n$graphSchema\n(Note: This graph has already been displayed to the user in a separate tab. Do NOT redraw it.)\n\n' : ''}${codeSnippet != null ? '### WRITTEN_CODE\n$codeSnippet\n(Note: This code has already been displayed to the user. USE THIS CODE TO ANSWER THE QUERY. Start answer with "Here is the explanation of the code...")\n\n' : ''}${canvasHtml != null ? '### INTERACTIVE_CANVAS\n$canvasHtml\n(Note: This interactive HTML/SVG component has been displayed in a separate tab. Acknowledge this in your response.)\n\n' : ''}${flashcardTitle != null ? '### FLASHCARD_DECK\nTitle: $flashcardTitle\nCount: $flashcardCount\n(Note: This study deck has been generated. Acknowledge this in your response.)\n\n' : ''}### User Query:
+$pluginInjections### User Query:
 $query
 ''';
   }
@@ -226,7 +213,6 @@ $query
       if (res != null) results.add(res);
     }
 
-    // Sort chronologically (by document and then by position in document)
     results.sort((a, b) {
       final docCompare = a.documentId.compareTo(b.documentId);
       if (docCompare != 0) return docCompare;

@@ -1,5 +1,6 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../plugins/agent_plugin.dart';
 
 enum GraphGeneratorMode { auto, off, on }
 enum CoderMode { auto, off, on }
@@ -19,20 +20,7 @@ class ResearchPackage {
 class ResearchResult {
   final ChatMessage? output;
   final ResearchPackage? package;
-  final GraphPackage? graphPackage;
-  final String? graphSchema;
-  final GraphGeneratorMode? graphGeneratorMode;
-  final CodePackage? codePackage;
-  final String? codeSnippet;
-  final String? codeLanguage;
-  final String? codeTitle;
-  final FlashcardPackage? flashcardPackage;
-  final List<Flashcard>? flashcardResult;
-  final String? flashcardTitle;
-  final FlashcardMode? flashcardMode;
-  final InteractiveCanvasPackage? canvasPackage;
-  final String? canvasHtml;
-  final InteractiveCanvasMode? interactiveCanvasMode;
+  final Map<String, PluginResult>? pluginResults;
   final List<ChatMessage>? steps;
   final bool noInfoFound;
   final String? noInfoReason;
@@ -41,20 +29,7 @@ class ResearchResult {
   ResearchResult({
     this.output,
     this.package,
-    this.graphPackage,
-    this.graphSchema,
-    this.codePackage,
-    this.codeSnippet,
-    this.codeLanguage,
-    this.codeTitle,
-    this.flashcardPackage,
-    this.flashcardResult,
-    this.flashcardTitle,
-    this.flashcardMode,
-    this.graphGeneratorMode,
-    this.canvasPackage,
-    this.canvasHtml,
-    this.interactiveCanvasMode,
+    this.pluginResults,
     this.steps,
     this.noInfoFound = false,
     this.noInfoReason,
