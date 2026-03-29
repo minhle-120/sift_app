@@ -2,6 +2,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/ai_models.dart';
 import '../../../../core/services/openai_service.dart';
 import '../../../../services/ai/i_ai_service.dart';
+class CodePackage {
+  final List<int> indices;
+  final String codingGoal;
+
+  CodePackage({required this.indices, required this.codingGoal});
+
+  @override
+  String toString() => 'CodePackage(indices: $indices, goal: $codingGoal)';
+}
+
+class CodeResult {
+  final CodePackage package;
+  final String? title;
+  final String codeSnippet;
+  final String language;
+  final List<ChatMessage> steps;
+
+  CodeResult({
+    required this.package,
+    required this.codeSnippet,
+    this.title,
+    this.language = 'dart',
+    required this.steps,
+  });
+}
 
 final codeOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);

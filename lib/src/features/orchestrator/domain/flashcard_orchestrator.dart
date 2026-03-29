@@ -4,6 +4,60 @@ import '../../../../core/models/ai_models.dart';
 import '../../../../core/services/openai_service.dart';
 import '../../../../services/ai/i_ai_service.dart';
 
+class FlashcardPackage {
+  final List<int> indices;
+  final String studyGoal;
+
+  FlashcardPackage({required this.indices, required this.studyGoal});
+
+  @override
+  String toString() => 'FlashcardPackage(indices: $indices, goal: $studyGoal)';
+}
+
+class Flashcard {
+  final String id;
+  final String question;
+  final String answer;
+  final String? explanation;
+
+  Flashcard({
+    required this.id,
+    required this.question,
+    required this.answer,
+    this.explanation,
+  });
+
+  factory Flashcard.fromJson(Map<String, dynamic> json) {
+    return Flashcard(
+      id: json['id'] ?? '',
+      question: json['question'] ?? '',
+      answer: json['answer'] ?? '',
+      explanation: json['explanation'],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'question': question,
+    'answer': answer,
+    if (explanation != null) 'explanation': explanation,
+  };
+}
+
+class FlashcardResult {
+  final FlashcardPackage package;
+  final List<Flashcard> cards;
+  final String title;
+  final List<ChatMessage> steps;
+
+  FlashcardResult({
+    required this.package,
+    required this.cards,
+    required this.title,
+    required this.steps,
+  });
+}
+
 final flashcardOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);
   return FlashcardOrchestrator(aiService: aiService);

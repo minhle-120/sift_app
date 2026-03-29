@@ -11,6 +11,7 @@ import '../controllers/settings_controller.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/collection_controller.dart';
 import '../views/settings_screen.dart';
+import '../../../../../core/plugins/plugins_provider.dart';
 import '../../../../../core/models/ai_models.dart';
 import 'dart:io';
 
@@ -176,6 +177,7 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
     final settingsNotifier = ref.read(settingsProvider.notifier);
     final chatState = ref.watch(chatControllerProvider);
     final collectionState = ref.watch(collectionProvider);
+    final plugins = ref.watch(pluginsProvider);
 
     return SafeArea(
       top: false,
@@ -306,44 +308,27 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
 
                   // Tool Toggles (Only in Research Mode)
                   if (!settings.isMobileInternal && settings.aiMode == AiMode.research) ...[
-                    _buildTrayAction(
-                      context,
-                      icon: _getGraphGeneratorIcon(settings.graphGeneratorMode),
-                      label: 'Graph: ${_getGraphGeneratorLabel(settings.graphGeneratorMode)}',
-                      isHighlight: settings.graphGeneratorMode != GraphGeneratorMode.off,
-                      onPressed: () => _cycleGraphGeneratorMode(settings, settingsNotifier),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildTrayAction(
-                      context,
-                      icon: _getCoderIcon(settings.coderMode),
-                      label: 'Code: ${_getCoderLabel(settings.coderMode)}',
-                      isHighlight: settings.coderMode != CoderMode.off,
-                      onPressed: () => _cycleCoderMode(settings, settingsNotifier),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildTrayAction(
-                      context,
-                      icon: _getFlashcardIcon(settings.flashcardMode),
-                      label: 'Flashcard: ${_getFlashcardLabel(settings.flashcardMode)}',
-                      isHighlight: settings.flashcardMode != FlashcardMode.off,
-                      onPressed: () => _cycleFlashcardMode(settings, settingsNotifier),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildTrayAction(
-                      context,
-                      icon: _getInteractiveCanvasIcon(settings.interactiveCanvasMode),
-                      label: 'Canvas: ${_getInteractiveCanvasLabel(settings.interactiveCanvasMode)}',
-                      isHighlight: settings.interactiveCanvasMode != InteractiveCanvasMode.off,
-                      onPressed: () => _cycleInteractiveCanvasMode(settings, settingsNotifier),
-                    ),
-                    const SizedBox(width: 8),
+                    ...plugins.map((plugin) {
+                      final mode = settings.pluginModes[plugin.id] ?? PluginMode.auto;
+                      String modeLabel;
+                      switch (mode) {
+                        case PluginMode.auto: modeLabel = 'Auto'; break;
+                        case PluginMode.on: modeLabel = 'On'; break;
+                        case PluginMode.off: modeLabel = 'Off'; break;
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _buildTrayAction(
+                          context,
+                          icon: mode == PluginMode.off ? Icons.visibility_off_outlined : plugin.icon,
+                          label: '${plugin.name}: $modeLabel',
+                          isHighlight: mode != PluginMode.off,
+                          onPressed: () => settingsNotifier.cyclePluginMode(plugin.id),
+                        ),
+                      );
+                    }),
                   ],
-
-
-                  
-                  // Future toggles go here
-                  const SizedBox(width: 12),
                 ],
               ),
             ),
@@ -534,89 +519,6 @@ class _ChatInputFieldState extends ConsumerState<ChatInputField> {
     notifier.updateAiMode(modes[nextIndex]);
   }
 
-  IconData _getGraphGeneratorIcon(GraphGeneratorMode mode) {
-    switch (mode) {
-      case GraphGeneratorMode.auto: return Icons.auto_awesome_outlined;
-      case GraphGeneratorMode.off: return Icons.visibility_off_outlined;
-      case GraphGeneratorMode.on: return Icons.visibility_outlined;
-    }
-  }
-
-  String _getGraphGeneratorLabel(GraphGeneratorMode mode) {
-    switch (mode) {
-      case GraphGeneratorMode.auto: return 'Auto';
-      case GraphGeneratorMode.off: return 'Off';
-      case GraphGeneratorMode.on: return 'On';
-    }
-  }
-
-  void _cycleGraphGeneratorMode(SettingsState settings, SettingsController notifier) {
-    final nextIndex = (settings.graphGeneratorMode.index + 1) % GraphGeneratorMode.values.length;
-    notifier.updateGraphGeneratorMode(GraphGeneratorMode.values[nextIndex]);
-  }
-
-  IconData _getCoderIcon(CoderMode mode) {
-    switch (mode) {
-      case CoderMode.auto: return Icons.code_rounded;
-      case CoderMode.off: return Icons.code_off_rounded;
-      case CoderMode.on: return Icons.terminal_rounded;
-    }
-  }
-
-  String _getCoderLabel(CoderMode mode) {
-    switch (mode) {
-      case CoderMode.auto: return 'Auto';
-      case CoderMode.off: return 'Off';
-      case CoderMode.on: return 'On';
-    }
-  }
-
-  void _cycleCoderMode(SettingsState settings, SettingsController notifier) {
-    final nextIndex = (settings.coderMode.index + 1) % CoderMode.values.length;
-    notifier.updateCoderMode(CoderMode.values[nextIndex]);
-  }
-
-  IconData _getFlashcardIcon(FlashcardMode mode) {
-    switch (mode) {
-      case FlashcardMode.auto: return Icons.auto_awesome_outlined;
-      case FlashcardMode.off: return Icons.close_rounded;
-      case FlashcardMode.on: return Icons.school_outlined;
-    }
-  }
-
-  String _getFlashcardLabel(FlashcardMode mode) {
-    switch (mode) {
-      case FlashcardMode.auto: return 'Auto';
-      case FlashcardMode.off: return 'Off';
-      case FlashcardMode.on: return 'On';
-    }
-  }
-
-  void _cycleFlashcardMode(SettingsState settings, SettingsController notifier) {
-    final nextIndex = (settings.flashcardMode.index + 1) % FlashcardMode.values.length;
-    notifier.updateFlashcardMode(FlashcardMode.values[nextIndex]);
-  }
-
-  IconData _getInteractiveCanvasIcon(InteractiveCanvasMode mode) {
-    switch (mode) {
-      case InteractiveCanvasMode.auto: return Icons.auto_awesome_mosaic_rounded;
-      case InteractiveCanvasMode.off: return Icons.layers_clear_rounded;
-      case InteractiveCanvasMode.on: return Icons.layers_rounded;
-    }
-  }
-
-  String _getInteractiveCanvasLabel(InteractiveCanvasMode mode) {
-    switch (mode) {
-      case InteractiveCanvasMode.auto: return 'Auto';
-      case InteractiveCanvasMode.off: return 'Off';
-      case InteractiveCanvasMode.on: return 'On';
-    }
-  }
-
-  void _cycleInteractiveCanvasMode(SettingsState settings, SettingsController notifier) {
-    final nextIndex = (settings.interactiveCanvasMode.index + 1) % InteractiveCanvasMode.values.length;
-    notifier.updateInteractiveCanvasMode(InteractiveCanvasMode.values[nextIndex]);
-  }
 
   IconData _getFileIcon(String? extension) {
     switch (extension?.toLowerCase()) {

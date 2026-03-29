@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../../core/models/ai_models.dart';
 import '../controllers/workbench_controller.dart';
 import '../controllers/settings_controller.dart';
 import '../../../knowledge/presentation/widgets/document_viewer.dart';
-import 'graph_viewer.dart';
-import 'code_viewer.dart';
-import 'flashcard_viewer.dart';
-import 'interactive_canvas_viewer.dart';
 import 'control_panel.dart';
-import 'dart:convert';
+import '../../../../../core/plugins/plugins_provider.dart';
 
 class WorkbenchPanel extends ConsumerWidget {
   const WorkbenchPanel({super.key});
@@ -20,9 +15,10 @@ class WorkbenchPanel extends ConsumerWidget {
     final workbench = ref.watch(workbenchProvider);
     final settings = ref.watch(settingsProvider);
     
+    
     // Filter tabs for Mobile Lite Mode (internal AI)
     final filteredTabs = workbench.tabs.where((tab) {
-      if (settings.isMobileInternal && tab.type == WorkbenchTabType.controlPanel) {
+      if (settings.isMobileInternal && tab.type == 'controlPanel') {
         return false;
       }
       return true;
@@ -42,7 +38,7 @@ class WorkbenchPanel extends ConsumerWidget {
         children: [
           if (filteredTabs.isNotEmpty) _buildTabBar(ref, workbench, filteredTabs, theme),
           Expanded(
-            child: _buildContent(workbench.activeTab, settings.isMobileInternal, theme),
+            child: _buildContent(context, ref, workbench.activeTab, settings.isMobileInternal, theme),
           ),
         ],
       ),
@@ -105,8 +101,8 @@ class WorkbenchPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildContent(WorkbenchTab? tab, bool isMobileInternal, ThemeData theme) {
-    if (tab == null || (isMobileInternal && tab.type == WorkbenchTabType.controlPanel)) {
+  Widget _buildContent(BuildContext context, WidgetRef ref, WorkbenchTab? tab, bool isMobileInternal, ThemeData theme) {
+    if (tab == null || (isMobileInternal && tab.type == 'controlPanel')) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -124,7 +120,19 @@ class WorkbenchPanel extends ConsumerWidget {
       );
     }
 
-    if (tab.type == WorkbenchTabType.document) {
+    // Try plugins first
+    final plugins = ref.watch(pluginsProvider);
+    for (final plugin in plugins) {
+       final widget = plugin.buildWorkbenchTab(context, tab);
+       if (widget != null) {
+         return widget;
+       }
+    }
+
+    // Fallback to core standard tabs
+    if (tab.type == 'controlPanel') {
+      return const ControlPanel();
+    } else if (tab.type == 'document') {
       final meta = tab.metadata as Map<String, dynamic>?;
       final docId = meta?['documentId'] as int?;
       final chunkIndex = meta?['chunkIndex'] as int?;
@@ -136,67 +144,12 @@ class WorkbenchPanel extends ConsumerWidget {
           initialChunkIndex: chunkIndex,
         );
       }
-    } else if (tab.type == WorkbenchTabType.graph) {
-      final meta = tab.metadata as Map<String, dynamic>?;
-      var schemaStr = meta?['schema'] as String?;
-      
-      if (schemaStr != null) {
-        // Robustness: Strip markdown backticks if they persisted
-        if (schemaStr.contains('```')) {
-          schemaStr = schemaStr.replaceAll(RegExp(r'```json|```'), '').trim();
-        }
-
-        try {
-          final schema = jsonDecode(schemaStr) as Map<String, dynamic>;
-          return GraphViewer(
-            key: ValueKey('${tab.id}_${meta?['currentIndex'] ?? 0}'),
-            schema: schema,
-          );
-        } catch (e) {
-          return Center(child: Text('Invalid graph data: $e'));
-        }
-      }
-    } else if (tab.type == WorkbenchTabType.code) {
-      final meta = tab.metadata as Map<String, dynamic>?;
-      final code = meta?['code'] as String?;
-      final language = meta?['language'] as String? ?? 'dart';
-      
-      if (code != null) {
-        return CodeViewer(
-          key: ValueKey(tab.id),
-          code: code,
-          language: language,
-        );
-      }
-    } else if (tab.type == WorkbenchTabType.flashcards) {
-      final meta = tab.metadata as Map<String, dynamic>?;
-      final cardsRaw = meta?['cards'] as List<dynamic>?;
-      
-      if (cardsRaw != null) {
-        final cards = cardsRaw.map((c) => Flashcard.fromJson(c as Map<String, dynamic>)).toList();
-        return FlashcardViewer(
-          key: ValueKey(tab.id),
-          cards: cards,
-        );
-      }
-    } else if (tab.type == WorkbenchTabType.interactiveCanvas) {
-      final meta = tab.metadata as Map<String, dynamic>?;
-      final html = meta?['htmlContent'] as String?;
-      
-      if (html != null) {
-        return InteractiveCanvasViewer(
-          key: ValueKey('${tab.id}_${meta?['currentIndex'] ?? 0}'),
-          htmlContent: html,
-        );
-      }
-    } else if (tab.type == WorkbenchTabType.controlPanel) {
-      return const ControlPanel();
     }
     
     return _buildPlaceholderContent(tab.type, theme);
   }
 
-  Widget _buildPlaceholderContent(WorkbenchTabType type, ThemeData theme) {
+  Widget _buildPlaceholderContent(String type, ThemeData theme) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -204,7 +157,7 @@ class WorkbenchPanel extends ConsumerWidget {
           Icon(Icons.construction, size: 48, color: theme.colorScheme.outlineVariant),
           const SizedBox(height: 16),
           Text(
-            '${type.name.toUpperCase()} View Coming Soon',
+            '${type.toUpperCase()} View Coming Soon',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../../core/models/ai_models.dart';
+import '../../../orchestrator/domain/flashcard_orchestrator.dart';
 import 'dart:math';
 
 class FlashcardViewer extends StatefulWidget {

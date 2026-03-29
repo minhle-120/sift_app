@@ -2,6 +2,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/ai_models.dart';
 import '../../../../core/services/openai_service.dart';
 import '../../../../services/ai/i_ai_service.dart';
+class GraphPackage {
+  final List<int> indices;
+  final String graphGoal;
+
+  GraphPackage({required this.indices, required this.graphGoal});
+
+  @override
+  String toString() => 'GraphPackage(indices: $indices, goal: $graphGoal)';
+}
+
+class GraphResult {
+  final GraphPackage package;
+  final String schema;
+  final List<ChatMessage> steps;
+
+  GraphResult({
+    required this.package,
+    required this.schema,
+    required this.steps,
+  });
+}
 
 final graphGeneratorOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);

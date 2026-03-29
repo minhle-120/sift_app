@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
+import 'dart:convert';
 
 import '../../../../../core/services/embedding_service.dart';
 import '../../../../../core/services/portable_settings.dart';
@@ -28,10 +29,7 @@ class SettingsState {
   final int chunkSize;
   final int chunkOverlap;
   final bool isSyncEnabled;
-  final GraphGeneratorMode graphGeneratorMode;
-  final CoderMode coderMode;
-  final FlashcardMode flashcardMode;
-  final InteractiveCanvasMode interactiveCanvasMode;
+  final Map<String, PluginMode> pluginModes;
   final List<String> availableModels;
   final bool isLoadingModels;
   final String? error;
@@ -96,10 +94,7 @@ class SettingsState {
     this.chunkSize = 100,
     this.chunkOverlap = 50,
     this.isSyncEnabled = true,
-    this.graphGeneratorMode = GraphGeneratorMode.auto,
-    this.coderMode = CoderMode.auto,
-    this.flashcardMode = FlashcardMode.auto,
-    this.interactiveCanvasMode = InteractiveCanvasMode.auto,
+    this.pluginModes = const {},
     this.availableModels = const [],
     this.isLoadingModels = false,
     this.error,
@@ -170,10 +165,7 @@ class SettingsState {
     int? chunkSize,
     int? chunkOverlap,
     bool? isSyncEnabled,
-    GraphGeneratorMode? graphGeneratorMode,
-    CoderMode? coderMode,
-    FlashcardMode? flashcardMode,
-    InteractiveCanvasMode? interactiveCanvasMode,
+    Map<String, PluginMode>? pluginModes,
     List<String>? availableModels,
     bool? isLoadingModels,
     String? error,
@@ -232,10 +224,7 @@ class SettingsState {
       chunkSize: chunkSize ?? this.chunkSize,
       chunkOverlap: chunkOverlap ?? this.chunkOverlap,
       isSyncEnabled: isSyncEnabled ?? this.isSyncEnabled,
-      graphGeneratorMode: graphGeneratorMode ?? this.graphGeneratorMode,
-      coderMode: coderMode ?? this.coderMode,
-      flashcardMode: flashcardMode ?? this.flashcardMode,
-      interactiveCanvasMode: interactiveCanvasMode ?? this.interactiveCanvasMode,
+      pluginModes: pluginModes ?? this.pluginModes,
       availableModels: availableModels ?? this.availableModels,
       isLoadingModels: isLoadingModels ?? this.isLoadingModels,
       error: error ?? this.error,
@@ -313,7 +302,24 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     final url = prefs.getString('llamaServerUrl') ?? 'http://localhost:8080';
     final externalUrl = prefs.getString('externalLlamaServerUrl') ?? url;
-    final flashcardMode = FlashcardMode.values[prefs.getInt('flashcardMode') ?? FlashcardMode.auto.index];
+    
+    final currentPluginModes = <String, PluginMode>{};
+    final modesStr = prefs.getString('pluginModes');
+    if (modesStr != null) {
+      try {
+        final decoded = jsonDecode(modesStr) as Map<String, dynamic>;
+        decoded.forEach((key, value) {
+          currentPluginModes[key] = PluginMode.values[value as int];
+        });
+      } catch (_) {}
+    } else {
+      // Legacy fallback
+      currentPluginModes['graph'] = PluginMode.values[prefs.getInt('graphGeneratorMode') ?? prefs.getInt('chartGeneratorMode') ?? prefs.getInt('visualizerMode') ?? 0];
+      currentPluginModes['code'] = PluginMode.values[prefs.getInt('coderMode') ?? 0];
+      currentPluginModes['flashcard'] = PluginMode.values[prefs.getInt('flashcardMode') ?? 0];
+      currentPluginModes['canvas'] = PluginMode.values[prefs.getInt('interactiveCanvasMode') ?? 0];
+      currentPluginModes['quiz'] = PluginMode.values[prefs.getInt('quizMode') ?? 0];
+    }
     
     state = state.copyWith(
       llamaServerUrl: url,
@@ -324,10 +330,7 @@ class SettingsController extends StateNotifier<SettingsState> {
       chunkSize: prefs.getInt('chunkSize') ?? 100,
       chunkOverlap: prefs.getInt('chunkOverlap') ?? 50,
       isSyncEnabled: prefs.getBool('isSyncEnabled') ?? true,
-      graphGeneratorMode: GraphGeneratorMode.values[prefs.getInt('graphGeneratorMode') ?? prefs.getInt('chartGeneratorMode') ?? prefs.getInt('visualizerMode') ?? 0],
-      coderMode: CoderMode.values[prefs.getInt('coderMode') ?? 0],
-      flashcardMode: flashcardMode,
-      interactiveCanvasMode: InteractiveCanvasMode.values[prefs.getInt('interactiveCanvasMode') ?? 0],
+      pluginModes: currentPluginModes,
       backendType: BackendType.values[prefs.getInt('backendType') ?? 0],
       gpuDeviceIndex: prefs.getInt('gpuDeviceIndex') ?? 0,
       modelsPath: prefs.getString('modelsPath') ?? await _downloader.getModelsDirectory(),
@@ -847,28 +850,33 @@ class SettingsController extends StateNotifier<SettingsState> {
     state = state.copyWith(aiMode: mode);
   }
 
-  Future<void> updateGraphGeneratorMode(GraphGeneratorMode mode) async {
+  Future<void> cyclePluginMode(String pluginId) async {
     final prefs = await PortableSettings.getInstance();
-    await prefs.setInt('graphGeneratorMode', mode.index);
-    state = state.copyWith(graphGeneratorMode: mode);
+    
+    final currentModes = Map<String, PluginMode>.from(state.pluginModes);
+    final currentMode = currentModes[pluginId] ?? PluginMode.auto;
+    
+    final nextIndex = (currentMode.index + 1) % PluginMode.values.length;
+    final nextMode = PluginMode.values[nextIndex];
+    
+    currentModes[pluginId] = nextMode;
+    
+    final modesMapStr = currentModes.map((k, v) => MapEntry(k, v.index));
+    await prefs.setString('pluginModes', jsonEncode(modesMapStr));
+    
+    state = state.copyWith(pluginModes: currentModes);
   }
 
-  Future<void> updateCoderMode(CoderMode mode) async {
+  Future<void> setPluginMode(String pluginId, PluginMode mode) async {
     final prefs = await PortableSettings.getInstance();
-    await prefs.setInt('coderMode', mode.index);
-    state = state.copyWith(coderMode: mode);
-  }
-
-  Future<void> updateFlashcardMode(FlashcardMode mode) async {
-    state = state.copyWith(flashcardMode: mode);
-    final prefs = await PortableSettings.getInstance();
-    await prefs.setInt('flashcardMode', mode.index);
-  }
-
-  Future<void> updateInteractiveCanvasMode(InteractiveCanvasMode mode) async {
-    state = state.copyWith(interactiveCanvasMode: mode);
-    final prefs = await PortableSettings.getInstance();
-    await prefs.setInt('interactiveCanvasMode', mode.index);
+    
+    final currentModes = Map<String, PluginMode>.from(state.pluginModes);
+    currentModes[pluginId] = mode;
+    
+    final modesMapStr = currentModes.map((k, v) => MapEntry(k, v.index));
+    await prefs.setString('pluginModes', jsonEncode(modesMapStr));
+    
+    state = state.copyWith(pluginModes: currentModes);
   }
 
   Future<void> setSelectedBundleSize(ModelBundleSize size) async {

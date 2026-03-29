@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ai_models.dart';
 import '../../src/features/chat/domain/entities/message.dart';
 import '../../src/features/chat/presentation/controllers/settings_controller.dart';
+import '../../src/features/chat/presentation/controllers/workbench_controller.dart';
 
 class PluginResult {
   final Map<String, dynamic> metadataToPersist;
@@ -17,7 +18,10 @@ class PluginResult {
 }
 
 abstract class AgentPlugin {
+  String get id;
   String get name;
+  IconData get icon;
+
   String get toolName;
   ToolDefinition get toolDefinition;
   
@@ -40,4 +44,6 @@ abstract class AgentPlugin {
   void onResult(PluginResult result, String messageId, Ref ref);
 
   Widget? buildMessageActionTrigger(BuildContext context, WidgetRef ref, Message message);
+
+  Widget? buildWorkbenchTab(BuildContext context, WorkbenchTab tab);
 }

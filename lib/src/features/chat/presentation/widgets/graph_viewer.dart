@@ -232,7 +232,7 @@ class _GraphViewerState extends ConsumerState<GraphViewer> {
     final workbench = ref.watch(workbenchProvider);
     final activeTab = workbench.activeTab;
     
-    if (activeTab == null || activeTab.type != WorkbenchTabType.graph) {
+    if (activeTab == null || activeTab.type != 'graph') {
       return const SizedBox.shrink();
     }
 

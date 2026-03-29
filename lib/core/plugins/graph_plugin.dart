@@ -6,6 +6,7 @@ import '../../src/features/chat/domain/entities/message.dart';
 import '../../src/features/chat/presentation/controllers/settings_controller.dart';
 import '../../src/features/chat/presentation/controllers/workbench_controller.dart';
 import '../../src/features/orchestrator/domain/graph_generator_orchestrator.dart';
+import '../../src/features/chat/presentation/widgets/graph_viewer.dart';
 import 'dart:convert';
 
 class GraphPlugin extends AgentPlugin {
@@ -14,7 +15,13 @@ class GraphPlugin extends AgentPlugin {
   GraphPlugin(this._orchestrator);
 
   @override
+  String get id => 'graph';
+
+  @override
   String get name => 'Graph Generator';
+
+  @override
+  IconData get icon => Icons.hub_rounded;
 
   @override
   String get toolName => 'delegate_to_graph_generator';
@@ -52,7 +59,7 @@ class GraphPlugin extends AgentPlugin {
   }
 
   @override
-  bool isEnabled(SettingsState settings) => settings.graphGeneratorMode != GraphGeneratorMode.off;
+  bool isEnabled(SettingsState settings) => settings.pluginModes[id] != PluginMode.off;
 
   @override
   Future<PluginResult> execute({
@@ -96,13 +103,32 @@ class GraphPlugin extends AgentPlugin {
       parsedTitle = schema['title'] as String?;
     } catch (_) {}
 
+    final wb = ref.read(workbenchProvider);
+    final existingIndex = wb.tabs.indexWhere((t) => t.type == 'graph' && t.title == parsedTitle);
+
+    List<dynamic> versions = [schemaStr];
+    String targetId = 'graph_$messageId';
+
+    if (existingIndex != -1) {
+      final existingTab = wb.tabs[existingIndex];
+      targetId = existingTab.id;
+      versions = List.from(existingTab.metadata?['versions'] ?? [existingTab.metadata?['schema']]);
+      if (!versions.contains(schemaStr)) {
+        versions.add(schemaStr);
+      }
+    }
+
     ref.read(workbenchProvider.notifier).addTab(
       WorkbenchTab(
-        id: 'graph_$messageId',
+        id: targetId,
         title: parsedTitle ?? 'Graph',
         icon: Icons.hub_rounded,
-        type: WorkbenchTabType.graph,
-        metadata: {'schema': schemaStr},
+        type: 'graph',
+        metadata: {
+          'schema': schemaStr,
+          'versions': versions,
+          'currentIndex': versions.length - 1,
+        },
       ),
     );
   }
@@ -132,7 +158,7 @@ class GraphPlugin extends AgentPlugin {
             id: 'graph_${message.id}',
             title: tabTitle,
             icon: Icons.hub_rounded,
-            type: WorkbenchTabType.graph,
+            type: 'graph',
             metadata: {'schema': schemaStr},
           ),
         );
@@ -150,5 +176,30 @@ class GraphPlugin extends AgentPlugin {
       ),
       child: Text(label),
     );
+  }
+
+  @override
+  Widget? buildWorkbenchTab(BuildContext context, WorkbenchTab tab) {
+    if (tab.type != 'graph') return null;
+    
+    final meta = tab.metadata as Map<String, dynamic>?;
+    var schemaStr = meta?['schema'] as String?;
+    
+    if (schemaStr != null) {
+      if (schemaStr.contains('```')) {
+        schemaStr = schemaStr.replaceAll(RegExp(r'```json|```'), '').trim();
+      }
+
+      try {
+        final schema = jsonDecode(schemaStr) as Map<String, dynamic>;
+        return GraphViewer(
+          key: ValueKey('${tab.id}_${meta?['currentIndex'] ?? 0}'),
+          schema: schema,
+        );
+      } catch (e) {
+        return Center(child: Text('Invalid graph data: $e'));
+      }
+    }
+    return null;
   }
 }

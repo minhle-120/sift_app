@@ -8,6 +8,8 @@ import '../../src/features/orchestrator/domain/graph_generator_orchestrator.dart
 import '../../src/features/orchestrator/domain/code_orchestrator.dart';
 import '../../src/features/orchestrator/domain/flashcard_orchestrator.dart';
 import '../../src/features/orchestrator/domain/interactive_canvas_orchestrator.dart';
+import '../../src/features/orchestrator/domain/quiz_orchestrator.dart';
+import 'quiz_plugin.dart';
 
 final pluginsProvider = Provider<List<AgentPlugin>>((ref) {
   return [
@@ -15,5 +17,6 @@ final pluginsProvider = Provider<List<AgentPlugin>>((ref) {
     CodePlugin(ref.watch(codeOrchestratorProvider)),
     FlashcardPlugin(ref.watch(flashcardOrchestratorProvider)),
     CanvasPlugin(ref.watch(interactiveCanvasOrchestratorProvider)),
+    QuizPlugin(ref.watch(quizOrchestratorProvider)),
   ];
 });

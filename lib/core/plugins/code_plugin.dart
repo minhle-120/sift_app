@@ -6,6 +6,7 @@ import '../../src/features/chat/domain/entities/message.dart';
 import '../../src/features/chat/presentation/controllers/settings_controller.dart';
 import '../../src/features/chat/presentation/controllers/workbench_controller.dart';
 import '../../src/features/orchestrator/domain/code_orchestrator.dart';
+import '../../src/features/chat/presentation/widgets/code_viewer.dart';
 
 class CodePlugin extends AgentPlugin {
   final CodeOrchestrator _orchestrator;
@@ -13,7 +14,13 @@ class CodePlugin extends AgentPlugin {
   CodePlugin(this._orchestrator);
 
   @override
-  String get name => 'Code Specialist';
+  String get id => 'code';
+
+  @override
+  String get name => 'Code';
+  
+  @override
+  IconData get icon => Icons.terminal_rounded;
 
   @override
   String get toolName => 'delegate_to_coder';
@@ -51,7 +58,7 @@ class CodePlugin extends AgentPlugin {
   }
 
   @override
-  bool isEnabled(SettingsState settings) => settings.coderMode != CoderMode.off;
+  bool isEnabled(SettingsState settings) => settings.pluginModes[id] != PluginMode.off;
 
   @override
   Future<PluginResult> execute({
@@ -99,7 +106,7 @@ class CodePlugin extends AgentPlugin {
         id: 'code_$messageId',
         title: data.title ?? 'Generated Code',
         icon: Icons.code_rounded,
-        type: WorkbenchTabType.code,
+        type: 'code',
         metadata: {
           'code': data.codeSnippet,
           'language': data.language,
@@ -133,7 +140,7 @@ class CodePlugin extends AgentPlugin {
             id: 'code_${message.id}',
             title: title ?? 'Generated Code',
             icon: Icons.code_rounded,
-            type: WorkbenchTabType.code,
+            type: 'code',
             metadata: {
               'code': code,
               'language': _detectLanguage(code),
@@ -154,5 +161,23 @@ class CodePlugin extends AgentPlugin {
       ),
       child: Text(title != null ? 'View $title' : 'View Implementation'),
     );
+  }
+
+  @override
+  Widget? buildWorkbenchTab(BuildContext context, WorkbenchTab tab) {
+    if (tab.type != 'code') return null;
+    
+    final meta = tab.metadata as Map<String, dynamic>?;
+    final code = meta?['code'] as String?;
+    final language = meta?['language'] as String? ?? 'dart';
+    
+    if (code != null) {
+      return CodeViewer(
+        key: ValueKey(tab.id),
+        code: code,
+        language: language,
+      );
+    }
+    return null;
   }
 }

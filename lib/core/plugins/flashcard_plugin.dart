@@ -6,6 +6,7 @@ import '../../src/features/chat/domain/entities/message.dart';
 import '../../src/features/chat/presentation/controllers/settings_controller.dart';
 import '../../src/features/chat/presentation/controllers/workbench_controller.dart';
 import '../../src/features/orchestrator/domain/flashcard_orchestrator.dart';
+import '../../src/features/chat/presentation/widgets/flashcard_viewer.dart';
 
 class FlashcardPlugin extends AgentPlugin {
   final FlashcardOrchestrator _orchestrator;
@@ -13,7 +14,13 @@ class FlashcardPlugin extends AgentPlugin {
   FlashcardPlugin(this._orchestrator);
 
   @override
-  String get name => 'Study Companion';
+  String get id => 'flashcard';
+
+  @override
+  String get name => 'Flashcards';
+  
+  @override
+  IconData get icon => Icons.school_outlined;
 
   @override
   String get toolName => 'delegate_to_flashcards';
@@ -51,7 +58,7 @@ class FlashcardPlugin extends AgentPlugin {
   }
 
   @override
-  bool isEnabled(SettingsState settings) => settings.flashcardMode != FlashcardMode.off;
+  bool isEnabled(SettingsState settings) => settings.pluginModes[id] != PluginMode.off;
 
   @override
   Future<PluginResult> execute({
@@ -100,14 +107,34 @@ class FlashcardPlugin extends AgentPlugin {
     final data = result.resultData as FlashcardResult?;
     if (data == null) return;
 
+    final wb = ref.read(workbenchProvider);
+    final existingIndex = wb.tabs.indexWhere((t) => t.type == 'flashcards' && t.title == data.title);
+
+    List<dynamic> finalCards = data.cards.map((c) => c.toJson()).toList();
+    String targetId = 'cards_$messageId';
+
+    if (existingIndex != -1) {
+      final existingTab = wb.tabs[existingIndex];
+      targetId = existingTab.id;
+      final List<dynamic> currentCards = List.from(existingTab.metadata?['cards'] ?? []);
+      
+      final existingIds = currentCards.map((c) => c['id']).toSet();
+      for (final card in finalCards) {
+        if (!existingIds.contains(card['id'])) {
+          currentCards.add(card);
+        }
+      }
+      finalCards = currentCards;
+    }
+
     ref.read(workbenchProvider.notifier).addTab(
       WorkbenchTab(
-        id: 'cards_$messageId',
+        id: targetId,
         title: data.title,
         icon: Icons.sports_esports_outlined,
-        type: WorkbenchTabType.flashcards,
+        type: 'flashcards',
         metadata: {
-          'cards': data.cards.map((c) => c.toJson()).toList(),
+          'cards': finalCards,
         },
       ),
     );
@@ -128,7 +155,7 @@ class FlashcardPlugin extends AgentPlugin {
             id: 'cards_${message.id}',
             title: title,
             icon: Icons.sports_esports_outlined,
-            type: WorkbenchTabType.flashcards,
+            type: 'flashcards',
             metadata: {
               'cards': cards,
             },
@@ -148,5 +175,30 @@ class FlashcardPlugin extends AgentPlugin {
       ),
       child: Text('View $title'),
     );
+  }
+
+  @override
+  Widget? buildWorkbenchTab(BuildContext context, WorkbenchTab tab) {
+    if (tab.type != 'flashcards') return null;
+    
+    final meta = tab.metadata as Map<String, dynamic>?;
+    final cardsRaw = meta?['cards'] as List<dynamic>?;
+    
+    if (cardsRaw != null) {
+      // Decode inside the view builder
+      final List<Flashcard> parsed = [];
+      for (final c in cardsRaw) {
+        if (c is Map<String, dynamic>) {
+           parsed.add(Flashcard.fromJson(c));
+        } else if (c is Flashcard) {
+           parsed.add(c);
+        }
+      }
+      return FlashcardViewer(
+        key: ValueKey(tab.id),
+        cards: parsed,
+      );
+    }
+    return null;
   }
 }

@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../../core/services/portable_settings.dart';
-
-enum WorkbenchTabType { graph, analysis, sandbox, document, diagram, code, flashcards, controlPanel, interactiveCanvas }
-
 class WorkbenchTab {
   final String id;
   final String title;
   final IconData icon;
-  final WorkbenchTabType type;
+  final String type;
   final bool isPermanent;
   final dynamic metadata;
 
@@ -37,7 +34,7 @@ class WorkbenchState {
         id: 'control_panel',
         title: 'Control Panel',
         icon: Icons.tune_rounded,
-        type: WorkbenchTabType.controlPanel,
+        type: 'controlPanel',
         isPermanent: true,
       ),
     ],
@@ -105,7 +102,6 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
   }
 
   void addTab(WorkbenchTab tab) {
-    // 1. Check for exactly the same ID (e.g. reopening a document)
     if (state.tabs.any((t) => t.id == tab.id)) {
       if (tab.metadata != null) {
         updateTabMetadata(tab.id, tab.metadata);
@@ -114,122 +110,6 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
       return;
     }
 
-    // 2. Specialized Logic for Graphs: Match by Title for Versioning
-    if (tab.type == WorkbenchTabType.graph) {
-      final String? incomingSchema = tab.metadata?['schema'];
-      if (incomingSchema != null) {
-        // Try to find a tab with the same title
-        final existingTabIndex = state.tabs.indexWhere(
-          (t) => t.type == WorkbenchTabType.graph && t.title == tab.title
-        );
-
-        if (existingTabIndex != -1) {
-          final existingTab = state.tabs[existingTabIndex];
-          final List<dynamic> versions = List.from(existingTab.metadata?['versions'] ?? [existingTab.metadata?['schema']]);
-          
-          // Check if this exact schema is already in versions to avoid duplicates on rebuilds
-          if (!versions.contains(incomingSchema)) {
-            versions.add(incomingSchema);
-          }
-
-          final updatedTab = WorkbenchTab(
-            id: existingTab.id,
-            title: existingTab.title,
-            icon: existingTab.icon,
-            type: existingTab.type,
-            metadata: {
-              'schema': incomingSchema, // Current active schema
-              'versions': versions,
-              'currentIndex': versions.length - 1,
-            },
-          );
-
-          final newTabs = List<WorkbenchTab>.from(state.tabs);
-          newTabs[existingTabIndex] = updatedTab;
-
-          state = state.copyWith(
-            tabs: newTabs,
-            activeTabId: existingTab.id,
-            isCollapsed: false,
-          );
-          return;
-        }
-      }
-      
-      // If it's a new graph, initialize the versioning structure
-      final newTab = WorkbenchTab(
-        id: tab.id,
-        title: tab.title,
-        icon: tab.icon,
-        type: tab.type,
-        metadata: {
-          'schema': tab.metadata?['schema'],
-          'versions': [tab.metadata?['schema']],
-          'currentIndex': 0,
-        },
-      );
-      state = state.copyWith(
-        tabs: [...state.tabs, newTab],
-        activeTabId: tab.id,
-        isCollapsed: false,
-      );
-      return;
-    }
-
-    // Interactive Canvas (No versioning)
-    if (tab.type == WorkbenchTabType.interactiveCanvas) {
-      state = state.copyWith(
-        tabs: [...state.tabs, tab],
-        activeTabId: tab.id,
-        isCollapsed: false,
-      );
-      return;
-    }
-
-    // 3. Specialized Logic for Flashcards: Merge New Cards with Existing
-    if (tab.type == WorkbenchTabType.flashcards) {
-      final List<dynamic>? incomingCards = tab.metadata?['cards'];
-      if (incomingCards != null) {
-        final existingTabIndex = state.tabs.indexWhere(
-          (t) => t.type == WorkbenchTabType.flashcards && t.title == tab.title
-        );
-
-        if (existingTabIndex != -1) {
-          final existingTab = state.tabs[existingTabIndex];
-          final List<dynamic> currentCards = List.from(existingTab.metadata?['cards'] ?? []);
-          
-          // Merge logic: Add only cards with new IDs
-          final existingIds = currentCards.map((c) => c['id']).toSet();
-          for (final card in incomingCards) {
-            if (!existingIds.contains(card['id'])) {
-              currentCards.add(card);
-            }
-          }
-
-          final updatedTab = WorkbenchTab(
-            id: existingTab.id,
-            title: existingTab.title,
-            icon: existingTab.icon,
-            type: existingTab.type,
-            metadata: {
-              'cards': currentCards,
-            },
-          );
-
-          final newTabs = List<WorkbenchTab>.from(state.tabs);
-          newTabs[existingTabIndex] = updatedTab;
-
-          state = state.copyWith(
-            tabs: newTabs,
-            activeTabId: existingTab.id,
-            isCollapsed: false,
-          );
-          return;
-        }
-      }
-    }
-
-    // 4. Default behavior for other tab types
     state = state.copyWith(
       tabs: [...state.tabs, tab],
       activeTabId: tab.id,
@@ -239,7 +119,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
 
   void navigateVersion(String tabId, int index) {
     final newTabs = state.tabs.map((t) {
-      if (t.id == tabId && t.type == WorkbenchTabType.graph) {
+      if (t.id == tabId && t.type == 'graph') {
         final List<dynamic>? versions = t.metadata?['versions'];
         if (versions != null && index >= 0 && index < versions.length) {
           const dataKey = 'schema';
@@ -278,7 +158,7 @@ class WorkbenchController extends StateNotifier<WorkbenchState> {
   }
 
   void removeTab(String id) {
-    final tabToRemove = state.tabs.firstWhere((t) => t.id == id, orElse: () => const WorkbenchTab(id: '', title: '', icon: Icons.error, type: WorkbenchTabType.controlPanel));
+    final tabToRemove = state.tabs.firstWhere((t) => t.id == id, orElse: () => const WorkbenchTab(id: '', title: '', icon: Icons.error, type: 'controlPanel'));
     if (tabToRemove.isPermanent) return; // Cannot remove permanent tabs
 
     final newTabs = state.tabs.where((t) => t.id != id).toList();

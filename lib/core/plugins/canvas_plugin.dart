@@ -6,6 +6,7 @@ import '../../src/features/chat/domain/entities/message.dart';
 import '../../src/features/chat/presentation/controllers/settings_controller.dart';
 import '../../src/features/chat/presentation/controllers/workbench_controller.dart';
 import '../../src/features/orchestrator/domain/interactive_canvas_orchestrator.dart';
+import '../../src/features/chat/presentation/widgets/interactive_canvas_viewer.dart';
 
 class CanvasPlugin extends AgentPlugin {
   final InteractiveCanvasOrchestrator _orchestrator;
@@ -13,7 +14,13 @@ class CanvasPlugin extends AgentPlugin {
   CanvasPlugin(this._orchestrator);
 
   @override
-  String get name => 'Interactive Canvas';
+  String get id => 'canvas';
+
+  @override
+  String get name => 'Canvas';
+
+  @override
+  IconData get icon => Icons.auto_awesome_mosaic_rounded;
 
   @override
   String get toolName => 'delegate_to_interactive_canvas';
@@ -51,7 +58,7 @@ class CanvasPlugin extends AgentPlugin {
   }
 
   @override
-  bool isEnabled(SettingsState settings) => settings.interactiveCanvasMode != InteractiveCanvasMode.off;
+  bool isEnabled(SettingsState settings) => settings.pluginModes[id] != PluginMode.off;
 
   @override
   Future<PluginResult> execute({
@@ -95,7 +102,7 @@ class CanvasPlugin extends AgentPlugin {
         id: 'canvas_$messageId',
         title: 'Interactive Canvas',
         icon: Icons.auto_awesome_mosaic_rounded,
-        type: WorkbenchTabType.interactiveCanvas,
+        type: 'interactiveCanvas',
         metadata: {
           'htmlContent': htmlContent,
         },
@@ -117,7 +124,7 @@ class CanvasPlugin extends AgentPlugin {
             id: 'canvas_${message.id}',
             title: 'Canvas',
             icon: Icons.auto_awesome_mosaic_rounded,
-            type: WorkbenchTabType.interactiveCanvas,
+            type: 'interactiveCanvas',
             metadata: {
               'htmlContent': htmlContent,
             },
@@ -137,5 +144,20 @@ class CanvasPlugin extends AgentPlugin {
       ),
       child: const Text('View Canvas'),
     );
+  }
+
+  @override
+  Widget? buildWorkbenchTab(BuildContext context, WorkbenchTab tab) {
+    if (tab.type != 'interactiveCanvas') return null;
+    final meta = tab.metadata as Map<String, dynamic>?;
+    final html = meta?['htmlContent'] as String?;
+    
+    if (html != null) {
+      return InteractiveCanvasViewer(
+        key: ValueKey('${tab.id}_${meta?['currentIndex'] ?? 0}'),
+        htmlContent: html,
+      );
+    }
+    return null;
   }
 }

@@ -188,7 +188,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                                   id: 'doc_$docId',
                                   title: sourceTitle,
                                   icon: Icons.description_outlined,
-                                  type: WorkbenchTabType.document,
+                                  type: 'document',
                                   metadata: metadata,
                                 ),
                               );

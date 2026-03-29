@@ -6,6 +6,7 @@ enum GraphGeneratorMode { auto, off, on }
 enum CoderMode { auto, off, on }
 enum FlashcardMode { auto, off, on }
 enum InteractiveCanvasMode { auto, off, on }
+enum QuizMode { auto, off, on }
 
 enum AiConnectionStatus { ok, loading, unreachable }
 
@@ -37,125 +38,7 @@ class ResearchResult {
   });
 }
 
-class GraphPackage {
-  final List<int> indices;
-  final String graphGoal;
-
-  GraphPackage({required this.indices, required this.graphGoal});
-
-  @override
-  String toString() => 'GraphPackage(indices: $indices, goal: $graphGoal)';
-}
-
-class CodePackage {
-  final List<int> indices;
-  final String codingGoal;
-
-  CodePackage({required this.indices, required this.codingGoal});
-
-  @override
-  String toString() => 'CodePackage(indices: $indices, goal: $codingGoal)';
-}
-
-class FlashcardPackage {
-  final List<int> indices;
-  final String studyGoal;
-
-  FlashcardPackage({required this.indices, required this.studyGoal});
-
-  @override
-  String toString() => 'FlashcardPackage(indices: $indices, goal: $studyGoal)';
-}
-
-class InteractiveCanvasPackage {
-  final List<int> indices;
-  final String canvasGoal;
-
-  InteractiveCanvasPackage({required this.indices, required this.canvasGoal});
-
-  @override
-  String toString() => 'InteractiveCanvasPackage(indices: $indices, goal: $canvasGoal)';
-}
-
-class GraphResult {
-  final GraphPackage package;
-  final String schema;
-  final List<ChatMessage> steps;
-
-  GraphResult({required this.package, required this.schema, required this.steps});
-}
-
-class CodeResult {
-  final CodePackage package;
-  final String codeSnippet;
-  final String language;
-  final String? title;
-  final List<ChatMessage> steps;
-
-  CodeResult({
-    required this.package,
-    required this.codeSnippet,
-    this.language = 'plaintext',
-    this.title,
-    required this.steps,
-  });
-}
-
-class Flashcard {
-  final String id;
-  final String question;
-  final String answer;
-  final String? explanation;
-
-  Flashcard({
-    required this.id,
-    required this.question,
-    required this.answer,
-    this.explanation,
-  });
-
-  factory Flashcard.fromJson(Map<String, dynamic> json) {
-    return Flashcard(
-      id: json['id'] ?? '',
-      question: json['question'] ?? '',
-      answer: json['answer'] ?? '',
-      explanation: json['explanation'],
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'question': question,
-    'answer': answer,
-    if (explanation != null) 'explanation': explanation,
-  };
-}
-
-class FlashcardResult {
-  final FlashcardPackage package;
-  final List<Flashcard> cards;
-  final String title;
-  final List<ChatMessage> steps;
-
-  FlashcardResult({
-    required this.package,
-    required this.cards,
-    required this.title,
-    required this.steps,
-  });
-}
-
-class InteractiveCanvasResult {
-  final InteractiveCanvasPackage package;
-  final String htmlContent;
-  final List<ChatMessage> steps;
-
-  InteractiveCanvasResult({
-    required this.package,
-    required this.htmlContent,
-    required this.steps,
-  });
-}
+enum PluginMode { auto, off, on }
 
 enum ChatRole {
   system,

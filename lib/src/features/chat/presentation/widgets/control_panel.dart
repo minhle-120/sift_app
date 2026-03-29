@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/settings_controller.dart';
 import '../../../../../core/models/ai_models.dart';
+import '../../../../../core/plugins/plugins_provider.dart';
+import '../../../../../core/plugins/agent_plugin.dart';
 
 class ControlPanel extends ConsumerWidget {
   const ControlPanel({super.key});
@@ -11,6 +13,7 @@ class ControlPanel extends ConsumerWidget {
     final theme = Theme.of(context);
     final settings = ref.watch(settingsProvider);
     final settingsNotifier = ref.read(settingsProvider.notifier);
+    final plugins = ref.watch(pluginsProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -28,47 +31,22 @@ class ControlPanel extends ConsumerWidget {
 
           const SizedBox(height: 32),
           
-          _buildControlCard(
-            context,
-            title: 'Graph Generator',
-            icon: Icons.hub_rounded,
-            description: _getGraphGeneratorDescription(settings.graphGeneratorMode),
-            isEnabled: settings.aiMode == AiMode.research,
-            child: _buildGraphGeneratorToggles(settings, settingsNotifier, theme),
-          ),
-          
-          const SizedBox(height: 24),
-          
-          _buildControlCard(
-            context,
-            title: 'Code',
-            icon: Icons.terminal_rounded,
-            description: _getCoderDescription(settings.coderMode),
-            isEnabled: settings.aiMode == AiMode.research,
-            child: _buildCoderToggles(settings, settingsNotifier, theme),
-          ),
-          
-          const SizedBox(height: 24),
-
-          _buildControlCard(
-            context,
-            title: 'Flashcard',
-            icon: Icons.psychology_rounded,
-            description: _getFlashcardDescription(settings.flashcardMode),
-            isEnabled: settings.aiMode == AiMode.research,
-            child: _buildFlashcardToggles(settings, settingsNotifier, theme),
-          ),
-          
-          const SizedBox(height: 24),
-
-          _buildControlCard(
-            context,
-            title: 'Canvas',
-            icon: Icons.auto_awesome_mosaic_rounded,
-            description: _getInteractiveCanvasDescription(settings.interactiveCanvasMode),
-            isEnabled: settings.aiMode == AiMode.research,
-            child: _buildInteractiveCanvasToggles(settings, settingsNotifier, theme),
-          ),
+          ...plugins.map((plugin) {
+            final mode = settings.pluginModes[plugin.id] ?? PluginMode.auto;
+            return Column(
+              children: [
+                _buildControlCard(
+                  context,
+                  title: plugin.name,
+                  icon: plugin.icon,
+                  description: _getModeDescription(plugin, mode),
+                  isEnabled: settings.aiMode == AiMode.research,
+                  child: _buildPluginToggles(plugin, mode, settingsNotifier, theme),
+                ),
+                const SizedBox(height: 24),
+              ],
+            );
+          }),
           
           const SizedBox(height: 12),
         ],
@@ -296,135 +274,27 @@ class ControlPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildGraphGeneratorToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
-    return SegmentedButton<GraphGeneratorMode>(
+  Widget _buildPluginToggles(AgentPlugin plugin, PluginMode currentMode, SettingsController notifier, ThemeData theme) {
+    return SegmentedButton<PluginMode>(
       segments: const [
-        ButtonSegment(
-          value: GraphGeneratorMode.auto,
-          label: Text('Auto'),
-        ),
-        ButtonSegment(
-          value: GraphGeneratorMode.on,
-          label: Text('On'),
-        ),
-        ButtonSegment(
-          value: GraphGeneratorMode.off,
-          label: Text('Off'),
-        ),
+        ButtonSegment(value: PluginMode.auto, label: Text('Auto')),
+        ButtonSegment(value: PluginMode.on, label: Text('On')),
+        ButtonSegment(value: PluginMode.off, label: Text('Off')),
       ],
-      selected: {settings.graphGeneratorMode},
-      onSelectionChanged: (value) => notifier.updateGraphGeneratorMode(value.first),
+      selected: {currentMode},
+      onSelectionChanged: (value) => notifier.setPluginMode(plugin.id, value.first),
       showSelectedIcon: false,
     );
   }
 
-  Widget _buildCoderToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
-    return SegmentedButton<CoderMode>(
-      segments: const [
-        ButtonSegment(
-          value: CoderMode.auto,
-          label: Text('Auto'),
-        ),
-        ButtonSegment(
-          value: CoderMode.on,
-          label: Text('On'),
-        ),
-        ButtonSegment(
-          value: CoderMode.off,
-          label: Text('Off'),
-        ),
-      ],
-      selected: {settings.coderMode},
-      onSelectionChanged: (value) => notifier.updateCoderMode(value.first),
-      showSelectedIcon: false,
-    );
-  }
-
-  Widget _buildFlashcardToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
-    return SegmentedButton<FlashcardMode>(
-      segments: const [
-        ButtonSegment(
-          value: FlashcardMode.auto,
-          label: Text('Auto'),
-        ),
-        ButtonSegment(
-          value: FlashcardMode.on,
-          label: Text('On'),
-        ),
-        ButtonSegment(
-          value: FlashcardMode.off,
-          label: Text('Off'),
-        ),
-      ],
-      selected: {settings.flashcardMode},
-      onSelectionChanged: (value) => notifier.updateFlashcardMode(value.first),
-      showSelectedIcon: false,
-    );
-  }
-
-  Widget _buildInteractiveCanvasToggles(SettingsState settings, SettingsController notifier, ThemeData theme) {
-    return SegmentedButton<InteractiveCanvasMode>(
-      segments: const [
-        ButtonSegment(
-          value: InteractiveCanvasMode.auto,
-          label: Text('Auto'),
-        ),
-        ButtonSegment(
-          value: InteractiveCanvasMode.on,
-          label: Text('On'),
-        ),
-        ButtonSegment(
-          value: InteractiveCanvasMode.off,
-          label: Text('Off'),
-        ),
-      ],
-      selected: {settings.interactiveCanvasMode},
-      onSelectionChanged: (value) => notifier.updateInteractiveCanvasMode(value.first),
-      showSelectedIcon: false,
-    );
-  }
-
-  String _getGraphGeneratorDescription(GraphGeneratorMode mode) {
+  String _getModeDescription(AgentPlugin plugin, PluginMode mode) {
     switch (mode) {
-      case GraphGeneratorMode.auto:
-        return 'AI smartly chooses when to generate graphs or diagrams based on your request context.';
-      case GraphGeneratorMode.on:
-        return 'AI will attempt to generate graphs whenever possible, even for simpler requests.';
-      case GraphGeneratorMode.off:
-        return 'Disables graph generation entirely for a faster, text-only conversational experience.';
-    }
-  }
-
-  String _getCoderDescription(CoderMode mode) {
-    switch (mode) {
-      case CoderMode.auto:
-        return 'AI provides code snippets and logic when technically relevant to the conversation.';
-      case CoderMode.on:
-        return 'AI prioritizes technical implementation, optimization, and logical structures in every response.';
-      case CoderMode.off:
-        return 'Disables rich code generation, focusing the AI on more natural, conversational interactions.';
-    }
-  }
-
-  String _getFlashcardDescription(FlashcardMode mode) {
-    switch (mode) {
-      case FlashcardMode.auto:
-        return 'AI creates flashcard decks when it detects a learning objective or complex topic.';
-      case FlashcardMode.on:
-        return 'AI treats every research turn as a flashcard session, distilling information into atomic cards.';
-      case FlashcardMode.off:
-        return 'Disables flashcard generation entirely. Useful for purely data-driven research tasks.';
-    }
-  }
-
-  String _getInteractiveCanvasDescription(InteractiveCanvasMode mode) {
-    switch (mode) {
-      case InteractiveCanvasMode.auto:
-        return 'AI creates highly interactive HTML/SVG components when data complexity warrants custom visualization.';
-      case InteractiveCanvasMode.on:
-        return 'AI prioritizes building interactive canvases and structured reports for every research task.';
-      case InteractiveCanvasMode.off:
-        return 'Disables interactive canvas generation for a strictly text and standard graph experience.';
+      case PluginMode.auto:
+        return 'AI will automatically decide when to use the ${plugin.name} feature based on the context of your request.';
+      case PluginMode.on:
+        return 'AI will prioritize using the ${plugin.name} feature whenever possible.';
+      case PluginMode.off:
+        return 'The ${plugin.name} feature is completely disabled for this conversation.';
     }
   }
 }

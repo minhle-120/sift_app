@@ -2,6 +2,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/ai_models.dart';
 import '../../../../services/ai/i_ai_service.dart';
 import '../../../../core/services/openai_service.dart';
+class InteractiveCanvasPackage {
+  final List<int> indices;
+  final String canvasGoal;
+
+  InteractiveCanvasPackage({required this.indices, required this.canvasGoal});
+
+  @override
+  String toString() => 'InteractiveCanvasPackage(indices: $indices, goal: $canvasGoal)';
+}
+
+class InteractiveCanvasResult {
+  final InteractiveCanvasPackage package;
+  final String htmlContent;
+  final List<ChatMessage> steps;
+
+  InteractiveCanvasResult({
+    required this.package,
+    required this.htmlContent,
+    required this.steps,
+  });
+}
 
 final interactiveCanvasOrchestratorProvider = Provider((ref) {
   final aiService = ref.watch(aiServiceProvider);

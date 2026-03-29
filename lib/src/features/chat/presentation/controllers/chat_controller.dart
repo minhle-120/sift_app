@@ -512,7 +512,7 @@ class ChatController extends StateNotifier<ChatState> {
           currentTabMetadata = {
             ...?activeTab.metadata as Map<String, dynamic>?,
             'title': activeTab.title,
-            'type': activeTab.type.name,
+            'type': activeTab.type,
           };
         }
       }
