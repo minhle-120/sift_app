@@ -100,67 +100,7 @@ class _QuizViewerState extends State<QuizViewer> {
     return Column(
       children: [
         // Header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(
-                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
-              ),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Knowledge Check',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Question ${_currentIndex + 1} of ${widget.questions.length}',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_left_rounded),
-                      onPressed: _currentIndex > 0 ? _prevQuestion : null,
-                      tooltip: 'Previous',
-                    ),
-                    Container(
-                      height: 24,
-                      width: 1,
-                      color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.keyboard_arrow_right_rounded),
-                      onPressed: _currentIndex < widget.questions.length - 1 ? _nextQuestion : null,
-                      tooltip: 'Next',
-                    ),
-                  ],
-                ),
-              )
-            ],
-          ),
-        ),
+        // The header is now removed to maximize question space as per redesign plan.
         
         // Progress Bar
         TweenAnimationBuilder<double>(
@@ -249,51 +189,54 @@ class _QuizViewerState extends State<QuizViewer> {
                     if (hasAnswered && question.explanation.isNotEmpty) ...[
                       const SizedBox(height: 40),
                       _buildExplanationBox(theme, question.explanation),
-                      const SizedBox(height: 32),
-                      if (index < widget.questions.length - 1)
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton(
-                            onPressed: _nextQuestion,
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('Next Question'),
-                                SizedBox(width: 8),
-                                Icon(Icons.arrow_forward_rounded, size: 18),
-                              ],
-                            ),
-                          ),
-                        )
-                      else 
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton(
-                            onPressed: _finishQuiz,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('Finish Quiz'),
-                                SizedBox(width: 8),
-                                Icon(Icons.check_circle_outline_rounded, size: 18),
-                              ],
-                            ),
-                          ),
-                        )
                     ]
                   ],
                 ),
               );
             },
+          ),
+        ),
+
+        // Bottom Navigation Bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                onPressed: _currentIndex > 0 ? _prevQuestion : null,
+                tooltip: 'Previous Question',
+              ),
+              Text(
+                '${_currentIndex + 1} / ${widget.questions.length}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (_currentIndex == widget.questions.length - 1 && _selectedAnswers.containsKey(_currentIndex))
+                IconButton(
+                  icon: Icon(Icons.check_circle_rounded, color: theme.colorScheme.primary, size: 28),
+                  onPressed: _finishQuiz,
+                  tooltip: 'Finish Quiz',
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.arrow_forward_ios_rounded, size: 20),
+                  onPressed: _currentIndex < widget.questions.length - 1 ? _nextQuestion : null,
+                  tooltip: 'Next Question',
+                ),
+            ],
           ),
         ),
       ],
@@ -423,7 +366,7 @@ class _QuizViewerState extends State<QuizViewer> {
               ),
               const SizedBox(width: 12),
               Text(
-                'Deep Insights',
+                'Explanation',
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: theme.colorScheme.primary,
                   fontWeight: FontWeight.w900,

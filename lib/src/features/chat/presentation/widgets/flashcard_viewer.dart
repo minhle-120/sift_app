@@ -20,7 +20,7 @@ class _FlashcardViewerState extends State<FlashcardViewer> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(viewportFraction: 0.85);
+    _pageController = PageController(viewportFraction: 0.92);
   }
 
   @override
@@ -63,90 +63,88 @@ class _FlashcardViewerState extends State<FlashcardViewer> {
           autofocus: true,
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Card ${_currentIndex + 1} of ${widget.cards.length}',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               Expanded(
-                child: Row(
-                  children: [
-                    // Previous Button
-                    _buildNavButton(
-                      icon: Icons.chevron_left_rounded,
-                      onPressed: _currentIndex > 0 ? _previousPage : null,
-                    ),
-                    
-                    Expanded(
-                      child: PageView.builder(
-                        controller: _pageController,
-                        itemCount: widget.cards.length,
-                        physics: const BouncingScrollPhysics(),
-                        onPageChanged: (index) {
-                          setState(() {
-                            _currentIndex = index;
-                          });
-                        },
-                        itemBuilder: (context, index) {
-                          return AnimatedBuilder(
-                            animation: _pageController,
-                            builder: (context, child) {
-                              double value = 1.0;
-                              if (_pageController.position.haveDimensions) {
-                                value = _pageController.page! - index;
-                                value = (1 - (value.abs() * 0.3)).clamp(0.0, 1.0);
-                              }
-                              return Center(
-                                child: SizedBox(
-                                  height: Curves.easeOut.transform(value) * 450,
-                                  width: Curves.easeOut.transform(value) * 350,
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: _FlashcardItem(
-                              card: widget.cards[index],
-                              isFlipped: _flipped[index] ?? false,
-                              onTap: () => _toggleFlip(index),
-                            ),
-                          );
-                        },
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: widget.cards.length,
+                  physics: const BouncingScrollPhysics(),
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentIndex = index;
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    return AnimatedBuilder(
+                      animation: _pageController,
+                      builder: (context, child) {
+                        double value = 1.0;
+                        if (_pageController.position.haveDimensions) {
+                          value = _pageController.page! - index;
+                          value = (1 - (value.abs() * 0.15)).clamp(0.0, 1.0);
+                        }
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 8.0),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: _FlashcardItem(
+                        card: widget.cards[index],
+                        isFlipped: _flipped[index] ?? false,
+                        onTap: () => _toggleFlip(index),
                       ),
-                    ),
-
-                    // Next Button
-                    _buildNavButton(
-                      icon: Icons.chevron_right_rounded,
-                      onPressed: _currentIndex < widget.cards.length - 1 ? _nextPage : null,
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
-              const SizedBox(height: 40),
+
+              // Bottom Navigation Bar
+              Builder(
+                builder: (context) {
+                  final theme = Theme.of(context);
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton.filledTonal(
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                          onPressed: _currentIndex > 0 ? _previousPage : null,
+                          tooltip: 'Previous Card',
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${_currentIndex + 1} / ${widget.cards.length}',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                            Text(
+                              'SWIPE OR TAP',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                                letterSpacing: 1.2,
+                                fontSize: 9,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton.filledTonal(
+                          icon: const Icon(Icons.arrow_forward_ios_rounded, size: 20),
+                          onPressed: _currentIndex < widget.cards.length - 1 ? _nextPage : null,
+                          tooltip: 'Next Card',
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavButton({required IconData icon, VoidCallback? onPressed}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: IconButton.filledTonal(
-        icon: Icon(icon),
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          padding: const EdgeInsets.all(16),
         ),
       ),
     );
@@ -254,34 +252,59 @@ class _FlashcardItem extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Spacer(),
+          const Spacer(flex: 3),
           Center(
             child: Text(
               content,
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge?.copyWith(
+              style: (content.length > 100 ? theme.textTheme.titleMedium : theme.textTheme.headlineSmall)?.copyWith(
                 color: isBack ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 height: 1.4,
+                letterSpacing: -0.2,
               ),
             ),
           ),
-          const Spacer(),
-          if (isBack && explanation != null)
+          const Spacer(flex: 4),
+          if (isBack && explanation != null) ...[
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
+                color: colorScheme.onPrimaryContainer.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colorScheme.onPrimaryContainer.withValues(alpha: 0.1)),
               ),
               child: Text(
                 explanation,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
-                  fontStyle: FontStyle.italic,
+                  height: 1.5,
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+          ],
+          Center(
+             child: Row(
+               mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isBack ? Icons.flip_to_front_rounded : Icons.flip_to_back_rounded, 
+                    size: 14, 
+                    color: (isBack ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant).withValues(alpha: 0.4)
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isBack ? 'TAP TO SEE QUESTION' : 'TAP TO REVEAL ANSWER',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: (isBack ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant).withValues(alpha: 0.4),
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+             ),
+          ),
         ],
       ),
     );

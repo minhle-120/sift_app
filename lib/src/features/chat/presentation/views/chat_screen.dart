@@ -440,6 +440,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 
   void _showCreateCollectionDialog(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -471,6 +472,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 Navigator.pop(context);
               }
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
+              elevation: 0,
+            ),
             child: const Text('Create'),
           ),
         ],

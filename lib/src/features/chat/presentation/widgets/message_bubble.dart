@@ -107,195 +107,224 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
           color: isUser ? theme.colorScheme.surfaceContainerHigh : Colors.transparent,
           borderRadius: isUser ? BorderRadius.circular(20) : null,
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildAvatar(theme, isUser),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+        child: isUser 
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildAvatar(theme, isUser),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        isUser ? 'You' : 'Sift',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: isUser ? theme.colorScheme.primary : theme.colorScheme.secondary,
-                        ),
-                      ),
-                      if (widget.message.isEdited) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '(Edited)',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
+                      _buildHeaderRow(theme, isUser),
+                      const SizedBox(height: 4),
+                      _buildMainContent(theme, chatState, isUser, context),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  if (widget.message.reasoning != null) _buildReasoning(theme, widget.message.reasoning!),
-                  if (_isEditing)
-                    _buildEditMode(theme)
-                  else if (widget.message.text.isEmpty && 
-                           (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) && 
-                           chatState.isLoading && 
-                           !isUser)
-                    if (chatState.researchStatus != null)
-                      _buildStatusIndicator(theme, chatState.researchStatus!)
-                    else
-                      const _TypingIndicator()
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeaderRow(theme, isUser, includeAvatar: true),
+                const SizedBox(height: 12),
+                _buildMainContent(theme, chatState, isUser, context),
+              ],
+            ),
+      );
+  }
 
+  Widget _buildHeaderRow(ThemeData theme, bool isUser, {bool includeAvatar = false}) {
+    return Row(
+      children: [
+        if (includeAvatar) ...[
+          _buildAvatar(theme, isUser),
+          const SizedBox(width: 12),
+        ],
+        Text(
+          isUser ? 'You' : 'Sift',
+          style: theme.textTheme.labelMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: isUser ? theme.colorScheme.primary : theme.colorScheme.secondary,
+          ),
+        ),
+        if (widget.message.isEdited) ...[
+          const SizedBox(width: 8),
+          Text(
+            '(Edited)',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 
-
-
-                  else if (widget.message.text.isEmpty && 
-                           (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) && 
-                           !chatState.isLoading && 
-                           !isUser)
-                    const SizedBox.shrink()
-                  else
-                    MarkdownBody(
-                      data: widget.message.text,
-                      selectable: false,
-                      extensionSet: md.ExtensionSet(
-                        [
-                          LatexBlockSyntax(),
-                          ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
-                        ],
-                        [
-                          LatexInlineSyntax(),
-                          ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
-                          CitationSyntax(),
-                        ],
+  Widget _buildMainContent(ThemeData theme, dynamic chatState, bool isUser, BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.message.reasoning != null) _buildReasoning(theme, widget.message.reasoning!),
+        if (_isEditing)
+          _buildEditMode(theme)
+        else if (widget.message.text.isEmpty && 
+                 (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) && 
+                 chatState.isLoading && 
+                 !isUser)
+          if (chatState.researchStatus != null)
+            _buildStatusIndicator(theme, chatState.researchStatus!)
+          else
+            const _TypingIndicator()
+        else if (widget.message.text.isEmpty && 
+                 (widget.message.reasoning == null || widget.message.reasoning!.isEmpty) && 
+                 !chatState.isLoading && 
+                 !isUser)
+          const SizedBox.shrink()
+        else
+          MarkdownBody(
+            data: widget.message.text,
+            selectable: false,
+            extensionSet: md.ExtensionSet(
+              [
+                LatexBlockSyntax(),
+                ...md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+              ],
+              [
+                LatexInlineSyntax(),
+                ...md.ExtensionSet.gitHubFlavored.inlineSyntaxes,
+                CitationSyntax(),
+              ],
+            ),
+            builders: {
+              'latex': LatexElementBuilder(),
+              'citation': CitationBuilder(
+                context: context,
+                citations: widget.message.citations,
+                onCitationClick: (index, metadata) {
+                  final docId = metadata?['documentId'] as int?;
+                  final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Document';
+                  
+                  if (docId != null) {
+                    ref.read(workbenchProvider.notifier).addTab(
+                      WorkbenchTab(
+                        id: 'doc_$docId',
+                        title: sourceTitle,
+                        icon: Icons.description_outlined,
+                        type: 'document',
+                        metadata: metadata,
                       ),
-                      builders: {
-                        'latex': LatexElementBuilder(),
-                        'citation': CitationBuilder(
-                          context: context,
-                          citations: widget.message.citations,
-                          onCitationClick: (index, metadata) {
-                            final docId = metadata?['documentId'] as int?;
-                            final sourceTitle = metadata?['sourceTitle'] as String? ?? 'Document';
-                            
-                            if (docId != null) {
-                              ref.read(workbenchProvider.notifier).addTab(
-                                WorkbenchTab(
-                                  id: 'doc_$docId',
-                                  title: sourceTitle,
-                                  icon: Icons.description_outlined,
-                                  type: 'document',
-                                  metadata: metadata,
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      },
-                      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                        p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
-                        blockquoteDecoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border(
-                            left: BorderSide(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                              width: 4,
-                            ),
-                          ),
-                        ),
-                        blockquotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        blockquote: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontStyle: FontStyle.italic,
-                        ),
-                        code: theme.textTheme.bodyMedium?.copyWith(
-                          backgroundColor: Colors.transparent, // Avoid default blocky bg
-                          color: theme.colorScheme.primary,
-                          fontFamily: 'monospace',
-                        ),
-                        codeblockDecoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        horizontalRuleDecoration: BoxDecoration(
-                          border: Border(
-                            top: BorderSide(
-                              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
-                              width: 1.0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (widget.message.metadata?['attachments'] != null) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: (widget.message.metadata!['attachments'] as List).map((att) {
-                        final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains((att['extension'] as String?)?.toLowerCase());
-                        if (isImage && att['path'] != null) {
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              File(att['path']),
-                              width: 200,
-                              height: 150,
-                              fit: BoxFit.cover,
-                            ),
-                          );
-                        }
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: theme.colorScheme.outlineVariant),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.attach_file, size: 14, color: theme.colorScheme.primary),
-                              const SizedBox(width: 6),
-                              Text(
-                                att['name'] ?? 'File', 
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                  ...ref.watch(pluginsProvider).expand((plugin) {
-                    final trigger = plugin.buildMessageActionTrigger(context, ref, widget.message);
-                    if (trigger != null) {
-                      return [const SizedBox(height: 12), trigger];
-                    }
-                    return <Widget>[];
-                  }),
-                  if (!_isEditing) ...[
-                    const SizedBox(height: 4),
-                    isUser 
-                      ? Transform.translate(
-                          offset: const Offset(-16, 0),
-                          child: _buildActionMenu(context, ref, isUser),
-                        )
-                      : _buildActionMenu(context, ref, isUser),
-                  ],
-                ],
+                    );
+                  }
+                },
+              ),
+            },
+            styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+              p: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+              blockquoteDecoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(
+                  left: BorderSide(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                    width: 4,
+                  ),
+                ),
+              ),
+              blockquotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              blockquote: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+              code: theme.textTheme.bodyMedium?.copyWith(
+                backgroundColor: Colors.transparent, // Avoid default blocky bg
+                color: theme.colorScheme.primary,
+                fontFamily: 'monospace',
+              ),
+              codeblockDecoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              horizontalRuleDecoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
+                    width: 1.0,
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
-      );
+          ),
+        if (widget.message.metadata?['attachments'] != null) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: (widget.message.metadata!['attachments'] as List).map((att) {
+              final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].contains((att['extension'] as String?)?.toLowerCase());
+              if (isImage && att['path'] != null) {
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    File(att['path']),
+                    width: 200,
+                    height: 150,
+                    fit: BoxFit.cover,
+                  ),
+                );
+              }
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.attach_file, size: 14, color: theme.colorScheme.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      att['name'] ?? 'File', 
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+        ...ref.watch(pluginsProvider).expand((plugin) {
+          final trigger = plugin.buildMessageActionTrigger(context, ref, widget.message);
+          if (trigger != null) {
+            return [const SizedBox(height: 12), trigger];
+          }
+          return <Widget>[];
+        }),
+        if (!_isEditing)
+          Visibility(
+            visible: !chatState.isLoading,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: isUser 
+                ? Transform.translate(
+                    offset: const Offset(-16, 0),
+                    child: _buildActionMenu(context, ref, isUser),
+                  )
+                : _buildActionMenu(context, ref, isUser),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildStatusIndicator(ThemeData theme, String status) {
@@ -389,36 +418,55 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
   Widget _buildActionMenu(BuildContext context, WidgetRef ref, bool isUser) {
     final controller = ref.read(chatControllerProvider.notifier);
 
+    final List<Widget> actions = [
+      _StaggeredAction(
+        index: 0,
+        child: _ActionButton(
+          icon: Icons.copy_all_outlined,
+          tooltip: 'Copy',
+          onPressed: () {
+            controller.copyToClipboard(widget.message.text);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 1)),
+            );
+          },
+        ),
+      ),
+      if (isUser)
+        _StaggeredAction(
+          index: 1,
+          child: _ActionButton(
+            icon: Icons.edit_outlined,
+            tooltip: 'Edit',
+            onPressed: () => setState(() => _isEditing = true),
+          ),
+        )
+      else
+        _StaggeredAction(
+          index: 1,
+          child: _ActionButton(
+            icon: Icons.refresh_outlined,
+            tooltip: 'Regenerate',
+            onPressed: () {
+              final collectionId = ref.read(collectionProvider).activeCollection?.id;
+              controller.regenerateResponse(widget.message.id, collectionId);
+            },
+          ),
+        ),
+      _StaggeredAction(
+        index: 2,
+        child: _ActionButton(
+          icon: Icons.delete_outline_rounded,
+          tooltip: 'Delete',
+          onPressed: () => controller.deleteMessage(widget.message.id),
+        ),
+      ),
+    ];
+
     return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ActionButton(
-            icon: Icons.copy_rounded,
-            tooltip: 'Copy',
-            onPressed: () => controller.copyToClipboard(widget.message.text),
-          ),
-          if (isUser)
-            _ActionButton(
-              icon: Icons.edit_outlined,
-              tooltip: 'Edit',
-              onPressed: () => setState(() => _isEditing = true),
-            ),
-          if (!isUser)
-            _ActionButton(
-              icon: Icons.refresh_rounded,
-              tooltip: 'Regenerate',
-              onPressed: () {
-                final collectionId = ref.read(collectionProvider).activeCollection?.id;
-                controller.regenerateResponse(widget.message.id, collectionId);
-              },
-            ),
-          _ActionButton(
-            icon: Icons.delete_outline_rounded,
-            tooltip: 'Delete',
-            onPressed: () => controller.deleteMessage(widget.message.id),
-          ),
-        ],
-      );
+      mainAxisSize: MainAxisSize.min,
+      children: actions,
+    );
   }
 
 
@@ -452,6 +500,7 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
+            borderRadius: BorderRadius.circular(12),
             onTap: () => setState(() {
               _isReasoningExpanded = !_isReasoningExpanded;
               if (_isReasoningExpanded) {
@@ -684,6 +733,72 @@ class _TypingIndicatorState extends State<_TypingIndicator> with SingleTickerPro
             },
           );
         }),
+      ),
+    );
+  }
+}
+
+class _StaggeredAction extends StatefulWidget {
+  final Widget child;
+  final int index;
+
+  const _StaggeredAction({
+    required this.child,
+    required this.index,
+  });
+
+  @override
+  State<_StaggeredAction> createState() => _StaggeredActionState();
+}
+
+class _StaggeredActionState extends State<_StaggeredAction> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _opacityAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+
+    _opacityAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 1.0, curve: Curves.easeOut),
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.2),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 1.0, curve: Curves.easeOutCubic),
+    ));
+
+    const baseDelay = 0;
+    const staggerDelay = 50;
+    Future.delayed(Duration(milliseconds: baseDelay + (widget.index * staggerDelay)), () {
+      if (mounted) {
+        _controller.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacityAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: widget.child,
       ),
     );
   }
