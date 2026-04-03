@@ -883,6 +883,23 @@ class SettingsController extends StateNotifier<SettingsState> {
     final prefs = await PortableSettings.getInstance();
     await prefs.setInt('selectedBundleSize', size.index);
     state = state.copyWith(selectedBundleSize: size);
+    
+    if (state.backendType == BackendType.internal) {
+      await _syncInternalModels();
+    }
+  }
+
+  Future<void> _syncInternalModels() async {
+    if (state.backendType != BackendType.internal) return;
+    if (Platform.isAndroid || Platform.isIOS) return; // LiteRT handles its own paths
+
+    final modelID = state.selectedBundleSize == ModelBundleSize.fast2B 
+        ? 'Qwen3.5-2B-Instruct' 
+        : 'Qwen3.5-4B-Instruct';
+    
+    await updateChatModel(modelID);
+    await updateEmbeddingModel('Qwen3-Embedding-0.6B');
+    await updateRerankModel('Qwen3-Reranker-0.6B');
   }
 
   Future<void> updateBackendType(BackendType type) async {
@@ -892,9 +909,10 @@ class SettingsController extends StateNotifier<SettingsState> {
     // Clear any stale connection errors from the previous mode
     state = state.copyWith(backendType: type, error: null);
 
-    // If switching to internal, default the URL
+    // If switching to internal, default the URL and auto-sync models
     if (type == BackendType.internal) {
       await updateLlamaServerUrl('http://localhost:8080');
+      await _syncInternalModels();
     } else {
       // Restore user's preferred external URL
       await updateLlamaServerUrl(state.externalLlamaServerUrl);

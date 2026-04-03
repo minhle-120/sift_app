@@ -93,8 +93,12 @@ class _ExternalConfigScreenState extends ConsumerState<ExternalConfigScreen> {
                   'Model Selection',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Select the specific models your llama.cpp server is currently serving with --models-preset.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                ),
                 const SizedBox(height: 20),
-
 
                 _buildDropdown(
                   label: 'Chat Model (LLM)',
