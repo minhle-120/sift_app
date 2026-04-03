@@ -62,6 +62,11 @@ class AppDatabase extends _$AppDatabase {
         .write(const KnowledgeCollectionsCompanion(isDeleted: Value(true)));
   }
 
+  /// Get a single collection.
+  Future<KnowledgeCollection?> getCollectionById(int id) {
+    return (select(knowledgeCollections)..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
   /// Watch conversations for a collection.
   Stream<List<Conversation>> watchConversations(int collectionId) {
     return (select(conversations)

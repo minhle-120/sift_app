@@ -48,6 +48,13 @@ class CollectionController extends StateNotifier<CollectionState> {
     _watchDocuments(collection.id);
   }
 
+  Future<void> selectCollectionById(int id) async {
+    final collection = await _db.getCollectionById(id);
+    if (collection != null) {
+      selectCollection(collection);
+    }
+  }
+
   void clearSelection() {
     _documentsSubscription?.cancel();
     state = state.copyWith(clearActive: true, hasDocuments: false);

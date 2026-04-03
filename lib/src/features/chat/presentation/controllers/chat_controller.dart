@@ -9,6 +9,7 @@ import 'package:sift_app/src/features/orchestrator/domain/research_orchestrator.
 import 'package:sift_app/src/features/orchestrator/domain/chat_orchestrator.dart';
 import 'package:sift_app/src/features/orchestrator/domain/brainstorm_orchestrator.dart';
 import 'package:sift_app/src/features/chat/presentation/controllers/settings_controller.dart';
+import 'collection_controller.dart';
 import 'package:sift_app/core/models/ai_models.dart' as ai;
 import 'package:sift_app/core/plugins/plugins_provider.dart';
 import 'package:sift_app/core/services/openai_service.dart';
@@ -170,7 +171,11 @@ class ChatController extends StateNotifier<ChatState> {
     try {
       // 1. Load conversation metadata to restore mode
       final conv = await _db.getConversationById(conversationId);
-      if (conv != null && conv.metadata != null) {
+      if (conv != null) {
+        // Ensure the active collection is synchronized with this chat
+        _ref.read(collectionProvider.notifier).selectCollectionById(conv.collectionId);
+
+        if (conv.metadata != null) {
         try {
           // We load common metadata here, but we ignore isBrainstormMode 
           // because it is now a global sticky setting.
@@ -179,6 +184,7 @@ class ChatController extends StateNotifier<ChatState> {
           debugPrint("Error parsing conversation metadata: $e");
         }
       }
+    }
 
       _messagesSubscription = _db.watchMessages(conversationId).listen((messages) {
         final domainMessages = messages.map((m) => domain.Message(
