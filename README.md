@@ -1,6 +1,6 @@
 # Sift
 
-**Sift** is a privacy-first AI research assistant designed to turn your local document library into an actionable knowledge base. Built with a sophisticated orchestration layer, Sift doesn't just answer questions—it performs iterative research, visualizes data, and builds specialized tools to help you discover deeper insights.
+**Sift** is a privacy-first AI research assistant designed to turn your local document library into an actionable knowledge base. Built with a sophisticated orchestration layer, Sift performs iterative research, visualizes data, and builds specialized tools to help you discover insights.
 
 ---
 
@@ -27,7 +27,8 @@ Sift employs a powerful **ReAct (Reasoning + Acting) loop** to handle complex qu
 When research is complete, Sift can delegate work to specialized agents to provide high-value outputs:
 *   **Graph Generator**: Automatically transforms raw data into beautiful, insightful graphs and networks.
 *   **Code Specialist**: Handles technical implementations, script generation, and code explanations.
-*   **Study Companion**: Bridges the gap between research and learning by generating custom-designed flashcard decks.
+*   **Flash Card**: Bridges the gap between research and learning by generating custom-designed flashcard decks.
+*   **Quiz**: Helps reviews knowledge by creating a custom list of question based on the documents.
 *   **Canvas**: Designs dynamic HTML/SVG visual components directly in the workspace for interactive discovery and problem-solving.
 
 ### Local Knowledge Base
@@ -51,7 +52,7 @@ Sift is built for high-performance research across multiple platforms:
 *   **Frontend**: [Flutter](https://flutter.dev) for a smooth, multi-platform experience.
 *   **State Management**: [Riverpod](https://riverpod.dev) for robust and testable logic.
 *   **Database**: [Drift](https://drift.simonbinder.eu) (SQLite) for powerful local storage and RAG capabilities.
-*   **Intelligence**: Optimized for **Local LLMs** via any OpenAI-compatible endpoint (e.g., llama.cpp, vLLM, LM Studio).
+*   **AI**: Optimized for **Local LLMs** via any OpenAI-compatible endpoint (e.g., llama.cpp, vLLM, LM Studio).
 *   **UI/UX**: Rich visualizations using `flutter_markdown`, `syncfusion_flutter_pdf`, and custom SVG/HTML rendering.
 
 ---
@@ -63,4 +64,35 @@ Sift follows a clean, domain-driven architecture:
 *   **Specialist Layer**: Decoupled agents focused on specific output types (Graphs, Code, etc.).
 *   **Core Services**: Abstracted interfaces for AI, Embeddings, and Reranking, allowing for easy swaps between different local or cloud providers.
 
+```mermaid
+graph TD
+    User([User Query]) --> ChatUI[Chat UI]
+    ChatUI --> Orchestrator[Research Orchestrator]
+    
+    subgraph "Orchestration Layer (ReAct Loop)"
+        Orchestrator --> LLM{LLM Reasoning}
+        LLM -- "tool: query_knowledge_base" --> RAGTool[RAG Tool]
+        LLM -- "tool: specialized_plugin" --> Plugins[Specialist Plugins]
+        LLM -- "tool: finalize_research" --> Synthesis[Synthesis & Answer]
+    end
+    
+    subgraph "Specialist Layer (Agents)"
+        Plugins --> Canvas[Canvas Plugin]
+        Plugins --> Graph[Graph Plugin]
+        Plugins --> Code[Code Plugin]
+        Plugins --> Flashcard[Flashcard Plugin]
+        Plugins --> Quiz[Quiz Plugin]
+    end
+    
+    subgraph "Core Services & Data"
+        RAGTool --> VectorSearch[Vector Search]
+        VectorSearch --> SQL[(Drift/SQLite DB)]
+        RAGTool --> Reranker[Rerank Service]
+        DocInbound[Document Import] --> DocProc[Document Processor]
+        DocProc --> Embedder[Embedding Service]
+        Embedder --> SQL
+    end
+    
+    Synthesis --> ChatUI
+```
 ---
