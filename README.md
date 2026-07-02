@@ -18,7 +18,7 @@ Follow these steps to perform your first research cycle with Sift:
 ## Key Features
 
 ### Iterative Research Orchestrator
-Sift employs a powerful **ReAct (Reasoning + Acting) loop** to handle complex queries. Instead of a single pass, the `ResearchOrchestrator` performs multiple cycles of:
+Sift employs a powerful **ReAct (Reasoning + Acting) loop** to handle complex queries:
 1.  **Context Analysis**: Understanding the nuances of your query.
 2.  **RAG Search**: Querying the local database for relevant document chunks.
 3.  **Reasoning**: Evaluating the findings and refining subsequent searches until the information is complete.
@@ -46,23 +46,6 @@ Sift is built for high-performance research across multiple platforms:
 *   **Android**: Mobile-optimized RAG and chat experience (APK).
 
 ---
-
-## Technology Stack
-
-*   **Frontend**: [Flutter](https://flutter.dev) for a smooth, multi-platform experience.
-*   **State Management**: [Riverpod](https://riverpod.dev) for robust and testable logic.
-*   **Database**: [Drift](https://drift.simonbinder.eu) (SQLite) for powerful local storage and RAG capabilities.
-*   **AI**: Optimized for **Local LLMs** via any OpenAI-compatible endpoint (e.g., llama.cpp, vLLM, LM Studio).
-*   **UI/UX**: Rich visualizations using `flutter_markdown`, `syncfusion_flutter_pdf`, and custom SVG/HTML rendering.
-
----
-
-## Architecture
-
-Sift follows a clean, domain-driven architecture:
-*   **Orchestration Layer**: Manages the high-level research flow and multi-step reasoning.
-*   **Specialist Layer**: Decoupled agents focused on specific output types (Graphs, Code, etc.).
-*   **Core Services**: Abstracted interfaces for AI, Embeddings, and Reranking, allowing for easy swaps between different local or cloud providers.
 
 ```mermaid
 graph TD
